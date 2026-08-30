@@ -1,6 +1,6 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
 const elements = Object.fromEntries([
-  "startDate", "triggerAt", "nights", "bookingMode", "epochValue", "reservationUrl", "roomList", "roomSectionTitle", "roomSectionHelp", "reserverName",
+  "startDate", "triggerAt", "nights", "bookingMode", "epochValue", "openAtValue", "reservationUrl", "roomList", "roomSectionTitle", "roomSectionHelp", "reserverName",
   "depositorName", "phone", "birthDate", "historyList", "statusBadge", "statusText", "statusDetails", "inspectResult",
   "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
   "inspectButton", "saveButton", "stopButton", "runNowButton", "startButton"
@@ -30,7 +30,9 @@ const STAGE_LABELS = {
 };
 const AVAILABILITY_LABELS = {
   available: "예약 가능", booked: "예약 완료", unavailable: "해당 박수 불가",
-  checking: "확인 중", "before-open": "예약 오픈 전", unknown: "미확인"
+  checking: "확인 중", "checking-before-open": "확인 중 (예약 오픈 전)",
+  "available-before-open": "예약 가능 (예약 오픈 전)", "unavailable-before-open": "예약 불가 (예약 오픈 전)",
+  "before-open": "확인 불가 (예약 오픈 전)", unknown: "미확인"
 };
 
 init().catch((error) => showMessage(error.message, true));
@@ -90,7 +92,7 @@ function bindEvents() {
     await saveConfig();
     showMessage("미니 PC에서 예약 페이지에 연결하고 있습니다.");
     const result = await request("inspect", { method: "POST", body: JSON.stringify({ startDate: elements.startDate.value, nights: Number(elements.nights.value) }) });
-    renderInspection(result.rooms);
+    renderInspection(result.rooms, { beforeOpen: isBeforeOpen(elements.startDate.value) });
     await refreshStatus();
   }));
   elements.copyDiagnosticsButton.addEventListener("click", () => copyDiagnostics());
@@ -214,11 +216,13 @@ function updateGeneratedValues() {
   const date = elements.startDate.value;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     elements.epochValue.textContent = "—";
+    elements.openAtValue.textContent = "—";
     elements.reservationUrl.value = "";
     return;
   }
   const epoch = Math.floor(Date.parse(`${date}T00:00:00+09:00`) / 1000);
   elements.epochValue.textContent = String(epoch);
+  elements.openAtValue.textContent = formatOpeningTime(date);
   elements.reservationUrl.value = `http://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim&adaystart=${epoch}`;
 }
 
@@ -228,6 +232,24 @@ function bookingOpenIso(startDate) {
   const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 3, 1));
   const pad = (value) => String(value).padStart(2, "0");
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-01T00:00:00`;
+}
+
+function bookingOpenEpoch(startDate) {
+  return Date.parse(`${bookingOpenIso(startDate)}+09:00`);
+}
+
+function isBeforeOpen(startDate) {
+  const opensAt = bookingOpenEpoch(startDate);
+  return Number.isFinite(opensAt) && opensAt > Date.now();
+}
+
+function formatOpeningTime(startDate) {
+  const opensAt = bookingOpenEpoch(startDate);
+  if (!Number.isFinite(opensAt)) return "—";
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "long", day: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"
+  }).format(new Date(opensAt));
 }
 
 async function refreshStatus() {
@@ -281,13 +303,20 @@ async function copyDiagnostics() {
   showMessage("진단 정보를 복사했습니다. 이 대화에 그대로 붙여 넣어 주세요.");
 }
 
-function renderInspection(result) {
-  for (const room of result) availabilityByRoom.set(room.name, room.status || (room.available ? "available" : "unavailable"));
+function renderInspection(result, { beforeOpen = false } = {}) {
+  const displayed = result.map((room) => ({
+    ...room,
+    displayStatus: beforeOpen ? (room.available ? "available-before-open" : "unavailable-before-open")
+      : room.status || (room.available ? "available" : "unavailable")
+  }));
+  for (const room of displayed) availabilityByRoom.set(room.name, room.displayStatus);
   renderRooms();
   elements.inspectResult.hidden = false;
-  elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${result.map((room) => {
-    const status = room.status || (room.available ? "available" : "unavailable");
-    const label = status === "before-open" || status === "booked" ? AVAILABILITY_LABELS[status]
+  const opening = beforeOpen ? `<small>예약 가능 시작: ${escapeHtml(formatOpeningTime(elements.startDate.value))}</small><br>` : "";
+  elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${opening}${displayed.map((room) => {
+    const status = room.displayStatus;
+    const label = ["available-before-open", "unavailable-before-open", "before-open", "booked"].includes(status)
+      ? AVAILABILITY_LABELS[status]
       : room.available ? `${elements.nights.value}박 가능` : `${elements.nights.value}박 불가`;
     return `<span class="${escapeHtml(status)}">${escapeHtml(room.name)}: ${label}</span>`;
   }).join(" · ")}`;
@@ -304,24 +333,22 @@ async function refreshAvailability() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !Number.isInteger(nights)) return;
   const requestId = ++availabilityRequest;
   availabilityByRoom.clear();
-  const opensAt = Date.parse(`${bookingOpenIso(startDate)}+09:00`);
-  if (Number.isFinite(opensAt) && opensAt > Date.now()) {
-    renderInspection(rooms.map((room) => ({ name: room.name, available: false, status: "before-open" })));
-    return;
-  }
+  const beforeOpen = isBeforeOpen(startDate);
   if (["waiting", "running"].includes(currentState)) {
+    if (beforeOpen) for (const room of rooms) availabilityByRoom.set(room.name, "before-open");
     renderRooms();
     return;
   }
-  for (const room of rooms) availabilityByRoom.set(room.name, "checking");
+  for (const room of rooms) availabilityByRoom.set(room.name, beforeOpen ? "checking-before-open" : "checking");
   renderRooms();
   try {
     const result = await request("inspect", { method: "POST", body: JSON.stringify({ startDate, nights }) });
     if (requestId !== availabilityRequest) return;
-    renderInspection(result.rooms || []);
+    renderInspection(result.rooms || [], { beforeOpen });
   } catch (error) {
     if (requestId !== availabilityRequest) return;
     availabilityByRoom.clear();
+    if (beforeOpen) for (const room of rooms) availabilityByRoom.set(room.name, "before-open");
     renderRooms();
     if (!busy) showMessage(`객실 가능 여부 확인 실패: ${error.message}`, true);
   }
