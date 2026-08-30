@@ -141,10 +141,13 @@ export class ReservationEngine {
   async detectPage() {
     return this.page.evaluate(() => {
       const text = (document.body?.innerText || "").replace(/\s+/g, " ");
+      const exactPersonalFields = ["name", "name2", "tel1", "tel2", "tel3", "birthYear", "birthMonth", "birthDay"]
+        .filter((name) => document.querySelector(`[name="${name}"]`)).length;
+      if (exactPersonalFields >= 6) return "personal";
       const personal = /예약자(명| 이름)?/.test(text) && /(입금자|휴대폰|생년월일)/.test(text);
       if (/예약(이 | )?(완료|되었습니다)|예약번호/.test(text) && !personal) return "success";
-      if (personal) return "personal";
       if (/환불|취소.*규정|이용.*약관/.test(text) || document.querySelector('input[type="checkbox"]')) return "terms";
+      if (personal) return "personal";
       return "unknown";
     });
   }

@@ -40,34 +40,40 @@ export function fillPersonalFields(profile) {
   const setValue = (control, value) => {
     let nextValue = String(value);
     if (control.tagName === "SELECT") {
-      const option = [...control.options].find((item) => item.value === nextValue || clean(item.text) === clean(nextValue));
-      if (option) nextValue = option.value;
+      const option = [...control.options].find((item) => (
+        item.value === nextValue
+        || clean(item.text) === clean(nextValue)
+        || (/^\d+$/.test(item.value) && Number(item.value) === Number(nextValue))
+      ));
+      if (!option) return false;
+      nextValue = option.value;
     }
     control.value = nextValue;
     control.dispatchEvent(new Event("input", { bubbles: true }));
     control.dispatchEvent(new Event("change", { bubbles: true }));
     used.add(control);
+    return control.value === nextValue;
   };
 
   const fillOne = (labelPattern, namePattern, value, exclude) => {
     const candidate = ranked(labelPattern, namePattern, exclude)[0]?.control;
-    if (candidate) setValue(candidate, value);
-    return Boolean(candidate);
+    return candidate ? setValue(candidate, value) : false;
   };
 
   const splitFill = (labelPattern, namePattern, digits, parts, singleValue) => {
     const matches = ranked(labelPattern, namePattern).map((item) => item.control);
     if (matches.length >= parts.length) {
       let offset = 0;
-      parts.forEach((length, index) => {
-        setValue(matches[index], digits.slice(offset, offset + length));
+      for (let index = 0; index < parts.length; index += 1) {
+        const length = parts[index];
+        const success = setValue(matches[index], digits.slice(offset, offset + length));
+        if (!success) return false;
         offset += length;
-      });
+      }
       return true;
     }
     if (matches[0]) {
-      setValue(matches[0], singleValue ? singleValue(matches[0], digits) : digits);
-      return true;
+      return setValue(matches[0], singleValue ? singleValue(matches[0], digits) : digits);
     }
     return false;
   };
