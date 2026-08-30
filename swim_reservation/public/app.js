@@ -12,6 +12,26 @@ let currentState = "idle";
 let availabilityTimer = null;
 let availabilityRequest = 0;
 const availabilityByRoom = new Map();
+const STATE_LABELS = {
+  idle: "설정 중", waiting: "예약 대기", running: "자동 실행 중",
+  success: "예약 완료", failed: "확인 필요", stopped: "중지됨"
+};
+const STAGE_LABELS = {
+  idle: "초기 상태", armed: "예약 대기 설정됨", prewarming: "사전 준비 중",
+  "preparing-room": "객실 사전 선택", "final-ready": "최종 제출 대기",
+  "multiple-final-ready": "복수 객실 최종 제출 대기", starting: "예약 시작",
+  "starting-now": "즉시 예약 시작", "room-selected": "객실 선택 완료",
+  "room-reselected": "다음 객실 선택 완료", "terms-accepted": "환불 규정 동의 완료",
+  "final-submit": "최종 예약 제출", "retrying-next-room": "다음 순위 객실 재시도",
+  complete: "예약 완료", "multiple-final-submit": "복수 객실 동시 제출",
+  "multiple-complete": "복수 객실 예약 완료", "multiple-partial": "복수 예약 일부 성공",
+  "multiple-failed": "복수 예약 실패", "reservation-error": "예약 처리 오류",
+  exception: "실행 예외", missed: "실행 시각 경과", stopped: "실행 중지", inspected: "객실 확인 완료"
+};
+const AVAILABILITY_LABELS = {
+  available: "예약 가능", booked: "예약 완료", unavailable: "해당 박수 불가",
+  checking: "확인 중", "before-open": "예약 오픈 전", unknown: "미확인"
+};
 
 init().catch((error) => showMessage(error.message, true));
 
@@ -171,11 +191,7 @@ function renderRooms() {
     const row = document.createElement("div");
     row.className = `room-row${room.enabled ? " enabled" : ""}`;
     const availability = availabilityByRoom.get(room.name);
-    const availabilityLabel = availability === "available" ? "예약 가능"
-      : availability === "booked" ? "예약 완료"
-        : availability === "unavailable" ? "해당 박수 불가"
-        : availability === "checking" ? "확인 중"
-          : availability === "before-open" ? "예약 오픈 전" : "미확인";
+    const availabilityLabel = AVAILABILITY_LABELS[availability] || AVAILABILITY_LABELS.unknown;
     row.innerHTML = `
       <label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} aria-label="${escapeHtml(room.name)} 선택"></label>
       <div class="room-name"><span class="room-rank">${room.enabled ? (multiple ? "예약" : `${rank}순위`) : "—"}</span>${escapeHtml(room.name)}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
@@ -225,9 +241,8 @@ async function refreshStatus() {
 function renderStatus(status) {
   const state = status.state || "idle";
   currentState = state;
-  const labels = { idle: "설정 중", waiting: "예약 대기", running: "자동 실행 중", success: "예약 완료", failed: "확인 필요", stopped: "중지됨" };
   elements.statusBadge.className = `badge ${state}`;
-  elements.statusBadge.textContent = labels[state] || state;
+  elements.statusBadge.textContent = STATE_LABELS[state] || state;
   elements.statusText.textContent = status.message || "상태 정보가 없습니다.";
   const details = [];
   if (status.startDate) details.push(["숙박 시작 날짜", status.startDate]);
@@ -237,7 +252,7 @@ function renderStatus(status) {
   if (status.selectedRooms?.length) details.push(["동시 예약 대상", status.selectedRooms.join(" · ")]);
   if (status.succeededRooms?.length) details.push(["예약 성공 객실", status.succeededRooms.join(" · ")]);
   if (status.failedRooms?.length) details.push(["예약 실패 객실", status.failedRooms.join(" · ")]);
-  if (status.stage) details.push(["진행 단계", status.stage]);
+  if (status.stage) details.push(["진행 단계", STAGE_LABELS[status.stage] || status.stage]);
   if (status.updatedAt) details.push(["최근 갱신", new Date(status.updatedAt).toLocaleString("ko-KR")]);
   elements.statusDetails.replaceChildren(...details.flatMap(([term, value]) => {
     const dt = document.createElement("dt"); dt.textContent = term;
@@ -271,8 +286,10 @@ function renderInspection(result) {
   renderRooms();
   elements.inspectResult.hidden = false;
   elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${result.map((room) => {
-    const label = room.status === "booked" ? "예약 완료" : room.available ? `${elements.nights.value}박 가능` : `${elements.nights.value}박 불가`;
-    return `<span class="${room.available ? "available" : "unavailable"}">${escapeHtml(room.name)}: ${label}</span>`;
+    const status = room.status || (room.available ? "available" : "unavailable");
+    const label = status === "before-open" || status === "booked" ? AVAILABILITY_LABELS[status]
+      : room.available ? `${elements.nights.value}박 가능` : `${elements.nights.value}박 불가`;
+    return `<span class="${escapeHtml(status)}">${escapeHtml(room.name)}: ${label}</span>`;
   }).join(" · ")}`;
 }
 
@@ -289,8 +306,7 @@ async function refreshAvailability() {
   availabilityByRoom.clear();
   const opensAt = Date.parse(`${bookingOpenIso(startDate)}+09:00`);
   if (Number.isFinite(opensAt) && opensAt > Date.now()) {
-    for (const room of rooms) availabilityByRoom.set(room.name, "before-open");
-    renderRooms();
+    renderInspection(rooms.map((room) => ({ name: room.name, available: false, status: "before-open" })));
     return;
   }
   if (["waiting", "running"].includes(currentState)) {

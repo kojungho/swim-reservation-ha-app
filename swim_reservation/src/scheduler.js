@@ -16,6 +16,20 @@ export class Scheduler {
 
   async restore() {
     const status = await this.store.getStatus();
+    if (isCompletedReservationDiagnostics(status.diagnostics)) {
+      const selectedRooms = status.selectedRooms?.length ? status.selectedRooms : status.selectedRoom ? [status.selectedRoom] : [];
+      await this.store.updateStatus({
+        state: "success",
+        stage: selectedRooms.length > 1 ? "multiple-complete" : "complete",
+        succeededRooms: selectedRooms,
+        failedRooms: [],
+        diagnostics: null,
+        message: selectedRooms.length > 1
+          ? `${selectedRooms.length}개 객실의 예약 완료 화면을 확인했습니다.`
+          : "사이트에서 예약 완료 화면을 확인했습니다."
+      });
+      return;
+    }
     if (status.state !== "waiting") return;
     const config = await this.store.getConfig();
     if (triggerEpoch(config.triggerAt) <= Date.now()) {
@@ -151,4 +165,9 @@ export class Scheduler {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
+}
+
+function isCompletedReservationDiagnostics(diagnostics) {
+  if (!diagnostics || !/\/order_ok4\.php(?:\?|$)/i.test(String(diagnostics.url || ""))) return false;
+  return Array.isArray(diagnostics.buttons) && diagnostics.buttons.some((button) => String(button?.label || "").includes("예약취소"));
 }

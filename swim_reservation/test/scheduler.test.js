@@ -51,3 +51,27 @@ test("예약 오픈 전에는 즉시 예약을 실행하지 않는다", async ()
   }), /아직 예약 오픈 전/);
   assert.deepEqual(calls, []);
 });
+
+test("저장된 order_ok4 완료 진단은 App 재시작 시 성공 상태로 보정한다", async () => {
+  const statuses = [];
+  const store = {
+    getStatus: async () => ({
+      state: "failed",
+      stage: "reservation-error",
+      selectedRoom: "숨_산맥존",
+      diagnostics: {
+        url: "http://newpension.logosweb.or.kr/reservation/order_ok4.php?id=swim",
+        buttons: [{ label: "예약취소" }]
+      }
+    }),
+    updateStatus: async (patch) => { statuses.push(patch); return patch; }
+  };
+  const scheduler = new Scheduler({ store, engine: { close: async () => {} } });
+
+  await scheduler.restore();
+
+  assert.equal(statuses[0].state, "success");
+  assert.equal(statuses[0].stage, "complete");
+  assert.deepEqual(statuses[0].succeededRooms, ["숨_산맥존"]);
+  assert.deepEqual(statuses[0].failedRooms, []);
+});
