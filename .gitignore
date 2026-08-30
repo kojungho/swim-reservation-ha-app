@@ -4,3 +4,4 @@ node_modules/
 data/
 reservation-config.json
 reservation-status.json
+reservation-history.json

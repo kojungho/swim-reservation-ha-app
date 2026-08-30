@@ -6,6 +6,7 @@ import { defaultConfig, reservationUrl } from "../src/config.js";
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
 let config = defaultConfig(new Date("2026-08-30T12:00:00+09:00"));
+let history = [];
 const status = { state: "idle", stage: "idle", message: "UI 테스트 서버", updatedAt: Date.now() };
 
 http.createServer(async (request, response) => {
@@ -15,7 +16,23 @@ http.createServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
     config = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const id = `${config.startDate}__${config.nights}`;
+    history = [{ id, savedAt: Date.now(), config }, ...history.filter((entry) => entry.id !== id)];
     return json(response, { ok: true, config: { ...config, reservationUrl: reservationUrl(config.startDate) } });
+  }
+  if (url.pathname === "/api/history" && request.method === "GET") {
+    return json(response, { entries: history.map((entry) => ({ id: entry.id, savedAt: entry.savedAt, startDate: entry.config.startDate, nights: entry.config.nights, enabledRooms: entry.config.roomPriority.filter((room) => room.enabled).map((room) => room.name) })) });
+  }
+  const historyMatch = /^\/api\/history\/([^/]+)(?:\/(load))?$/.exec(url.pathname);
+  if (historyMatch && request.method === "POST" && historyMatch[2] === "load") {
+    const entry = history.find((item) => item.id === decodeURIComponent(historyMatch[1]));
+    if (!entry) return json(response, { error: "Not found" });
+    config = entry.config;
+    return json(response, { ok: true, config: { ...config, reservationUrl: reservationUrl(config.startDate) } });
+  }
+  if (historyMatch && request.method === "DELETE") {
+    history = history.filter((item) => item.id !== decodeURIComponent(historyMatch[1]));
+    return json(response, { ok: true });
   }
   if (url.pathname === "/api/status") return json(response, status);
   if (url.pathname === "/api/inspect") return json(response, { ok: true, rooms: config.roomPriority.map((room, index) => ({ name: room.name, available: index % 3 !== 2 })) });

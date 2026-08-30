@@ -36,6 +36,20 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/api/status" && request.method === "GET") {
       return json(response, 200, await store.getStatus());
     }
+    if (url.pathname === "/api/history" && request.method === "GET") {
+      return json(response, 200, { entries: await store.listHistory() });
+    }
+    const historyMatch = /^\/api\/history\/([^/]+)(?:\/(load))?$/.exec(url.pathname);
+    if (historyMatch && request.method === "POST" && historyMatch[2] === "load") {
+      const entry = await store.loadHistory(decodeURIComponent(historyMatch[1]));
+      if (!entry) return json(response, 404, { ok: false, error: "저장 이력을 찾지 못했습니다." });
+      return json(response, 200, { ok: true, config: { ...entry.config, reservationUrl: reservationUrl(entry.config.startDate) } });
+    }
+    if (historyMatch && request.method === "DELETE" && !historyMatch[2]) {
+      const deleted = await store.deleteHistory(decodeURIComponent(historyMatch[1]));
+      if (!deleted) return json(response, 404, { ok: false, error: "삭제할 저장 이력을 찾지 못했습니다." });
+      return json(response, 200, { ok: true });
+    }
     if (url.pathname === "/api/start" && request.method === "POST") {
       const config = await store.getConfig();
       const errors = validateConfig(config, { futureTrigger: true });

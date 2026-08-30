@@ -1,7 +1,7 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
 const elements = Object.fromEntries([
   "startDate", "triggerAt", "nights", "epochValue", "reservationUrl", "roomList", "reserverName",
-  "depositorName", "phone", "birthDate", "statusBadge", "statusText", "statusDetails", "inspectResult",
+  "depositorName", "phone", "birthDate", "historyList", "statusBadge", "statusText", "statusDetails", "inspectResult",
   "inspectButton", "saveButton", "stopButton", "runNowButton", "startButton"
 ].map((id) => [id, document.getElementById(id)]));
 
@@ -14,6 +14,7 @@ async function init() {
   const config = await request("config");
   loadConfig(config);
   bindEvents();
+  await refreshHistory();
   await refreshStatus();
   setInterval(refreshStatus, 1500);
 }
@@ -88,6 +89,46 @@ function readConfig() {
 async function saveConfig() {
   const result = await request("config", { method: "PUT", body: JSON.stringify(readConfig()) });
   loadConfig(result.config);
+  await refreshHistory();
+}
+
+async function refreshHistory() {
+  const result = await request("history");
+  renderHistory(result.entries || []);
+}
+
+function renderHistory(entries) {
+  elements.historyList.replaceChildren();
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.className = "history-empty";
+    empty.textContent = "아직 저장된 예약 설정이 없습니다.";
+    elements.historyList.append(empty);
+    return;
+  }
+  for (const entry of entries) {
+    const row = document.createElement("div");
+    row.className = "history-row";
+    const savedAt = new Date(entry.savedAt).toLocaleString("ko-KR");
+    const roomsText = entry.enabledRooms?.length ? entry.enabledRooms.join(" → ") : "선택된 객실 없음";
+    row.innerHTML = `
+      <div class="history-key"><strong>${escapeHtml(entry.startDate)} · ${entry.nights}박</strong><small>${escapeHtml(savedAt)} 저장</small></div>
+      <div class="history-rooms">${escapeHtml(roomsText)}</div>
+      <div class="history-actions"><button class="load" type="button">불러오기</button><button class="delete" type="button">삭제</button></div>`;
+    row.querySelector(".load").addEventListener("click", () => perform(async () => {
+      const result = await request(`history/${encodeURIComponent(entry.id)}/load`, { method: "POST" });
+      loadConfig(result.config);
+      showMessage(`${entry.startDate} · ${entry.nights}박 설정을 불러왔습니다.`);
+    }));
+    row.querySelector(".delete").addEventListener("click", () => perform(async () => {
+      const approved = window.confirm(`${entry.startDate} · ${entry.nights}박 저장 이력을 삭제할까요?\n\n현재 화면에 불러온 설정은 삭제되지 않습니다.`);
+      if (!approved) return;
+      await request(`history/${encodeURIComponent(entry.id)}`, { method: "DELETE" });
+      await refreshHistory();
+      showMessage("저장 이력을 삭제했습니다.");
+    }));
+    elements.historyList.append(row);
+  }
 }
 
 function renderRooms() {
