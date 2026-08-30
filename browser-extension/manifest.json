@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "쉼오지 예약 도우미",
+  "version": "1.0.0",
+  "description": "쉼오지캠프 객실 우선순위와 예약자 정보를 저장하고 지정 시각에 예약 절차를 진행합니다.",
+  "permissions": [
+    "alarms",
+    "power",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://newpension.logosweb.or.kr/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "쉼오지 예약 도우미 설정"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "http://newpension.logosweb.or.kr/reservation/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}

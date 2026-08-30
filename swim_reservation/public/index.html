@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#174d39">
+  <title>쉼오지 예약 도우미</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">HOME ASSISTANT APP</p>
+        <h1>쉼오지 예약 도우미</h1>
+        <p class="lead">예약은 HA 미니 PC가 실행하고, 이 화면은 휴대폰과 컴퓨터 어디서든 사용할 수 있습니다.</p>
+      </div>
+      <div id="statusBadge" class="badge idle">불러오는 중</div>
+    </header>
+
+    <section class="card">
+      <div class="section-title"><span>1</span><div><h2>예약 날짜와 시각</h2><p>숙박 시작 날짜를 고르면 링크 숫자와 예약 오픈 시각이 자동 계산됩니다.</p></div></div>
+      <div class="grid two">
+        <label>숙박 시작 날짜<input id="startDate" type="date"></label>
+        <label>예약 실행 시각<input id="triggerAt" type="datetime-local" step="1"></label>
+        <label>박수
+          <select id="nights"><option value="1">1박</option><option value="2">2박</option><option value="3">3박</option><option value="4">4박</option><option value="5">5박</option><option value="6">6박</option></select>
+        </label>
+        <div class="generated"><span>생성된 날짜 숫자</span><strong id="epochValue">—</strong></div>
+      </div>
+      <label>자동 생성된 예약 링크<input id="reservationUrl" readonly></label>
+    </section>
+
+    <section class="card">
+      <div class="section-title"><span>2</span><div><h2>객실 우선순위</h2><p>체크된 객실 중 위에 있는 객실부터 예약 가능 여부를 확인합니다.</p></div></div>
+      <div id="roomList" class="room-list"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-title"><span>3</span><div><h2>예약자 정보</h2><p>HA App의 영구 데이터 영역에 저장되며 HA 백업에 포함될 수 있습니다.</p></div></div>
+      <div class="grid two">
+        <label>예약자명<input id="reserverName" autocomplete="off"></label>
+        <label>입금자명<input id="depositorName" autocomplete="off"></label>
+        <label>휴대폰 번호<input id="phone" inputmode="numeric" autocomplete="off" placeholder="01012345678"></label>
+        <label>생년월일<input id="birthDate" inputmode="numeric" autocomplete="off" placeholder="YYYYMMDD" maxlength="8"></label>
+      </div>
+    </section>
+
+    <section class="card status-card">
+      <div class="section-title"><span>4</span><div><h2>실행 상태</h2><p id="statusText">App 상태를 확인하고 있습니다.</p></div></div>
+      <dl id="statusDetails"></dl>
+      <div id="inspectResult" class="inspect-result" hidden></div>
+      <div class="actions">
+        <button id="inspectButton" class="secondary">페이지 연결 확인</button>
+        <button id="saveButton" class="secondary">설정 저장</button>
+        <button id="stopButton" class="danger">실행 중지</button>
+        <button id="startButton" class="primary">예약 대기 시작</button>
+      </div>
+    </section>
+
+    <aside class="notice">
+      <strong>안전한 운영을 위해</strong>
+      <p>HA OS 미니 PC의 시간 동기화와 인터넷 연결을 확인하세요. App 포트를 인터넷에 직접 공개하지 말고 Home Assistant Ingress를 통해 접속하세요. 대상 예약 사이트 자체는 HTTP 연결을 사용합니다.</p>
+    </aside>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
