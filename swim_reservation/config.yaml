@@ -1,5 +1,5 @@
 name: "쉼오지 예약 도우미"
-version: "1.2.4"
+version: "1.2.5"
 slug: "swim_reservation"
 description: "객실 우선순위와 예약자 정보를 저장하고 지정 시각에 쉼오지캠프 예약을 진행합니다."
 url: "https://github.com/kojungho/swim-reservation-ha-app"

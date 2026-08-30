@@ -1,12 +1,17 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
 const elements = Object.fromEntries([
-  "startDate", "triggerAt", "nights", "epochValue", "reservationUrl", "roomList", "reserverName",
+  "startDate", "triggerAt", "nights", "bookingMode", "epochValue", "reservationUrl", "roomList", "roomSectionTitle", "roomSectionHelp", "reserverName",
   "depositorName", "phone", "birthDate", "historyList", "statusBadge", "statusText", "statusDetails", "inspectResult",
-  "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "inspectButton", "saveButton", "stopButton", "runNowButton", "startButton"
+  "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
+  "inspectButton", "saveButton", "stopButton", "runNowButton", "startButton"
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
 let busy = false;
+let currentState = "idle";
+let availabilityTimer = null;
+let availabilityRequest = 0;
+const availabilityByRoom = new Map();
 
 init().catch((error) => showMessage(error.message, true));
 
@@ -16,6 +21,7 @@ async function init() {
   bindEvents();
   await refreshHistory();
   await refreshStatus();
+  scheduleAvailabilityCheck(0);
   setInterval(refreshStatus, 1500);
 }
 
@@ -23,21 +29,33 @@ function bindEvents() {
   elements.startDate.addEventListener("change", () => {
     updateGeneratedValues();
     elements.triggerAt.value = bookingOpenIso(elements.startDate.value);
+    scheduleAvailabilityCheck();
   });
+  elements.nights.addEventListener("change", () => scheduleAvailabilityCheck());
+  elements.bookingMode.addEventListener("change", () => renderRooms());
   elements.saveButton.addEventListener("click", () => perform(async () => {
     await saveConfig();
     showMessage("설정을 HA 미니 PC에 저장했습니다.");
   }));
   elements.startButton.addEventListener("click", () => perform(async () => {
+    if (elements.bookingMode.value === "multiple") {
+      const selectedRooms = rooms.filter((room) => room.enabled).map((room) => room.name);
+      const approved = window.confirm(
+        `여러 객실 동시 예약을 대기시킵니다.\n\n숙박: ${elements.startDate.value}부터 ${elements.nights.value}박\n실제 예약 객실 ${selectedRooms.length}개: ${selectedRooms.join(", ") || "선택 없음"}\n\n지정 시각에 각 객실이 별도 예약으로 최종 제출됩니다. 계속할까요?`
+      );
+      if (!approved) return;
+    }
     await saveConfig();
     await request("start", { method: "POST" });
     await refreshStatus();
   }));
   elements.runNowButton.addEventListener("click", () => perform(async () => {
     const date = elements.startDate.value;
-    const selected = rooms.filter((room) => room.enabled).map((room) => room.name).join(", ");
+    const selectedRooms = rooms.filter((room) => room.enabled).map((room) => room.name);
+    const multiple = elements.bookingMode.value === "multiple";
+    const modeText = multiple ? `여러 객실 동시 예약 (${selectedRooms.length}개)` : "1개 예약 · 우선순위 방식";
     const approved = window.confirm(
-      `${date}부터 ${elements.nights.value}박 예약을 지금 즉시 실행합니다.\n\n객실 우선순위: ${selected || "선택 없음"}\n\n환불 규정 동의와 최종 예약하기까지 자동 진행됩니다. 실행할까요?`
+      `${date}부터 ${elements.nights.value}박 예약을 지금 즉시 실행합니다.\n\n예약 방식: ${modeText}\n예약 대상: ${selectedRooms.join(", ") || "선택 없음"}\n\n환불 규정 동의와 최종 예약하기까지 자동 진행됩니다. 실행할까요?`
     );
     if (!approved) return;
     await saveConfig();
@@ -51,17 +69,23 @@ function bindEvents() {
   elements.inspectButton.addEventListener("click", () => perform(async () => {
     await saveConfig();
     showMessage("미니 PC에서 예약 페이지에 연결하고 있습니다.");
-    const result = await request("inspect", { method: "POST" });
+    const result = await request("inspect", { method: "POST", body: JSON.stringify({ startDate: elements.startDate.value, nights: Number(elements.nights.value) }) });
     renderInspection(result.rooms);
     await refreshStatus();
   }));
   elements.copyDiagnosticsButton.addEventListener("click", () => copyDiagnostics());
+  elements.siteMapButton.addEventListener("click", () => elements.siteMapDialog.showModal());
+  elements.siteMapCloseButton.addEventListener("click", () => elements.siteMapDialog.close());
+  elements.siteMapDialog.addEventListener("click", (event) => {
+    if (event.target === elements.siteMapDialog) elements.siteMapDialog.close();
+  });
 }
 
 function loadConfig(config) {
   elements.startDate.value = config.startDate || "";
   elements.triggerAt.value = (config.triggerAt || "").slice(0, 19);
   elements.nights.value = String(config.nights || 1);
+  elements.bookingMode.value = config.bookingMode === "multiple" ? "multiple" : "priority";
   elements.reserverName.value = config.profile?.reserverName || "";
   elements.depositorName.value = config.profile?.depositorName || "";
   elements.phone.value = config.profile?.phone || "";
@@ -76,6 +100,7 @@ function readConfig() {
     startDate: elements.startDate.value,
     triggerAt: elements.triggerAt.value,
     nights: Number(elements.nights.value),
+    bookingMode: elements.bookingMode.value,
     roomPriority: rooms,
     profile: {
       reserverName: elements.reserverName.value.trim(),
@@ -111,9 +136,10 @@ function renderHistory(entries) {
     const row = document.createElement("div");
     row.className = "history-row";
     const savedAt = new Date(entry.savedAt).toLocaleString("ko-KR");
-    const roomsText = entry.enabledRooms?.length ? entry.enabledRooms.join(" → ") : "선택된 객실 없음";
+    const multiple = entry.bookingMode === "multiple";
+    const roomsText = entry.enabledRooms?.length ? entry.enabledRooms.join(multiple ? " + " : " → ") : "선택된 객실 없음";
     row.innerHTML = `
-      <div class="history-key"><strong>${escapeHtml(entry.startDate)} · ${entry.nights}박</strong><small>${escapeHtml(savedAt)} 저장</small></div>
+      <div class="history-key"><strong>${escapeHtml(entry.startDate)} · ${entry.nights}박</strong><small>${multiple ? `동시 ${entry.enabledRooms.length}개 예약` : "1개 우선순위 예약"} · ${escapeHtml(savedAt)} 저장</small></div>
       <div class="history-rooms">${escapeHtml(roomsText)}</div>
       <div class="history-actions"><button class="load" type="button">불러오기</button><button class="delete" type="button">삭제</button></div>`;
     row.querySelector(".load").addEventListener("click", () => perform(async () => {
@@ -133,15 +159,25 @@ function renderHistory(entries) {
 }
 
 function renderRooms() {
+  const multiple = elements.bookingMode.value === "multiple";
+  elements.roomSectionTitle.textContent = multiple ? "동시 예약할 객실" : "객실 우선순위";
+  elements.roomSectionHelp.textContent = multiple
+    ? "체크한 객실(최대 5개)을 각각 별도 예약으로 준비하고 같은 시각에 최종 제출합니다."
+    : "체크된 객실 중 위에 있는 객실부터 하나가 성공할 때까지 시도합니다.";
   elements.roomList.replaceChildren();
   let rank = 0;
   rooms.forEach((room, index) => {
     if (room.enabled) rank += 1;
     const row = document.createElement("div");
     row.className = `room-row${room.enabled ? " enabled" : ""}`;
+    const availability = availabilityByRoom.get(room.name);
+    const availabilityLabel = availability === "available" ? "예약 가능"
+      : availability === "unavailable" ? "예약 불가"
+        : availability === "checking" ? "확인 중"
+          : availability === "before-open" ? "예약 오픈 전" : "미확인";
     row.innerHTML = `
       <label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} aria-label="${escapeHtml(room.name)} 선택"></label>
-      <div class="room-name"><span class="room-rank">${room.enabled ? `${rank}순위` : "—"}</span>${escapeHtml(room.name)}</div>
+      <div class="room-name"><span class="room-rank">${room.enabled ? (multiple ? "예약" : `${rank}순위`) : "—"}</span>${escapeHtml(room.name)}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
       <div class="move-buttons"><button type="button" data-move="up" ${index === 0 ? "disabled" : ""} aria-label="위로 이동">↑</button><button type="button" data-move="down" ${index === rooms.length - 1 ? "disabled" : ""} aria-label="아래로 이동">↓</button></div>`;
     row.querySelector("input").addEventListener("change", (event) => { room.enabled = event.target.checked; renderRooms(); });
     row.querySelector('[data-move="up"]').addEventListener("click", () => moveRoom(index, -1));
@@ -187,6 +223,7 @@ async function refreshStatus() {
 
 function renderStatus(status) {
   const state = status.state || "idle";
+  currentState = state;
   const labels = { idle: "설정 중", waiting: "예약 대기", running: "자동 실행 중", success: "예약 완료", failed: "확인 필요", stopped: "중지됨" };
   elements.statusBadge.className = `badge ${state}`;
   elements.statusBadge.textContent = labels[state] || state;
@@ -196,6 +233,9 @@ function renderStatus(status) {
   if (status.prepareAt) details.push(["브라우저 준비 시각", new Date(status.prepareAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })]);
   if (status.targetAt) details.push(["예약 요청 시작 시각", new Date(status.targetAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })]);
   if (status.selectedRoom) details.push(["선택된 객실", status.selectedRoom]);
+  if (status.selectedRooms?.length) details.push(["동시 예약 대상", status.selectedRooms.join(" · ")]);
+  if (status.succeededRooms?.length) details.push(["예약 성공 객실", status.succeededRooms.join(" · ")]);
+  if (status.failedRooms?.length) details.push(["예약 실패 객실", status.failedRooms.join(" · ")]);
   if (status.stage) details.push(["진행 단계", status.stage]);
   if (status.updatedAt) details.push(["최근 갱신", new Date(status.updatedAt).toLocaleString("ko-KR")]);
   elements.statusDetails.replaceChildren(...details.flatMap(([term, value]) => {
@@ -226,8 +266,45 @@ async function copyDiagnostics() {
 }
 
 function renderInspection(result) {
+  for (const room of result) availabilityByRoom.set(room.name, room.available ? "available" : "unavailable");
+  renderRooms();
   elements.inspectResult.hidden = false;
   elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${result.map((room) => `<span class="${room.available ? "available" : "unavailable"}">${escapeHtml(room.name)}: ${room.available ? `${elements.nights.value}박 가능` : `${elements.nights.value}박 불가`}</span>`).join(" · ")}`;
+}
+
+function scheduleAvailabilityCheck(delay = 500) {
+  clearTimeout(availabilityTimer);
+  availabilityTimer = setTimeout(() => refreshAvailability(), delay);
+}
+
+async function refreshAvailability() {
+  const startDate = elements.startDate.value;
+  const nights = Number(elements.nights.value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !Number.isInteger(nights)) return;
+  const requestId = ++availabilityRequest;
+  availabilityByRoom.clear();
+  const opensAt = Date.parse(`${bookingOpenIso(startDate)}+09:00`);
+  if (Number.isFinite(opensAt) && opensAt > Date.now()) {
+    for (const room of rooms) availabilityByRoom.set(room.name, "before-open");
+    renderRooms();
+    return;
+  }
+  if (["waiting", "running"].includes(currentState)) {
+    renderRooms();
+    return;
+  }
+  for (const room of rooms) availabilityByRoom.set(room.name, "checking");
+  renderRooms();
+  try {
+    const result = await request("inspect", { method: "POST", body: JSON.stringify({ startDate, nights }) });
+    if (requestId !== availabilityRequest) return;
+    renderInspection(result.rooms || []);
+  } catch (error) {
+    if (requestId !== availabilityRequest) return;
+    availabilityByRoom.clear();
+    renderRooms();
+    if (!busy) showMessage(`객실 가능 여부 확인 실패: ${error.message}`, true);
+  }
 }
 
 async function perform(action) {

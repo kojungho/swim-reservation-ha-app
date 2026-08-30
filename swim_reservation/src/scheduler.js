@@ -1,7 +1,7 @@
 import { triggerEpoch } from "./config.js";
 
 const HOUR = 60 * 60 * 1000;
-const PREWARM_MS = 15_000;
+const PREWARM_MS = 30_000;
 
 export class Scheduler {
   constructor({ store, engine }) {
@@ -40,6 +40,10 @@ export class Scheduler {
         prepareAt: targetAt - PREWARM_MS,
         startDate: config.startDate,
         selectedRoom: null,
+        selectedRooms: [],
+        succeededRooms: [],
+        failedRooms: [],
+        attemptedRooms: [],
         diagnostics: null,
         message: "예약 실행 시각을 기다리는 중입니다."
       });
@@ -75,6 +79,10 @@ export class Scheduler {
       prepareAt: null,
       startDate: config.startDate,
       selectedRoom: null,
+      selectedRooms: [],
+      succeededRooms: [],
+      failedRooms: [],
+      attemptedRooms: [],
       diagnostics: null,
       message: "즉시 예약을 시작합니다.",
       startedAt: Date.now()
@@ -91,12 +99,13 @@ export class Scheduler {
     if (!this.armed) return;
     const config = await this.store.getConfig();
     const target = triggerEpoch(config.triggerAt);
-    const remaining = target - Date.now();
+    let remaining = target - Date.now();
 
     if (!this.prepared && remaining <= PREWARM_MS && remaining > 0) {
-      this.prepared = true;
-      await this.store.updateStatus({ stage: "prewarming", message: "예약 브라우저를 미리 준비하고 있습니다." });
+      await this.store.updateStatus({ stage: "prewarming", message: "객실 선택부터 예약자 정보 입력까지 미리 준비하고 있습니다." });
       await this.engine.prepare(config);
+      this.prepared = true;
+      remaining = target - Date.now();
     }
 
     if (remaining <= 0) {
@@ -122,7 +131,12 @@ export class Scheduler {
     }
     const current = await this.store.getStatus();
     if (current.state === "failed") return;
-    await this.store.updateStatus({ state: "failed", stage: "exception", message: error.message || String(error) });
+    await this.store.updateStatus({
+      state: "failed",
+      stage: "exception",
+      message: error.message || String(error),
+      diagnostics: error.diagnostics || null
+    });
   }
 
   async execute(config, options) {

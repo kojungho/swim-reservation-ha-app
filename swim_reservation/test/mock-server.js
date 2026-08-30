@@ -21,7 +21,7 @@ http.createServer(async (request, response) => {
     return json(response, { ok: true, config: { ...config, reservationUrl: reservationUrl(config.startDate) } });
   }
   if (url.pathname === "/api/history" && request.method === "GET") {
-    return json(response, { entries: history.map((entry) => ({ id: entry.id, savedAt: entry.savedAt, startDate: entry.config.startDate, nights: entry.config.nights, enabledRooms: entry.config.roomPriority.filter((room) => room.enabled).map((room) => room.name) })) });
+    return json(response, { entries: history.map((entry) => ({ id: entry.id, savedAt: entry.savedAt, startDate: entry.config.startDate, nights: entry.config.nights, bookingMode: entry.config.bookingMode, enabledRooms: entry.config.roomPriority.filter((room) => room.enabled).map((room) => room.name) })) });
   }
   const historyMatch = /^\/api\/history\/([^/]+)(?:\/(load))?$/.exec(url.pathname);
   if (historyMatch && request.method === "POST" && historyMatch[2] === "load") {
@@ -37,7 +37,7 @@ http.createServer(async (request, response) => {
   if (url.pathname === "/api/status") return json(response, status);
   if (url.pathname === "/api/inspect") return json(response, { ok: true, rooms: config.roomPriority.map((room, index) => ({ name: room.name, available: index % 3 !== 2 })) });
   if (url.pathname === "/api/start" || url.pathname === "/api/stop" || url.pathname === "/api/run-now") return json(response, { ok: true });
-  const files = { "/": ["index.html", "text/html"], "/styles.css": ["styles.css", "text/css"], "/app.js": ["app.js", "text/javascript"] };
+  const files = { "/": ["index.html", "text/html"], "/styles.css": ["styles.css", "text/css"], "/app.js": ["app.js", "text/javascript"], "/site-map.png": ["site-map.png", "image/png"] };
   const file = files[url.pathname];
   if (!file) { response.writeHead(404); return response.end(); }
   response.writeHead(200, { "Content-Type": file[1] });

@@ -37,6 +37,7 @@ test("객실 순위와 개인정보를 정규화하고 검증한다", () => {
     startDate: "2026-11-07",
     triggerAt: "2026-09-01T00:00:00",
     nights: 2,
+    bookingMode: "multiple",
     roomPriority: [{ name: "달_하늘존", enabled: true }, { name: "해_하늘존", enabled: true }],
     profile: { reserverName: "예약자", depositorName: "입금자", phone: "010-1234-5678", birthDate: "19900101" }
   });
@@ -45,5 +46,18 @@ test("객실 순위와 개인정보를 정규화하고 검증한다", () => {
     { name: "해_하늘존", enabled: true }
   ]);
   assert.equal(config.profile.phone, "01012345678");
+  assert.equal(config.bookingMode, "multiple");
   assert.deepEqual(validateConfig(config), []);
+});
+
+test("동시 예약은 미니 PC 보호를 위해 최대 5개 객실로 제한한다", () => {
+  const config = normalizeConfig({
+    startDate: "2026-11-07",
+    triggerAt: "2026-09-01T00:00:00",
+    nights: 1,
+    bookingMode: "multiple",
+    roomPriority: ["해_하늘존", "달_하늘존", "별_하늘존", "빛_하늘존", "강_하늘존", "산_하늘존"].map((name) => ({ name, enabled: true })),
+    profile: { reserverName: "예약자", depositorName: "입금자", phone: "01012345678", birthDate: "19900101" }
+  });
+  assert.match(validateConfig(config).join(","), /최대 5개/);
 });

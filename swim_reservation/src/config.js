@@ -15,6 +15,7 @@ export function defaultConfig(now = new Date()) {
     startDate,
     triggerAt: bookingOpenIso(startDate),
     nights: 1,
+    bookingMode: "priority",
     roomPriority: ROOM_NAMES.map((name) => ({ name, enabled: false })),
     profile: { reserverName: "", depositorName: "", phone: "", birthDate: "" },
     autoFinalSubmit: true
@@ -39,6 +40,7 @@ export function normalizeConfig(input = {}) {
     startDate: String(input.startDate || ""),
     triggerAt: String(input.triggerAt || ""),
     nights: Number(input.nights),
+    bookingMode: input.bookingMode === "multiple" ? "multiple" : "priority",
     roomPriority: ordered,
     profile: {
       reserverName: String(input.profile?.reserverName || "").trim(),
@@ -56,7 +58,8 @@ export function validateConfig(config, { futureTrigger = false } = {}) {
     errors.push("숙박 시작 날짜");
   }
   if (!Number.isInteger(config.nights) || config.nights < 1 || config.nights > 6) errors.push("박수");
-  if (!config.roomPriority.some((room) => room.enabled)) errors.push("우선순위 객실");
+  if (!config.roomPriority.some((room) => room.enabled)) errors.push("예약할 객실");
+  if (config.bookingMode === "multiple" && config.roomPriority.filter((room) => room.enabled).length > 5) errors.push("동시 예약 객실은 최대 5개");
   if (!config.profile.reserverName) errors.push("예약자명");
   if (!config.profile.depositorName) errors.push("입금자명");
   if (!/^01\d{8,9}$/.test(config.profile.phone)) errors.push("휴대폰 번호");

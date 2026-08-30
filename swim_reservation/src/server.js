@@ -73,8 +73,14 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, { ok: true });
     }
     if (url.pathname === "/api/inspect" && request.method === "POST") {
-      if (scheduler.running) return json(response, 409, { ok: false, error: "예약 실행 중에는 페이지 연결 확인을 사용할 수 없습니다." });
-      const config = await store.getConfig();
+      if (scheduler.running || scheduler.armed) return json(response, 409, { ok: false, error: "예약 대기 또는 실행 중에는 객실 확인을 사용할 수 없습니다." });
+      const input = await readJsonBody(request);
+      const stored = await store.getConfig();
+      const config = normalizeConfig({
+        ...stored,
+        startDate: input.startDate || stored.startDate,
+        nights: Number(input.nights || stored.nights)
+      });
       const rooms = await engine.inspect(config);
       await store.updateStatus({ state: "idle", stage: "inspected", message: "예약 페이지 연결과 객실 목록을 확인했습니다." });
       return json(response, 200, { ok: true, rooms, reservationUrl: reservationUrl(config.startDate) });
@@ -103,7 +109,8 @@ async function serveStatic(pathname, response) {
     "/": ["index.html", "text/html; charset=utf-8"],
     "/index.html": ["index.html", "text/html; charset=utf-8"],
     "/app.js": ["app.js", "text/javascript; charset=utf-8"],
-    "/styles.css": ["styles.css", "text/css; charset=utf-8"]
+    "/styles.css": ["styles.css", "text/css; charset=utf-8"],
+    "/site-map.png": ["site-map.png", "image/png"]
   };
   const route = routes[pathname];
   if (!route) return json(response, 404, { error: "Not found" });

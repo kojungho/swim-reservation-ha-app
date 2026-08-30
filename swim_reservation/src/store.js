@@ -34,6 +34,7 @@ export class Store {
         savedAt,
         startDate: config.startDate,
         nights: config.nights,
+        bookingMode: config.bookingMode,
         enabledRooms: config.roomPriority.filter((room) => room.enabled).map((room) => room.name)
       }))
       .sort((left, right) => right.savedAt - left.savedAt);
