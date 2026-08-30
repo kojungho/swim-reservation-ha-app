@@ -158,9 +158,11 @@ export class ReservationEngine {
       const index = Number((box.name.match(/\[(\d+)\]/) || [])[1]);
       const select = document.querySelector(`select[name="daytype[${index}]"]`);
       const name = (row?.querySelector("td:nth-child(2)")?.innerText || row?.innerText || "").trim().split(/\s+/)[0];
+      const nightsAvailable = Boolean(select && [...select.options].some((option) => option.value === String(requestedNights) && !option.disabled));
       return {
         name,
-        available: Boolean(select && [...select.options].some((option) => option.value === String(requestedNights) && !option.disabled)),
+        available: !box.disabled && nightsAvailable,
+        status: box.disabled ? "booked" : nightsAvailable ? "available" : "unavailable",
         options: select ? [...select.options].map((option) => option.text.trim()) : []
       };
     }), nights);

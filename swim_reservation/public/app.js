@@ -172,7 +172,8 @@ function renderRooms() {
     row.className = `room-row${room.enabled ? " enabled" : ""}`;
     const availability = availabilityByRoom.get(room.name);
     const availabilityLabel = availability === "available" ? "예약 가능"
-      : availability === "unavailable" ? "예약 불가"
+      : availability === "booked" ? "예약 완료"
+        : availability === "unavailable" ? "해당 박수 불가"
         : availability === "checking" ? "확인 중"
           : availability === "before-open" ? "예약 오픈 전" : "미확인";
     row.innerHTML = `
@@ -266,10 +267,13 @@ async function copyDiagnostics() {
 }
 
 function renderInspection(result) {
-  for (const room of result) availabilityByRoom.set(room.name, room.available ? "available" : "unavailable");
+  for (const room of result) availabilityByRoom.set(room.name, room.status || (room.available ? "available" : "unavailable"));
   renderRooms();
   elements.inspectResult.hidden = false;
-  elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${result.map((room) => `<span class="${room.available ? "available" : "unavailable"}">${escapeHtml(room.name)}: ${room.available ? `${elements.nights.value}박 가능` : `${elements.nights.value}박 불가`}</span>`).join(" · ")}`;
+  elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${result.map((room) => {
+    const label = room.status === "booked" ? "예약 완료" : room.available ? `${elements.nights.value}박 가능` : `${elements.nights.value}박 불가`;
+    return `<span class="${room.available ? "available" : "unavailable"}">${escapeHtml(room.name)}: ${label}</span>`;
+  }).join(" · ")}`;
 }
 
 function scheduleAvailabilityCheck(delay = 500) {
