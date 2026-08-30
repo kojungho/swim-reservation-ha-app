@@ -52,10 +52,11 @@ input[readonly] { background: #f3f6f4; color: #516159; }
 .move-buttons button:disabled { opacity: .3; cursor: default; }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; margin-top: 22px; }
 button { border: 0; border-radius: 11px; padding: 12px 17px; font-weight: 800; cursor: pointer; }
+.button { display: inline-flex; align-items: center; border: 0; border-radius: 11px; padding: 12px 17px; font-weight: 800; cursor: pointer; text-decoration: none; }
 button:disabled { opacity: .55; cursor: wait; }
 button.primary { background: var(--green); color: white; }
 button.primary:hover { background: var(--green-dark); }
-button.secondary { background: #e9efeb; color: #34473d; }
+button.secondary, .button.secondary { background: #e9efeb; color: #34473d; }
 button.danger { background: #f9e7e5; color: var(--red); }
 button.now { background: #d67a24; color: white; }
 button.now:hover { background: #b86116; }

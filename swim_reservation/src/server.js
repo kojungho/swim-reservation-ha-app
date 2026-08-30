@@ -6,6 +6,7 @@ import { normalizeConfig, reservationUrl, triggerEpoch, validateConfig } from ".
 import { ReservationEngine } from "./reservation-engine.js";
 import { Scheduler } from "./scheduler.js";
 import { Store } from "./store.js";
+import { reservationCheckUrl } from "./reservation-check.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -35,6 +36,15 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/api/status" && request.method === "GET") {
       return json(response, 200, await store.getStatus());
+    }
+    if (url.pathname === "/reservation-check" && request.method === "GET") {
+      const config = await store.getConfig();
+      response.writeHead(302, {
+        Location: reservationCheckUrl(config.profile),
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer"
+      });
+      return response.end();
     }
     if (url.pathname === "/api/history" && request.method === "GET") {
       return json(response, 200, { entries: await store.listHistory() });
