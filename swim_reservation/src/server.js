@@ -43,11 +43,20 @@ const server = http.createServer(async (request, response) => {
       await scheduler.arm(config);
       return json(response, 200, { ok: true, targetAt: triggerEpoch(config.triggerAt) });
     }
+    if (url.pathname === "/api/run-now" && request.method === "POST") {
+      const config = await store.getConfig();
+      const errors = validateConfig(config);
+      if (errors.length) return json(response, 400, { ok: false, error: `확인할 항목: ${errors.join(", ")}` });
+      if (scheduler.running) return json(response, 409, { ok: false, error: "이미 예약 엔진이 실행 중입니다." });
+      await scheduler.runNow(config);
+      return json(response, 202, { ok: true, startedAt: Date.now() });
+    }
     if (url.pathname === "/api/stop" && request.method === "POST") {
       await scheduler.stop();
       return json(response, 200, { ok: true });
     }
     if (url.pathname === "/api/inspect" && request.method === "POST") {
+      if (scheduler.running) return json(response, 409, { ok: false, error: "예약 실행 중에는 페이지 연결 확인을 사용할 수 없습니다." });
       const config = await store.getConfig();
       const rooms = await engine.inspect(config);
       await store.updateStatus({ state: "idle", stage: "inspected", message: "예약 페이지 연결과 객실 목록을 확인했습니다." });

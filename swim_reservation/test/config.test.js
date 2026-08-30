@@ -22,6 +22,11 @@ test("날짜가 하루 늘면 타임스탬프가 86400 증가한다", () => {
   assert.equal(startEpoch("2026-11-08") / 1000, 1794063600);
 });
 
+test("2026-10-22 링크 타임스탬프를 정확히 생성한다", () => {
+  assert.equal(startEpoch("2026-10-22") / 1000, 1792594800);
+  assert.match(reservationUrl("2026-10-22"), /adaystart=1792594800$/);
+});
+
 test("숙박월 두 달 전 1일 00시를 제안한다", () => {
   assert.equal(bookingOpenIso("2026-11-07"), "2026-09-01T00:00:00");
   assert.equal(new Date(triggerEpoch("2026-09-01T00:00:00")).toISOString(), "2026-08-31T15:00:00.000Z");

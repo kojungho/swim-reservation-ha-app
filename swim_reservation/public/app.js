@@ -2,7 +2,7 @@ const API = (path) => new URL(`api/${path}`, document.baseURI).href;
 const elements = Object.fromEntries([
   "startDate", "triggerAt", "nights", "epochValue", "reservationUrl", "roomList", "reserverName",
   "depositorName", "phone", "birthDate", "statusBadge", "statusText", "statusDetails", "inspectResult",
-  "inspectButton", "saveButton", "stopButton", "startButton"
+  "inspectButton", "saveButton", "stopButton", "runNowButton", "startButton"
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
@@ -30,6 +30,17 @@ function bindEvents() {
   elements.startButton.addEventListener("click", () => perform(async () => {
     await saveConfig();
     await request("start", { method: "POST" });
+    await refreshStatus();
+  }));
+  elements.runNowButton.addEventListener("click", () => perform(async () => {
+    const date = elements.startDate.value;
+    const selected = rooms.filter((room) => room.enabled).map((room) => room.name).join(", ");
+    const approved = window.confirm(
+      `${date}부터 ${elements.nights.value}박 예약을 지금 즉시 실행합니다.\n\n객실 우선순위: ${selected || "선택 없음"}\n\n환불 규정 동의와 최종 예약하기까지 자동 진행됩니다. 실행할까요?`
+    );
+    if (!approved) return;
+    await saveConfig();
+    await request("run-now", { method: "POST" });
     await refreshStatus();
   }));
   elements.stopButton.addEventListener("click", () => perform(async () => {
@@ -170,7 +181,7 @@ async function perform(action) {
 }
 
 function setButtonsDisabled(disabled) {
-  for (const button of [elements.inspectButton, elements.saveButton, elements.stopButton, elements.startButton]) button.disabled = disabled;
+  for (const button of [elements.inspectButton, elements.saveButton, elements.stopButton, elements.runNowButton, elements.startButton]) button.disabled = disabled;
 }
 
 function showMessage(message, error = false) {

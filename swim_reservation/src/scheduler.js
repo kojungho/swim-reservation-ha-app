@@ -10,6 +10,8 @@ export class Scheduler {
     this.timer = null;
     this.armed = false;
     this.prepared = false;
+    this.running = false;
+    this.cancelRequested = false;
   }
 
   async restore() {
@@ -24,9 +26,11 @@ export class Scheduler {
   }
 
   async arm(config, { restored = false } = {}) {
+    if (this.running) throw new Error("이미 예약 엔진이 실행 중입니다.");
     this.stopTimer();
     this.armed = true;
     this.prepared = false;
+    this.cancelRequested = false;
     if (!restored) {
       await this.store.updateStatus({
         state: "waiting",
@@ -40,11 +44,31 @@ export class Scheduler {
   }
 
   async stop() {
+    this.cancelRequested = true;
     this.armed = false;
     this.prepared = false;
+    this.running = false;
     this.stopTimer();
     await this.engine.close();
     return this.store.updateStatus({ state: "stopped", stage: "stopped", message: "예약 실행을 중지했습니다." });
+  }
+
+  async runNow(config) {
+    if (this.running) throw new Error("이미 예약 엔진이 실행 중입니다.");
+    this.stopTimer();
+    this.armed = false;
+    this.prepared = false;
+    this.running = true;
+    this.cancelRequested = false;
+    await this.store.updateStatus({
+      state: "running",
+      stage: "starting-now",
+      targetAt: Date.now(),
+      selectedRoom: null,
+      message: "즉시 예약을 시작합니다.",
+      startedAt: Date.now()
+    });
+    this.execute(config, { prepared: false }).catch((error) => this.fail(error));
   }
 
   scheduleTick() {
@@ -66,8 +90,9 @@ export class Scheduler {
 
     if (remaining <= 0) {
       this.armed = false;
+      this.running = true;
       await this.store.updateStatus({ state: "running", stage: "starting", message: "예약을 시작합니다.", startedAt: Date.now() });
-      await this.engine.run(config, { prepared: this.prepared });
+      await this.execute(config, { prepared: this.prepared });
       return;
     }
 
@@ -77,9 +102,22 @@ export class Scheduler {
 
   async fail(error) {
     this.armed = false;
+    this.running = false;
     this.stopTimer();
     await this.engine.close();
+    if (this.cancelRequested) {
+      await this.store.updateStatus({ state: "stopped", stage: "stopped", message: "예약 실행을 중지했습니다." });
+      return;
+    }
     await this.store.updateStatus({ state: "failed", stage: "exception", message: error.message || String(error) });
+  }
+
+  async execute(config, options) {
+    try {
+      await this.engine.run(config, options);
+    } finally {
+      this.running = false;
+    }
   }
 
   stopTimer() {

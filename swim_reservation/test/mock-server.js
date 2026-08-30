@@ -19,7 +19,7 @@ http.createServer(async (request, response) => {
   }
   if (url.pathname === "/api/status") return json(response, status);
   if (url.pathname === "/api/inspect") return json(response, { ok: true, rooms: config.roomPriority.map((room, index) => ({ name: room.name, available: index % 3 !== 2 })) });
-  if (url.pathname === "/api/start" || url.pathname === "/api/stop") return json(response, { ok: true });
+  if (url.pathname === "/api/start" || url.pathname === "/api/stop" || url.pathname === "/api/run-now") return json(response, { ok: true });
   const files = { "/": ["index.html", "text/html"], "/styles.css": ["styles.css", "text/css"], "/app.js": ["app.js", "text/javascript"] };
   const file = files[url.pathname];
   if (!file) { response.writeHead(404); return response.end(); }

@@ -51,6 +51,8 @@ button.primary { background: var(--green); color: white; }
 button.primary:hover { background: var(--green-dark); }
 button.secondary { background: #e9efeb; color: #34473d; }
 button.danger { background: #f9e7e5; color: var(--red); }
+button.now { background: #d67a24; color: white; }
+button.now:hover { background: #b86116; }
 dl { display: grid; grid-template-columns: 130px 1fr; gap: 8px 14px; margin: 0; font-size: 14px; }
 dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
 .inspect-result { margin-top: 18px; padding: 14px; background: #f4f7f5; border-radius: 12px; font-size: 13px; line-height: 1.7; }
