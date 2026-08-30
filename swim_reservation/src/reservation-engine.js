@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { reservationUrl } from "./config.js";
+import { fillPersonalFields } from "./personal-fields.js";
 
 const NAVIGATION_TIMEOUT = 20_000;
 
@@ -151,45 +152,15 @@ export class ReservationEngine {
   }
 
   async fillPersonalInfo(config) {
-    const filled = await this.page.evaluate((profile) => {
-      const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
-      const controls = [...document.querySelectorAll("input, select, textarea")].filter((control) => {
-        const type = (control.type || "").toLowerCase();
-        return !control.disabled && !["hidden", "checkbox", "radio", "button", "submit", "image", "reset"].includes(type);
-      });
-      const used = new Set();
-      const context = (control) => clean(control.closest("tr, p, li, div, td")?.innerText || "");
-      const setValue = (control, value) => {
-        control.value = value;
-        control.dispatchEvent(new Event("input", { bubbles: true }));
-        control.dispatchEvent(new Event("change", { bubbles: true }));
-        used.add(control);
-      };
-      const fillOne = (pattern, value, exclude) => {
-        const control = controls.find((item) => !used.has(item) && pattern.test(`${context(item)} ${item.name} ${item.id}`) && (!exclude || !exclude.test(context(item))));
-        if (control) setValue(control, value);
-        return Boolean(control);
-      };
-      const splitFill = (pattern, digits, parts) => {
-        const matches = controls.filter((item) => !used.has(item) && pattern.test(`${context(item)} ${item.name} ${item.id}`));
-        if (matches.length >= parts.length) {
-          parts.forEach((length, index) => setValue(matches[index], digits.slice(parts.slice(0, index).reduce((a, b) => a + b, 0), parts.slice(0, index + 1).reduce((a, b) => a + b, 0))));
-          return true;
-        }
-        if (matches[0]) { setValue(matches[0], digits); return true; }
-        return false;
-      };
-      const result = {
-        reserverName: fillOne(/예약자명|예약자 이름|예약자/, profile.reserverName, /입금/),
-        depositorName: fillOne(/입금자명|입금자 이름|입금자/, profile.depositorName),
-        phone: splitFill(/휴대폰|핸드폰|연락처|전화번호|phone|mobile|tel|hp/i, profile.phone, [3, 4, 4]),
-        birthDate: splitFill(/생년월일|생일|birth|birthday/i, profile.birthDate, [4, 2, 2])
-      };
-      for (const box of document.querySelectorAll('input[type="checkbox"]:not(:disabled)')) box.checked = true;
-      return result;
-    }, config.profile);
-    const missing = Object.entries(filled).filter(([, value]) => !value).map(([key]) => key);
-    if (missing.length) throw new Error(`예약자 입력란을 찾지 못했습니다: ${missing.join(", ")}`);
+    const result = await this.page.evaluate(fillPersonalFields, config.profile);
+    const missing = Object.entries(result.filled).filter(([, value]) => !value).map(([key]) => key);
+    if (missing.length) {
+      const diagnostic = result.fields
+        .map((field) => `${field.tag}[name=${field.name || "-"},id=${field.id || "-"},max=${field.maxLength}](${field.context || "문맥 없음"})`)
+        .join(" | ")
+        .slice(0, 900);
+      throw new Error(`예약자 입력란을 찾지 못했습니다: ${missing.join(", ")} / 감지된 필드: ${diagnostic}`);
+    }
   }
 
   async clickAction(words, allowSubmitFallback) {

@@ -109,6 +109,8 @@ export class Scheduler {
       await this.store.updateStatus({ state: "stopped", stage: "stopped", message: "예약 실행을 중지했습니다." });
       return;
     }
+    const current = await this.store.getStatus();
+    if (current.state === "failed") return;
     await this.store.updateStatus({ state: "failed", stage: "exception", message: error.message || String(error) });
   }
 
