@@ -67,6 +67,13 @@ dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: any
 .inspect-result .unavailable { color: #9a4b44; }
 .inspect-result .before-open { color: #815c00; font-weight: 700; }
 .inspect-result .available-before-open, .inspect-result .unavailable-before-open { color: #815c00; font-weight: 700; }
+.reservation-list { display: grid; gap: 10px; margin-top: 18px; padding: 14px; background: #f4f7f5; border-radius: 12px; }
+.reservation-list[hidden] { display: none; }
+.reservation-list > p { margin: 2px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.reservation-row { display: grid; grid-template-columns: minmax(180px, 1.5fr) minmax(100px, .7fr) minmax(100px, .7fr) auto; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: white; }
+.reservation-row > div { display: grid; gap: 4px; }
+.reservation-row span { color: var(--muted); font-size: 12px; }
+.reservation-row .cancel-disabled { color: var(--muted); font-size: 12px; font-weight: 700; }
 .diagnostics-panel { margin-top: 18px; padding: 14px; border: 1px solid #e4c5c1; border-radius: 12px; background: #fff8f7; }
 .diagnostics-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .diagnostics-heading > div { display: grid; gap: 4px; }
@@ -97,9 +104,10 @@ dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: any
   .card { padding: 20px 16px; border-radius: 16px; }
   .grid.two { grid-template-columns: 1fr; }
   .actions { display: grid; grid-template-columns: 1fr 1fr; }
-  .actions button { width: 100%; }
+  .actions button, .actions .button { width: 100%; justify-content: center; }
   dl { grid-template-columns: 105px 1fr; }
   .history-row { grid-template-columns: 1fr; gap: 9px; }
+  .reservation-row { grid-template-columns: 1fr 1fr; }
   .history-actions { justify-content: stretch; }
   .history-actions button { flex: 1; }
   .diagnostics-heading { align-items: stretch; flex-direction: column; }

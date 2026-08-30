@@ -3,7 +3,7 @@ const elements = Object.fromEntries([
   "startDate", "triggerAt", "nights", "bookingMode", "epochValue", "openAtValue", "reservationUrl", "roomList", "roomSectionTitle", "roomSectionHelp", "reserverName",
   "depositorName", "phone", "birthDate", "historyList", "statusBadge", "statusText", "statusDetails", "inspectResult",
   "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
-  "inspectButton", "saveButton", "stopButton", "runNowButton", "startButton"
+  "inspectButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton", "startButton"
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
@@ -94,6 +94,10 @@ function bindEvents() {
     const result = await request("inspect", { method: "POST", body: JSON.stringify({ startDate: elements.startDate.value, nights: Number(elements.nights.value) }) });
     renderInspection(result.rooms, { beforeOpen: isBeforeOpen(elements.startDate.value) });
     await refreshStatus();
+  }));
+  elements.reservationLookupButton.addEventListener("click", () => perform(async () => {
+    const result = await request("reservations");
+    renderReservations(result.reservations || []);
   }));
   elements.copyDiagnosticsButton.addEventListener("click", () => copyDiagnostics());
   elements.siteMapButton.addEventListener("click", () => elements.siteMapDialog.showModal());
@@ -322,6 +326,42 @@ function renderInspection(result, { beforeOpen = false } = {}) {
   }).join(" · ")}`;
 }
 
+function renderReservations(reservations) {
+  elements.reservationList.hidden = false;
+  elements.reservationList.replaceChildren();
+  const heading = document.createElement("strong");
+  heading.textContent = "예약 확인 및 취소";
+  elements.reservationList.append(heading);
+  if (!reservations.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "예약 내역이 없습니다. 저장된 예약자명과 휴대폰 번호가 실제 예약 정보와 같은지 확인해 주세요.";
+    elements.reservationList.append(empty);
+    return;
+  }
+  for (const reservation of reservations) {
+    const row = document.createElement("div");
+    row.className = "reservation-row";
+    row.innerHTML = `
+      <div><strong>${escapeHtml(reservation.room)}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span></div>
+      <div><span>결제 금액</span><strong>${escapeHtml(reservation.total)}</strong></div>
+      <div><span>예약 상태</span><strong>${escapeHtml(reservation.status)}</strong></div>
+      ${reservation.cancelable ? '<button type="button" class="reservation-cancel-button danger">예약 취소</button>' : '<span class="cancel-disabled">사이트에서 취소 불가</span>'}`;
+    const cancelButton = row.querySelector(".reservation-cancel-button");
+    cancelButton?.addEventListener("click", () => perform(async () => {
+      const approved = window.confirm(
+        `${reservation.room}\n${reservation.stayDate} · ${reservation.nights}\n결제 금액 ${reservation.total}\n\n이 예약을 실제로 취소할까요? 취소한 예약은 자동으로 복구할 수 없습니다.`
+      );
+      if (!approved) return;
+      const result = await request(`reservations/${encodeURIComponent(reservation.id)}/cancel`, {
+        method: "POST", body: JSON.stringify({ confirmed: true })
+      });
+      renderReservations(result.reservations || []);
+      showMessage(`${reservation.room} 예약 취소가 완료되었습니다.`, false, "예약 취소 완료");
+    }));
+    elements.reservationList.append(row);
+  }
+}
+
 function scheduleAvailabilityCheck(delay = 500) {
   clearTimeout(availabilityTimer);
   availabilityTimer = setTimeout(() => refreshAvailability(), delay);
@@ -369,12 +409,13 @@ async function perform(action) {
 }
 
 function setButtonsDisabled(disabled) {
-  for (const button of [elements.inspectButton, elements.saveButton, elements.stopButton, elements.runNowButton, elements.startButton]) button.disabled = disabled;
+  for (const button of [elements.inspectButton, elements.reservationLookupButton, elements.saveButton, elements.stopButton, elements.runNowButton, elements.startButton]) button.disabled = disabled;
+  for (const button of elements.reservationList.querySelectorAll("button")) button.disabled = disabled;
 }
 
-function showMessage(message, error = false) {
+function showMessage(message, error = false, successLabel = "저장 완료") {
   elements.statusText.textContent = message;
-  elements.statusBadge.textContent = error ? "확인 필요" : "저장 완료";
+  elements.statusBadge.textContent = error ? "확인 필요" : successLabel;
   elements.statusBadge.className = `badge ${error ? "failed" : "success"}`;
 }
 

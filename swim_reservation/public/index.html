@@ -59,6 +59,7 @@
       <div class="section-title"><span>5</span><div><h2>실행 상태</h2><p id="statusText">App 상태를 확인하고 있습니다.</p></div></div>
       <dl id="statusDetails"></dl>
       <div id="inspectResult" class="inspect-result" hidden></div>
+      <div id="reservationList" class="reservation-list" hidden></div>
       <div id="diagnosticsPanel" class="diagnostics-panel" hidden>
         <div class="diagnostics-heading">
           <div><strong>실패 페이지 진단 정보</strong><small>입력값·쿠키·저장소·전체 HTML은 수집하지 않습니다.</small></div>
@@ -68,7 +69,8 @@
       </div>
       <div class="actions">
         <button id="siteMapButton" class="secondary">사이트 위치 안내</button>
-        <a class="button secondary" href="reservation-check" target="_blank" rel="noopener noreferrer">예약 확인 및 취소</a>
+        <a class="button secondary" href="reservation-check" target="_blank" rel="noopener noreferrer">사이트에서 직접 확인</a>
+        <button id="reservationLookupButton" class="secondary">예약 정보 불러오기</button>
         <button id="inspectButton" class="secondary">페이지 연결 확인</button>
         <button id="saveButton" class="secondary">설정 저장</button>
         <button id="stopButton" class="danger">실행 중지</button>

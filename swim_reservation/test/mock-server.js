@@ -35,6 +35,11 @@ http.createServer(async (request, response) => {
     return json(response, { ok: true });
   }
   if (url.pathname === "/api/status") return json(response, status);
+  if (url.pathname === "/api/reservations" && request.method === "GET") return json(response, {
+    ok: true,
+    reservations: [{ id: "493304", room: "숨_산맥존", stayDate: "2026년10월07일", nights: "1박", total: "60,000원", status: "예약대기 중", cancelable: true }]
+  });
+  if (/^\/api\/reservations\/\d+\/cancel$/.test(url.pathname) && request.method === "POST") return json(response, { ok: true, reservations: [] });
   if (url.pathname === "/api/inspect") return json(response, { ok: true, rooms: config.roomPriority.map((room, index) => ({ name: room.name, available: index % 3 !== 2 })) });
   if (url.pathname === "/api/start" || url.pathname === "/api/stop" || url.pathname === "/api/run-now") return json(response, { ok: true });
   const files = { "/": ["index.html", "text/html"], "/styles.css": ["styles.css", "text/css"], "/app.js": ["app.js", "text/javascript"], "/site-map.png": ["site-map.png", "image/png"] };

@@ -7,6 +7,7 @@ import { ReservationEngine } from "./reservation-engine.js";
 import { Scheduler } from "./scheduler.js";
 import { Store } from "./store.js";
 import { reservationCheckUrl } from "./reservation-check.js";
+import { ReservationManager } from "./reservation-manager.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -16,6 +17,7 @@ const PUBLIC_DIR = path.join(ROOT, "public");
 const store = new Store(DATA_DIR);
 const engine = new ReservationEngine({ store, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
 const scheduler = new Scheduler({ store, engine });
+const reservationManager = new ReservationManager({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
 
 await store.init();
 await scheduler.restore();
@@ -48,6 +50,21 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/api/history" && request.method === "GET") {
       return json(response, 200, { entries: await store.listHistory() });
+    }
+    if (url.pathname === "/api/reservations" && request.method === "GET") {
+      if (scheduler.running || scheduler.armed) return json(response, 409, { ok: false, error: "예약 대기 또는 실행 중에는 예약 내역 조회를 사용할 수 없습니다." });
+      const config = await store.getConfig();
+      const reservations = await reservationManager.list(config.profile);
+      return json(response, 200, { ok: true, reservations });
+    }
+    const cancelMatch = /^\/api\/reservations\/(\d+)\/cancel$/.exec(url.pathname);
+    if (cancelMatch && request.method === "POST") {
+      if (scheduler.running || scheduler.armed) return json(response, 409, { ok: false, error: "예약 대기 또는 실행 중에는 예약 취소를 사용할 수 없습니다." });
+      const input = await readJsonBody(request);
+      if (input.confirmed !== true) return json(response, 400, { ok: false, error: "예약 취소 최종 확인이 필요합니다." });
+      const config = await store.getConfig();
+      const result = await reservationManager.cancel(config.profile, cancelMatch[1]);
+      return json(response, 200, { ok: true, ...result });
     }
     const historyMatch = /^\/api\/history\/([^/]+)(?:\/(load))?$/.exec(url.pathname);
     if (historyMatch && request.method === "POST" && historyMatch[2] === "load") {
