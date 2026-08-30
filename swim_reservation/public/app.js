@@ -29,8 +29,9 @@ const STAGE_LABELS = {
   exception: "실행 예외", missed: "실행 시각 경과", stopped: "실행 중지", inspected: "객실 확인 완료"
 };
 const AVAILABILITY_LABELS = {
-  booked: "예약 완료",
+  available: "예약 가능", booked: "예약 완료", unavailable: "해당 박수 불가",
   checking: "확인 중", "checking-before-open": "확인 중 (예약 오픈 전)",
+  "available-before-open": "예약 가능 (예약 오픈 전)", "unavailable-before-open": "예약 불가 (예약 오픈 전)",
   "before-open": "확인 불가 (예약 오픈 전)", unknown: "미확인"
 };
 
@@ -192,25 +193,16 @@ function renderRooms() {
     const row = document.createElement("div");
     row.className = `room-row${room.enabled ? " enabled" : ""}`;
     const availability = availabilityByRoom.get(room.name);
-    const availabilityText = availabilityLabel(availability);
+    const availabilityLabel = AVAILABILITY_LABELS[availability] || AVAILABILITY_LABELS.unknown;
     row.innerHTML = `
       <label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} aria-label="${escapeHtml(room.name)} 선택"></label>
-      <div class="room-name"><span class="room-rank">${room.enabled ? (multiple ? "예약" : `${rank}순위`) : "—"}</span>${escapeHtml(room.name)}<span class="availability ${availability || "unknown"}">${availabilityText}</span></div>
+      <div class="room-name"><span class="room-rank">${room.enabled ? (multiple ? "예약" : `${rank}순위`) : "—"}</span>${escapeHtml(room.name)}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
       <div class="move-buttons"><button type="button" data-move="up" ${index === 0 ? "disabled" : ""} aria-label="위로 이동">↑</button><button type="button" data-move="down" ${index === rooms.length - 1 ? "disabled" : ""} aria-label="아래로 이동">↓</button></div>`;
     row.querySelector("input").addEventListener("change", (event) => { room.enabled = event.target.checked; renderRooms(); });
     row.querySelector('[data-move="up"]').addEventListener("click", () => moveRoom(index, -1));
     row.querySelector('[data-move="down"]').addEventListener("click", () => moveRoom(index, 1));
     elements.roomList.append(row);
   });
-}
-
-function availabilityLabel(status) {
-  const nights = Number(elements.nights.value) || 1;
-  if (status === "available") return `${nights}박 가능`;
-  if (status === "unavailable") return `${nights}박 불가`;
-  if (status === "available-before-open") return `${nights}박 가능 (예약 오픈 전)`;
-  if (status === "unavailable-before-open") return `${nights}박 불가 (예약 오픈 전)`;
-  return AVAILABILITY_LABELS[status] || AVAILABILITY_LABELS.unknown;
 }
 
 function moveRoom(index, delta) {
@@ -323,7 +315,9 @@ function renderInspection(result, { beforeOpen = false } = {}) {
   const opening = beforeOpen ? `<small>예약 가능 시작: ${escapeHtml(formatOpeningTime(elements.startDate.value))}</small><br>` : "";
   elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${opening}${displayed.map((room) => {
     const status = room.displayStatus;
-    const label = availabilityLabel(status);
+    const label = ["available-before-open", "unavailable-before-open", "before-open", "booked"].includes(status)
+      ? AVAILABILITY_LABELS[status]
+      : room.available ? `${elements.nights.value}박 가능` : `${elements.nights.value}박 불가`;
     return `<span class="${escapeHtml(status)}">${escapeHtml(room.name)}: ${label}</span>`;
   }).join(" · ")}`;
 }
