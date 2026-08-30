@@ -1,6 +1,7 @@
 import { chromium } from "playwright-core";
 import { reservationUrl } from "./config.js";
 import { fillPersonalFields } from "./personal-fields.js";
+import { readPageDiagnostics } from "./page-diagnostics.js";
 
 const NAVIGATION_TIMEOUT = 20_000;
 
@@ -64,7 +65,13 @@ export class ReservationEngine {
       }
       throw new Error("예약 단계가 예상보다 많아 자동 실행을 중지했습니다.");
     } catch (error) {
-      await this.store.updateStatus({ state: "failed", stage: "reservation-error", message: error.message || String(error) });
+      const diagnostics = error.diagnostics || await this.collectDiagnostics();
+      await this.store.updateStatus({
+        state: "failed",
+        stage: "reservation-error",
+        message: error.message || String(error),
+        diagnostics
+      });
       throw error;
     } finally {
       await this.close();
@@ -155,11 +162,18 @@ export class ReservationEngine {
     const result = await this.page.evaluate(fillPersonalFields, config.profile);
     const missing = Object.entries(result.filled).filter(([, value]) => !value).map(([key]) => key);
     if (missing.length) {
-      const diagnostic = result.fields
-        .map((field) => `${field.tag}[name=${field.name || "-"},id=${field.id || "-"},max=${field.maxLength}](${field.context || "문맥 없음"})`)
-        .join(" | ")
-        .slice(0, 900);
-      throw new Error(`예약자 입력란을 찾지 못했습니다: ${missing.join(", ")} / 감지된 필드: ${diagnostic}`);
+      const error = new Error(`예약자 입력란을 찾지 못했습니다: ${missing.join(", ")}. 아래의 진단 정보 복사 버튼을 눌러 내용을 보내주세요.`);
+      error.diagnostics = await this.collectDiagnostics();
+      throw error;
+    }
+  }
+
+  async collectDiagnostics() {
+    if (!this.page || this.page.isClosed()) return null;
+    try {
+      return await this.page.evaluate(readPageDiagnostics);
+    } catch {
+      return null;
     }
   }
 

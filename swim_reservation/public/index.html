@@ -55,6 +55,13 @@
       <div class="section-title"><span>5</span><div><h2>실행 상태</h2><p id="statusText">App 상태를 확인하고 있습니다.</p></div></div>
       <dl id="statusDetails"></dl>
       <div id="inspectResult" class="inspect-result" hidden></div>
+      <div id="diagnosticsPanel" class="diagnostics-panel" hidden>
+        <div class="diagnostics-heading">
+          <div><strong>실패 페이지 진단 정보</strong><small>입력값·쿠키·저장소·전체 HTML은 수집하지 않습니다.</small></div>
+          <button id="copyDiagnosticsButton" class="secondary" type="button">진단 정보 복사</button>
+        </div>
+        <pre id="diagnosticsPreview"></pre>
+      </div>
       <div class="actions">
         <button id="inspectButton" class="secondary">페이지 연결 확인</button>
         <button id="saveButton" class="secondary">설정 저장</button>

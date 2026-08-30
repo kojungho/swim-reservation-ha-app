@@ -37,6 +37,7 @@ export class Scheduler {
         stage: "armed",
         targetAt: triggerEpoch(config.triggerAt),
         selectedRoom: null,
+        diagnostics: null,
         message: "예약 실행 시각을 기다리는 중입니다."
       });
     }
@@ -65,6 +66,7 @@ export class Scheduler {
       stage: "starting-now",
       targetAt: Date.now(),
       selectedRoom: null,
+      diagnostics: null,
       message: "즉시 예약을 시작합니다.",
       startedAt: Date.now()
     });

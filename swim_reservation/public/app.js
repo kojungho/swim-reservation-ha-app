@@ -2,7 +2,7 @@ const API = (path) => new URL(`api/${path}`, document.baseURI).href;
 const elements = Object.fromEntries([
   "startDate", "triggerAt", "nights", "epochValue", "reservationUrl", "roomList", "reserverName",
   "depositorName", "phone", "birthDate", "historyList", "statusBadge", "statusText", "statusDetails", "inspectResult",
-  "inspectButton", "saveButton", "stopButton", "runNowButton", "startButton"
+  "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "inspectButton", "saveButton", "stopButton", "runNowButton", "startButton"
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
@@ -55,6 +55,7 @@ function bindEvents() {
     renderInspection(result.rooms);
     await refreshStatus();
   }));
+  elements.copyDiagnosticsButton.addEventListener("click", () => copyDiagnostics());
 }
 
 function loadConfig(config) {
@@ -200,6 +201,26 @@ function renderStatus(status) {
     const dd = document.createElement("dd"); dd.textContent = value;
     return [dt, dd];
   }));
+  const diagnosticText = status.diagnostics ? JSON.stringify(status.diagnostics, null, 2) : "";
+  elements.diagnosticsPanel.hidden = !diagnosticText;
+  elements.diagnosticsPreview.textContent = diagnosticText;
+}
+
+async function copyDiagnostics() {
+  const text = elements.diagnosticsPreview.textContent;
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(elements.diagnosticsPreview);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.execCommand("copy");
+    selection.removeAllRanges();
+  }
+  showMessage("진단 정보를 복사했습니다. 이 대화에 그대로 붙여 넣어 주세요.");
 }
 
 function renderInspection(result) {

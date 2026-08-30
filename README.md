@@ -13,6 +13,7 @@ Home Assistant OS 미니 PC에서 쉼오지캠프 예약을 실행하고, Home A
 - 날짜·박수 조합별 설정 이력 저장, 불러오기 및 삭제
 - 우선순위 중 예약 가능한 첫 객실 선택
 - 환불 규정 동의, 예약자 정보 입력, 최종 예약 자동 진행
+- 실패 페이지의 비식별 폼 구조 진단 및 원클릭 복사
 - `amd64` 및 `aarch64` Home Assistant OS 지원
 
 ## Home Assistant OS 설치

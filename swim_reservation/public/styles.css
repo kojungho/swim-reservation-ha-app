@@ -58,6 +58,12 @@ dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: any
 .inspect-result { margin-top: 18px; padding: 14px; background: #f4f7f5; border-radius: 12px; font-size: 13px; line-height: 1.7; }
 .inspect-result .available { color: #12603d; font-weight: 750; }
 .inspect-result .unavailable { color: #9a4b44; }
+.diagnostics-panel { margin-top: 18px; padding: 14px; border: 1px solid #e4c5c1; border-radius: 12px; background: #fff8f7; }
+.diagnostics-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.diagnostics-heading > div { display: grid; gap: 4px; }
+.diagnostics-heading small { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.diagnostics-heading button { flex: 0 0 auto; }
+.diagnostics-panel pre { max-height: 300px; margin: 12px 0 0; padding: 12px; overflow: auto; border-radius: 9px; background: #282d2a; color: #eaf1ed; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .history-list { display: grid; gap: 9px; }
 .history-empty { margin: 0; padding: 18px; text-align: center; color: var(--muted); background: var(--wash); border-radius: 12px; font-size: 13px; }
 .history-row { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(180px, 1.5fr) auto; align-items: center; gap: 14px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfb; }
@@ -82,4 +88,5 @@ dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: any
   .history-row { grid-template-columns: 1fr; gap: 9px; }
   .history-actions { justify-content: stretch; }
   .history-actions button { flex: 1; }
+  .diagnostics-heading { align-items: stretch; flex-direction: column; }
 }
