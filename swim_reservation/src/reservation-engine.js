@@ -223,6 +223,8 @@ export class ReservationEngine {
   async detectPage() {
     return this.page.evaluate(() => {
       const text = (document.body?.innerText || "").replace(/\s+/g, " ");
+      const completionPage = /order_ok4\.php$/i.test(location.pathname);
+      if (completionPage && (/예약취소/.test(text) || /입금계좌번호안내/.test(text))) return "success";
       const exactPersonalFields = ["name", "name2", "tel1", "tel2", "tel3", "birthYear", "birthMonth", "birthDay"]
         .filter((name) => document.querySelector(`[name="${name}"]`)).length;
       if (exactPersonalFields >= 6) return "personal";
