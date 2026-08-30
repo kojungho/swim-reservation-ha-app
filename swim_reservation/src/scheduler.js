@@ -32,10 +32,13 @@ export class Scheduler {
     this.prepared = false;
     this.cancelRequested = false;
     if (!restored) {
+      const targetAt = triggerEpoch(config.triggerAt);
       await this.store.updateStatus({
         state: "waiting",
         stage: "armed",
-        targetAt: triggerEpoch(config.triggerAt),
+        targetAt,
+        prepareAt: targetAt - PREWARM_MS,
+        startDate: config.startDate,
         selectedRoom: null,
         diagnostics: null,
         message: "예약 실행 시각을 기다리는 중입니다."
@@ -56,6 +59,10 @@ export class Scheduler {
 
   async runNow(config) {
     if (this.running) throw new Error("이미 예약 엔진이 실행 중입니다.");
+    const opensAt = triggerEpoch(config.triggerAt);
+    if (Number.isFinite(opensAt) && opensAt > Date.now()) {
+      throw new Error(`아직 예약 오픈 전입니다. ${config.triggerAt} 이후 예약하거나 예약 대기를 시작하세요.`);
+    }
     this.stopTimer();
     this.armed = false;
     this.prepared = false;
@@ -65,6 +72,8 @@ export class Scheduler {
       state: "running",
       stage: "starting-now",
       targetAt: Date.now(),
+      prepareAt: null,
+      startDate: config.startDate,
       selectedRoom: null,
       diagnostics: null,
       message: "즉시 예약을 시작합니다.",

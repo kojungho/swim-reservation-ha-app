@@ -61,6 +61,9 @@ const server = http.createServer(async (request, response) => {
       const config = await store.getConfig();
       const errors = validateConfig(config);
       if (errors.length) return json(response, 400, { ok: false, error: `확인할 항목: ${errors.join(", ")}` });
+      if (triggerEpoch(config.triggerAt) > Date.now()) {
+        return json(response, 409, { ok: false, error: `아직 예약 오픈 전입니다. ${config.triggerAt} 이후 예약하거나 예약 대기를 시작하세요.` });
+      }
       if (scheduler.running) return json(response, 409, { ok: false, error: "이미 예약 엔진이 실행 중입니다." });
       await scheduler.runNow(config);
       return json(response, 202, { ok: true, startedAt: Date.now() });

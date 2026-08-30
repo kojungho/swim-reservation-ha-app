@@ -192,7 +192,9 @@ function renderStatus(status) {
   elements.statusBadge.textContent = labels[state] || state;
   elements.statusText.textContent = status.message || "상태 정보가 없습니다.";
   const details = [];
-  if (status.targetAt) details.push(["예약 실행 시각", new Date(status.targetAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })]);
+  if (status.startDate) details.push(["숙박 시작 날짜", status.startDate]);
+  if (status.prepareAt) details.push(["브라우저 준비 시각", new Date(status.prepareAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })]);
+  if (status.targetAt) details.push(["예약 요청 시작 시각", new Date(status.targetAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })]);
   if (status.selectedRoom) details.push(["선택된 객실", status.selectedRoom]);
   if (status.stage) details.push(["진행 단계", status.stage]);
   if (status.updatedAt) details.push(["최근 갱신", new Date(status.updatedAt).toLocaleString("ko-KR")]);

@@ -1,5 +1,5 @@
 import { chromium } from "playwright-core";
-import { reservationUrl } from "./config.js";
+import { reservationUrl, startEpoch } from "./config.js";
 import { fillPersonalFields } from "./personal-fields.js";
 import { readPageDiagnostics } from "./page-diagnostics.js";
 
@@ -37,6 +37,7 @@ export class ReservationEngine {
       await this.ensurePage();
       if (prepared) await this.page.reload({ waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT });
       else await this.page.goto(reservationUrl(config.startDate), { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT });
+      await this.assertReservationDate(config, { required: true });
 
       const room = await this.selectRoom(config);
       await this.store.updateStatus({ stage: "room-selected", selectedRoom: room, message: `${room}, ${config.nights}박을 선택했습니다.` });
@@ -44,6 +45,7 @@ export class ReservationEngine {
 
       for (let step = 0; step < 5; step += 1) {
         await this.page.waitForLoadState("domcontentloaded", { timeout: NAVIGATION_TIMEOUT });
+        await this.assertReservationDate(config);
         const result = await this.detectPage();
         if (result === "success") {
           await this.store.updateStatus({ state: "success", stage: "complete", message: "사이트에서 예약 완료 화면을 확인했습니다." });
@@ -150,6 +152,19 @@ export class ReservationEngine {
       if (personal) return "personal";
       return "unknown";
     });
+  }
+
+  async assertReservationDate(config, { required = false } = {}) {
+    const expected = String(Math.floor(startEpoch(config.startDate) / 1000));
+    const found = await this.page.locator('input[name="adaystart"]').evaluateAll((inputs) => (
+      [...new Set(inputs.map((input) => String(input.value || "")).filter(Boolean))]
+    ));
+    if (required && !found.length) {
+      throw new Error(`숙박 날짜 확인값을 찾지 못해 예약을 중지했습니다: ${config.startDate}`);
+    }
+    if (found.length && !found.includes(expected)) {
+      throw new Error(`사이트의 숙박 날짜가 선택한 날짜와 달라 예약을 중지했습니다: 선택 ${config.startDate} (${expected}), 사이트 ${found.join(", ")}`);
+    }
   }
 
   async acceptTerms() {

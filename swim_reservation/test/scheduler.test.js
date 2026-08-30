@@ -38,3 +38,16 @@ test("실행 중인 예약 엔진을 중복 실행하지 않는다", async () =>
   release();
   await new Promise((resolve) => setImmediate(resolve));
 });
+
+test("예약 오픈 전에는 즉시 예약을 실행하지 않는다", async () => {
+  const calls = [];
+  const store = { updateStatus: async (patch) => patch };
+  const engine = { run: async () => { calls.push("run"); }, close: async () => {} };
+  const scheduler = new Scheduler({ store, engine });
+
+  await assert.rejects(() => scheduler.runNow({
+    startDate: "2026-11-07",
+    triggerAt: new Date(Date.now() + 60_000).toISOString()
+  }), /아직 예약 오픈 전/);
+  assert.deepEqual(calls, []);
+});
