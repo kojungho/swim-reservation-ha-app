@@ -1,16 +1,19 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
 const elements = Object.fromEntries([
   "startDate", "triggerAt", "nights", "bookingMode", "epochValue", "openAtValue", "reservationUrl", "roomList", "roomSectionTitle", "roomSectionHelp", "reserverName",
-  "depositorName", "phone", "birthDate", "historyList", "statusBadge", "statusText", "statusDetails", "inspectResult",
+  "depositorName", "phone", "birthDate", "useSecondProfile", "secondProfilePanel", "reserverName2", "depositorName2", "phone2", "birthDate2",
+  "historyList", "statusBadge", "statusText", "statusDetails", "profileStatusList", "inspectResult", "siteClock", "siteTimeMeta", "siteTimeSyncButton",
   "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
-  "inspectButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton", "startButton"
+  "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton", "startButton"
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
 let busy = false;
 let currentState = "idle";
+let currentStage = "idle";
 let availabilityTimer = null;
 let availabilityRequest = 0;
+let siteTimeBase = null;
 const availabilityByRoom = new Map();
 const STATE_LABELS = {
   idle: "설정 중", waiting: "예약 대기", running: "자동 실행 중",
@@ -26,13 +29,16 @@ const STAGE_LABELS = {
   complete: "예약 완료", "multiple-final-submit": "복수 객실 동시 제출",
   "multiple-complete": "복수 객실 예약 완료", "multiple-partial": "복수 예약 일부 성공",
   "multiple-failed": "복수 예약 실패", "reservation-error": "예약 처리 오류",
+  "profiles-final-ready": "예약자별 최종 제출 대기", "profile-running": "예약자별 순차 예약 진행",
+  "profiles-preparation-deferred": "예약 오픈 시 새로 진행 대기",
+  "profile-failed": "예약자 예약 실패", "profile-uncertain": "예약 결과 확인 필요", "profiles-complete": "예약자 2명 순차 예약 완료",
   exception: "실행 예외", missed: "실행 시각 경과", stopped: "실행 중지", inspected: "객실 확인 완료"
 };
 const AVAILABILITY_LABELS = {
   available: "예약 가능", booked: "예약 완료", unavailable: "해당 박수 불가",
   checking: "확인 중", "checking-before-open": "확인 중 (예약 오픈 전)",
   "available-before-open": "예약 가능 (예약 오픈 전)", "unavailable-before-open": "예약 불가 (예약 오픈 전)",
-  "before-open": "확인 불가 (예약 오픈 전)", unknown: "미확인"
+  "before-open": "확인 불가 (예약 오픈 전)", "before-open-no-data": "예약 오픈 전 - 서버에서 예약 가능 여부 미제공", unknown: "미확인"
 };
 
 init().catch((error) => showMessage(error.message, true));
@@ -43,8 +49,14 @@ async function init() {
   bindEvents();
   await refreshHistory();
   await refreshStatus();
+  await refreshSiteTime(false);
   scheduleAvailabilityCheck(0);
   setInterval(refreshStatus, 1500);
+  setInterval(renderSiteClock, 250);
+  setInterval(() => refreshSiteTime(false), 30_000);
+  setInterval(() => {
+    if (currentState === "waiting" && currentStage !== "prewarming") scheduleAvailabilityCheck(0);
+  }, 60_000);
 }
 
 function bindEvents() {
@@ -54,7 +66,16 @@ function bindEvents() {
     scheduleAvailabilityCheck();
   });
   elements.nights.addEventListener("change", () => scheduleAvailabilityCheck());
-  elements.bookingMode.addEventListener("change", () => renderRooms());
+  elements.bookingMode.addEventListener("change", () => {
+    if (elements.bookingMode.value === "multiple" && elements.useSecondProfile.checked) {
+      elements.useSecondProfile.checked = false;
+      toggleSecondProfile();
+      showMessage("여러 객실 동시 예약에서는 예약자 2명 순차 예약을 사용할 수 없습니다.", true);
+    }
+    renderRooms();
+  });
+  elements.useSecondProfile.addEventListener("change", toggleSecondProfile);
+  elements.siteTimeSyncButton.addEventListener("click", () => perform(async () => refreshSiteTime(true)));
   elements.saveButton.addEventListener("click", () => perform(async () => {
     await saveConfig();
     showMessage("설정을 HA 미니 PC에 저장했습니다.");
@@ -67,15 +88,21 @@ function bindEvents() {
       );
       if (!approved) return;
     }
+    if (elements.bookingMode.value === "priority" && elements.useSecondProfile.checked) {
+      const approved = window.confirm("예약자 1의 예약 완료 화면을 확인한 뒤 예약자 2를 순차 실행합니다. 예약자 1이 실패하거나 결과가 불확실하면 예약자 2는 실행하지 않습니다. 계속할까요?");
+      if (!approved) return;
+    }
     await saveConfig();
     await request("start", { method: "POST" });
     await refreshStatus();
+    scheduleAvailabilityCheck(0);
   }));
   elements.runNowButton.addEventListener("click", () => perform(async () => {
     const date = elements.startDate.value;
     const selectedRooms = rooms.filter((room) => room.enabled).map((room) => room.name);
     const multiple = elements.bookingMode.value === "multiple";
-    const modeText = multiple ? `여러 객실 동시 예약 (${selectedRooms.length}개)` : "1개 예약 · 우선순위 방식";
+    const modeText = multiple ? `여러 객실 동시 예약 (${selectedRooms.length}개)`
+      : elements.useSecondProfile.checked ? "1개 예약 · 예약자 2명 순차 방식" : "1개 예약 · 우선순위 방식";
     const approved = window.confirm(
       `${date}부터 ${elements.nights.value}박 예약을 지금 즉시 실행합니다.\n\n예약 방식: ${modeText}\n예약 대상: ${selectedRooms.join(", ") || "선택 없음"}\n\n환불 규정 동의와 최종 예약하기까지 자동 진행됩니다. 실행할까요?`
     );
@@ -99,6 +126,7 @@ function bindEvents() {
     const result = await request("reservations");
     renderReservations(result.reservations || []);
   }));
+  elements.reservationSiteButton.addEventListener("click", () => openReservationSite());
   elements.copyDiagnosticsButton.addEventListener("click", () => copyDiagnostics());
   elements.siteMapButton.addEventListener("click", () => elements.siteMapDialog.showModal());
   elements.siteMapCloseButton.addEventListener("click", () => elements.siteMapDialog.close());
@@ -112,30 +140,51 @@ function loadConfig(config) {
   elements.triggerAt.value = (config.triggerAt || "").slice(0, 19);
   elements.nights.value = String(config.nights || 1);
   elements.bookingMode.value = config.bookingMode === "multiple" ? "multiple" : "priority";
-  elements.reserverName.value = config.profile?.reserverName || "";
-  elements.depositorName.value = config.profile?.depositorName || "";
-  elements.phone.value = config.profile?.phone || "";
-  elements.birthDate.value = config.profile?.birthDate || "";
+  const profile1 = config.profile1 || config.profile || {};
+  const profile2 = config.profile2 || {};
+  elements.reserverName.value = profile1.reserverName || "";
+  elements.depositorName.value = profile1.depositorName || "";
+  elements.phone.value = profile1.phone || "";
+  elements.birthDate.value = profile1.birthDate || "";
+  elements.reserverName2.value = profile2.reserverName || "";
+  elements.depositorName2.value = profile2.depositorName || "";
+  elements.phone2.value = profile2.phone || "";
+  elements.birthDate2.value = profile2.birthDate || "";
+  elements.useSecondProfile.checked = Boolean(config.useSecondProfile);
+  toggleSecondProfile();
   rooms = Array.isArray(config.roomPriority) ? config.roomPriority : [];
   renderRooms();
   updateGeneratedValues();
 }
 
 function readConfig() {
+  const profile1 = {
+    reserverName: elements.reserverName.value.trim(),
+    depositorName: elements.depositorName.value.trim(),
+    phone: elements.phone.value.replace(/\D/g, ""),
+    birthDate: elements.birthDate.value.replace(/\D/g, "")
+  };
   return {
     startDate: elements.startDate.value,
     triggerAt: elements.triggerAt.value,
     nights: Number(elements.nights.value),
     bookingMode: elements.bookingMode.value,
     roomPriority: rooms,
-    profile: {
-      reserverName: elements.reserverName.value.trim(),
-      depositorName: elements.depositorName.value.trim(),
-      phone: elements.phone.value.replace(/\D/g, ""),
-      birthDate: elements.birthDate.value.replace(/\D/g, "")
+    profile: profile1,
+    profile1,
+    profile2: {
+      reserverName: elements.reserverName2.value.trim(),
+      depositorName: elements.depositorName2.value.trim(),
+      phone: elements.phone2.value.replace(/\D/g, ""),
+      birthDate: elements.birthDate2.value.replace(/\D/g, "")
     },
+    useSecondProfile: elements.useSecondProfile.checked,
     autoFinalSubmit: true
   };
+}
+
+function toggleSecondProfile() {
+  elements.secondProfilePanel.hidden = !elements.useSecondProfile.checked;
 }
 
 async function saveConfig() {
@@ -165,7 +214,7 @@ function renderHistory(entries) {
     const multiple = entry.bookingMode === "multiple";
     const roomsText = entry.enabledRooms?.length ? entry.enabledRooms.join(multiple ? " + " : " → ") : "선택된 객실 없음";
     row.innerHTML = `
-      <div class="history-key"><strong>${escapeHtml(entry.startDate)} · ${entry.nights}박</strong><small>${multiple ? `동시 ${entry.enabledRooms.length}개 예약` : "1개 우선순위 예약"} · ${escapeHtml(savedAt)} 저장</small></div>
+      <div class="history-key"><strong>${escapeHtml(entry.startDate)} · ${entry.nights}박</strong><small>${multiple ? `동시 ${entry.enabledRooms.length}개 예약` : entry.useSecondProfile ? "예약자 2명 순차 예약" : "1개 우선순위 예약"} · ${escapeHtml(savedAt)} 저장</small></div>
       <div class="history-rooms">${escapeHtml(roomsText)}</div>
       <div class="history-actions"><button class="load" type="button">불러오기</button><button class="delete" type="button">삭제</button></div>`;
     row.querySelector(".load").addEventListener("click", () => perform(async () => {
@@ -244,7 +293,8 @@ function bookingOpenEpoch(startDate) {
 
 function isBeforeOpen(startDate) {
   const opensAt = bookingOpenEpoch(startDate);
-  return Number.isFinite(opensAt) && opensAt > Date.now();
+  const siteNow = currentSiteTime();
+  return Number.isFinite(opensAt) && opensAt > (Number.isFinite(siteNow) ? siteNow : Date.now());
 }
 
 function formatOpeningTime(startDate) {
@@ -254,6 +304,48 @@ function formatOpeningTime(startDate) {
     timeZone: "Asia/Seoul", year: "numeric", month: "long", day: "numeric",
     hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"
   }).format(new Date(opensAt));
+}
+
+async function openReservationSite() {
+  const popup = window.open("about:blank", "_blank");
+  if (popup) popup.opener = null;
+  try {
+    const result = await request("reservation-check-url");
+    if (popup) popup.location.replace(result.url);
+    else window.location.href = result.url;
+  } catch (error) {
+    popup?.close();
+    showMessage(`예약확인 사이트 이동 실패: ${error.message}`, true);
+  }
+}
+
+async function refreshSiteTime(force) {
+  try {
+    const status = await request(force ? "site-time/sync" : "site-time", force ? { method: "POST" } : {});
+    if (!status.synced) throw new Error(status.error || "동기화 실패");
+    siteTimeBase = { serverNowMs: status.serverNowMs, receivedAt: performance.now() };
+    const offsetSeconds = Math.round(status.offsetMs / 1000);
+    const offsetText = `${offsetSeconds >= 0 ? "+" : ""}${offsetSeconds}초`;
+    const syncedAt = new Date(status.lastSyncedAt).toLocaleTimeString("ko-KR", { hour12: false });
+    elements.siteTimeMeta.textContent = `마지막 동기화 ${syncedAt} · 시간 차이 ${offsetText} · RTT ${Math.round(status.rttMs)}ms · ${status.stale ? "재동기화 필요" : "정상 (초 단위)"}`;
+    renderSiteClock();
+  } catch (error) {
+    siteTimeBase = null;
+    elements.siteClock.textContent = "서버 시간 동기화 실패";
+    elements.siteTimeMeta.textContent = error.message;
+  }
+}
+
+function currentSiteTime() {
+  return siteTimeBase ? siteTimeBase.serverNowMs + performance.now() - siteTimeBase.receivedAt : NaN;
+}
+
+function renderSiteClock() {
+  const now = currentSiteTime();
+  if (!Number.isFinite(now)) return;
+  elements.siteClock.textContent = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"
+  }).format(new Date(now));
 }
 
 async function refreshStatus() {
@@ -267,6 +359,7 @@ async function refreshStatus() {
 function renderStatus(status) {
   const state = status.state || "idle";
   currentState = state;
+  currentStage = status.stage || "idle";
   elements.statusBadge.className = `badge ${state}`;
   elements.statusBadge.textContent = STATE_LABELS[state] || state;
   elements.statusText.textContent = status.message || "상태 정보가 없습니다.";
@@ -285,9 +378,20 @@ function renderStatus(status) {
     const dd = document.createElement("dd"); dd.textContent = value;
     return [dt, dd];
   }));
+  renderProfileStatuses(status.profileStatuses || []);
   const diagnosticText = status.diagnostics ? JSON.stringify(status.diagnostics, null, 2) : "";
   elements.diagnosticsPanel.hidden = !diagnosticText;
   elements.diagnosticsPreview.textContent = diagnosticText;
+}
+
+function renderProfileStatuses(statuses) {
+  elements.profileStatusList.hidden = !statuses.length;
+  elements.profileStatusList.replaceChildren(...statuses.map((status) => {
+    const row = document.createElement("div");
+    row.className = "profile-status-row";
+    row.innerHTML = `<strong>${escapeHtml(status.label || `예약자 ${Number(status.index) + 1}`)}</strong><span>${escapeHtml(status.message || status.state || "대기")}${status.room ? ` · ${escapeHtml(status.room)}` : ""}</span>`;
+    return row;
+  }));
 }
 
 async function copyDiagnostics() {
@@ -308,9 +412,12 @@ async function copyDiagnostics() {
 }
 
 function renderInspection(result, { beforeOpen = false } = {}) {
-  const displayed = result.map((room) => ({
+  const returned = new Map(result.map((room) => [room.name, room]));
+  const source = beforeOpen ? rooms.map((configured) => returned.get(configured.name) || { name: configured.name, serverProvided: false }) : result;
+  const displayed = source.map((room) => ({
     ...room,
-    displayStatus: beforeOpen ? (room.available ? "available-before-open" : "unavailable-before-open")
+    displayStatus: beforeOpen
+      ? room.serverProvided === false ? "before-open-no-data" : room.available ? "available-before-open" : "unavailable-before-open"
       : room.status || (room.available ? "available" : "unavailable")
   }));
   for (const room of displayed) availabilityByRoom.set(room.name, room.displayStatus);
@@ -319,7 +426,7 @@ function renderInspection(result, { beforeOpen = false } = {}) {
   const opening = beforeOpen ? `<small>예약 가능 시작: ${escapeHtml(formatOpeningTime(elements.startDate.value))}</small><br>` : "";
   elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${opening}${displayed.map((room) => {
     const status = room.displayStatus;
-    const label = ["available-before-open", "unavailable-before-open", "before-open", "booked"].includes(status)
+    const label = ["available-before-open", "unavailable-before-open", "before-open", "before-open-no-data", "booked"].includes(status)
       ? AVAILABILITY_LABELS[status]
       : room.available ? `${elements.nights.value}박 가능` : `${elements.nights.value}박 불가`;
     return `<span class="${escapeHtml(status)}">${escapeHtml(room.name)}: ${label}</span>`;
@@ -342,7 +449,7 @@ function renderReservations(reservations) {
     const row = document.createElement("div");
     row.className = "reservation-row";
     row.innerHTML = `
-      <div><strong>${escapeHtml(reservation.room)}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span></div>
+      <div><strong>${escapeHtml(reservation.profileLabel ? `${reservation.profileLabel} · ${reservation.room}` : reservation.room)}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span></div>
       <div><span>결제 금액</span><strong>${escapeHtml(reservation.total)}</strong></div>
       <div><span>예약 상태</span><strong>${escapeHtml(reservation.status)}</strong></div>
       ${reservation.cancelable ? '<button type="button" class="reservation-cancel-button danger">예약 취소</button>' : '<span class="cancel-disabled">사이트에서 취소 불가</span>'}`;
@@ -353,9 +460,10 @@ function renderReservations(reservations) {
       );
       if (!approved) return;
       const result = await request(`reservations/${encodeURIComponent(reservation.id)}/cancel`, {
-        method: "POST", body: JSON.stringify({ confirmed: true })
+        method: "POST", body: JSON.stringify({ confirmed: true, profileIndex: reservation.profileIndex || 0 })
       });
-      renderReservations(result.reservations || []);
+      const refreshed = await request("reservations");
+      renderReservations(refreshed.reservations || []);
       showMessage(`${reservation.room} 예약 취소가 완료되었습니다.`, false, "예약 취소 완료");
     }));
     elements.reservationList.append(row);
@@ -374,7 +482,7 @@ async function refreshAvailability() {
   const requestId = ++availabilityRequest;
   availabilityByRoom.clear();
   const beforeOpen = isBeforeOpen(startDate);
-  if (["waiting", "running"].includes(currentState)) {
+  if (currentState === "running") {
     if (beforeOpen) for (const room of rooms) availabilityByRoom.set(room.name, "before-open");
     renderRooms();
     return;
@@ -409,7 +517,7 @@ async function perform(action) {
 }
 
 function setButtonsDisabled(disabled) {
-  for (const button of [elements.inspectButton, elements.reservationLookupButton, elements.saveButton, elements.stopButton, elements.runNowButton, elements.startButton]) button.disabled = disabled;
+  for (const button of [elements.inspectButton, elements.reservationSiteButton, elements.reservationLookupButton, elements.siteTimeSyncButton, elements.saveButton, elements.stopButton, elements.runNowButton, elements.startButton]) button.disabled = disabled;
   for (const button of elements.reservationList.querySelectorAll("button")) button.disabled = disabled;
 }
 

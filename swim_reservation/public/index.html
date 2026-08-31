@@ -33,31 +33,50 @@
         <div class="generated"><span>예약 가능 시작 일시</span><strong id="openAtValue">—</strong></div>
       </div>
       <label>자동 생성된 예약 링크<input id="reservationUrl" readonly></label>
+      <div class="site-time-panel">
+        <div><span>쉼오지 서버 시간</span><strong id="siteClock">동기화 중</strong></div>
+        <p id="siteTimeMeta">예약 사이트 서버 시간을 확인하고 있습니다.</p>
+        <button id="siteTimeSyncButton" class="secondary" type="button">시간 다시 맞추기</button>
+      </div>
     </section>
 
     <section class="card">
-      <div class="section-title"><span>2</span><div><h2 id="roomSectionTitle">객실 우선순위</h2><p id="roomSectionHelp">체크된 객실 중 위에 있는 객실부터 하나가 성공할 때까지 시도합니다.</p></div></div>
+      <div class="section-title section-title-actions"><span>2</span><div><h2 id="roomSectionTitle">객실 우선순위</h2><p id="roomSectionHelp">체크된 객실 중 위에 있는 객실부터 하나가 성공할 때까지 시도합니다.</p></div><button id="siteMapButton" class="secondary">사이트 위치 안내</button></div>
       <div id="roomList" class="room-list"></div>
     </section>
 
     <section class="card">
       <div class="section-title"><span>3</span><div><h2>예약자 정보</h2><p>HA App의 영구 데이터 영역에 저장되며 HA 백업에 포함될 수 있습니다.</p></div></div>
+      <h3>예약자 1</h3>
       <div class="grid two">
         <label>예약자명<input id="reserverName" autocomplete="off"></label>
         <label>입금자명<input id="depositorName" autocomplete="off"></label>
         <label>휴대폰 번호<input id="phone" inputmode="numeric" autocomplete="off" placeholder="01012345678"></label>
         <label>생년월일<input id="birthDate" inputmode="numeric" autocomplete="off" placeholder="YYYYMMDD" maxlength="8"></label>
       </div>
+      <label class="second-profile-toggle"><input id="useSecondProfile" type="checkbox"> 예약자 2명 사용</label>
+      <div id="secondProfilePanel" class="second-profile-panel" hidden>
+        <h3>예약자 2</h3>
+        <p>예약자 1의 실제 완료 화면이 확인된 뒤 순차적으로 예약합니다.</p>
+        <div class="grid two">
+          <label>예약자명<input id="reserverName2" autocomplete="off"></label>
+          <label>입금자명<input id="depositorName2" autocomplete="off"></label>
+          <label>휴대폰 번호<input id="phone2" inputmode="numeric" autocomplete="off" placeholder="01012345678"></label>
+          <label>생년월일<input id="birthDate2" inputmode="numeric" autocomplete="off" placeholder="YYYYMMDD" maxlength="8"></label>
+        </div>
+      </div>
     </section>
 
     <section class="card status-card">
       <div class="section-title"><span>4</span><div><h2>저장 이력</h2><p>숙박 시작 날짜와 박수별로 저장된 설정을 불러오거나 삭제할 수 있습니다.</p></div></div>
       <div id="historyList" class="history-list"><p class="history-empty">저장 이력을 불러오는 중입니다.</p></div>
+      <div class="section-actions"><button id="saveButton" class="secondary">설정 저장</button></div>
     </section>
 
     <section class="card status-card">
       <div class="section-title"><span>5</span><div><h2>실행 상태</h2><p id="statusText">App 상태를 확인하고 있습니다.</p></div></div>
       <dl id="statusDetails"></dl>
+      <div id="profileStatusList" class="profile-status-list" hidden></div>
       <div id="inspectResult" class="inspect-result" hidden></div>
       <div id="reservationList" class="reservation-list" hidden></div>
       <div id="diagnosticsPanel" class="diagnostics-panel" hidden>
@@ -68,11 +87,9 @@
         <pre id="diagnosticsPreview"></pre>
       </div>
       <div class="actions">
-        <button id="siteMapButton" class="secondary">사이트 위치 안내</button>
-        <a class="button secondary" href="reservation-check" target="_blank" rel="noopener noreferrer">사이트에서 직접 확인</a>
+        <button id="reservationSiteButton" class="secondary">예약확인 사이트 이동</button>
         <button id="reservationLookupButton" class="secondary">예약 정보 불러오기</button>
         <button id="inspectButton" class="secondary">페이지 연결 확인</button>
-        <button id="saveButton" class="secondary">설정 저장</button>
         <button id="stopButton" class="danger">실행 중지</button>
         <button id="runNowButton" class="now">지금 바로 예약</button>
         <button id="startButton" class="primary">예약 대기 시작</button>

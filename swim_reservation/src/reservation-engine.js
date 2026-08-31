@@ -6,18 +6,23 @@ import { readPageDiagnostics } from "./page-diagnostics.js";
 const NAVIGATION_TIMEOUT = 20_000;
 
 export class ReservationEngine {
-  constructor({ store, executablePath = "/usr/bin/chromium" }) {
+  constructor({ store, executablePath = "/usr/bin/chromium", browserProvider = null }) {
     this.store = store;
     this.executablePath = executablePath;
+    this.browserProvider = browserProvider;
     this.browser = null;
+    this.browserPromise = null;
+    this.ownsBrowser = false;
+    this.context = null;
     this.page = null;
     this.selectedRoom = null;
     this.childSessions = [];
+    this.prioritySessions = [];
   }
 
   async prepare(config) {
     if (config.bookingMode === "multiple") return this.prepareMultiple(config);
-    return this.prepareSingle(config);
+    return this.preparePriorityCandidates(config);
   }
 
   async prepareSingle(config) {
@@ -63,13 +68,15 @@ export class ReservationEngine {
       await this.assertReservationDate(config, { required: true });
       return await this.readRooms(config.nights);
     } finally {
-      if (temporary) await this.close();
+      if (temporary) await this.closeMainPage();
     }
   }
 
   async run(config, options = {}) {
     if (config.bookingMode === "multiple") return this.runMultiple(config, options);
-    return this.runSingle(config, options);
+    if (options.prepared && this.prioritySessions.length) return this.runPreparedProfiles(config);
+    if (config.useSecondProfile) return this.runProfilesSequential(config);
+    return this.runSingle(config, { ...options, prepared: Boolean(options.prepared && this.page) });
   }
 
   async runSingle(config, { prepared = false, allowFallback = true } = {}) {
@@ -92,7 +99,7 @@ export class ReservationEngine {
         const result = await this.detectPage();
         if (result === "success") {
           await this.store.updateStatus({ state: "success", stage: "complete", message: "사이트에서 예약 완료 화면을 확인했습니다." });
-          return;
+          return { room: this.selectedRoom };
         }
         if (result === "retryable") {
           if (!allowFallback) {
@@ -141,15 +148,29 @@ export class ReservationEngine {
 
   async ensurePage() {
     if (this.page) return;
-    this.browser = await chromium.launch({
-      executablePath: this.executablePath,
-      headless: true,
-      args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--lang=ko-KR"]
-    });
-    const context = await this.browser.newContext({ locale: "ko-KR", timezoneId: "Asia/Seoul" });
-    this.page = await context.newPage();
+    this.browser = this.browserProvider ? await this.browserProvider() : await this.ensureBrowser();
+    this.context = await this.browser.newContext({ locale: "ko-KR", timezoneId: "Asia/Seoul" });
+    this.page = await this.context.newPage();
     this.page.setDefaultTimeout(10_000);
     this.page.on("dialog", (dialog) => dialog.accept().catch(() => {}));
+  }
+
+  async ensureBrowser() {
+    if (this.browser) return this.browser;
+    if (!this.browserPromise) {
+      this.browserPromise = chromium.launch({
+        executablePath: this.executablePath,
+        headless: true,
+        args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--lang=ko-KR"]
+      });
+    }
+    try {
+      this.browser = await this.browserPromise;
+      this.ownsBrowser = true;
+      return this.browser;
+    } finally {
+      this.browserPromise = null;
+    }
   }
 
   async readRooms(nights) {
@@ -325,6 +346,160 @@ export class ReservationEngine {
     });
   }
 
+  async preparePriorityCandidates(config) {
+    await this.close();
+    const availability = await this.inspect({ ...config, bookingMode: "priority" });
+    const availableNames = new Set(availability.filter((room) => room.available).map((room) => room.name));
+    const selectedNames = config.roomPriority.filter((room) => room.enabled).map((room) => room.name);
+    const profiles = activeProfiles(config);
+    const prepared = [];
+    const preparationErrors = [];
+
+    for (const profileEntry of profiles) {
+      for (const room of selectedNames) {
+        if (!availableNames.has(room)) continue;
+        const session = this.createPrioritySession(config, room, profileEntry);
+        try {
+          await session.engine.prepareSingle(session.config);
+          prepared.push(session);
+        } catch (error) {
+          session.error = error;
+          preparationErrors.push(error);
+          await session.engine.close().catch(() => {});
+        }
+      }
+      if (profileEntry.index === 0 && !prepared.some((session) => session.profileIndex === 0)) {
+        this.prioritySessions = [];
+        await this.store.updateStatus({
+          state: "waiting",
+          stage: "profiles-preparation-deferred",
+          profileStatuses: profiles.map((entry) => ({ index: entry.index, label: entry.label, state: "예약 오픈 시 처음부터 진행" })),
+          diagnostics: preparationErrors.find((item) => item?.diagnostics)?.diagnostics || null,
+          message: "예약 오픈 전에 최종 제출 직전 단계까지 준비할 수 없어, 지정 시각에 최신 페이지로 처음부터 진행합니다."
+        });
+        return;
+      }
+    }
+
+    this.prioritySessions = prepared;
+    const profileStatuses = profiles.map((entry) => ({
+      index: entry.index,
+      label: entry.label,
+      state: entry.index === 0 ? "준비 완료" : "예약자 1 완료 대기 중",
+      preparedRooms: prepared.filter((session) => session.profileIndex === entry.index).map((session) => session.room)
+    }));
+    await this.store.updateStatus({
+      state: "waiting",
+      stage: "profiles-final-ready",
+      selectedRooms: selectedNames,
+      profileStatuses,
+      message: `${profiles.length}명의 예약자와 우선순위 객실을 최종 제출 직전까지 준비했습니다.`
+    });
+  }
+
+  async runPreparedProfiles(config) {
+    const profiles = activeProfiles(config);
+    const profileStatuses = profiles.map((entry) => ({
+      index: entry.index, label: entry.label,
+      state: entry.index === 0 ? "예약 진행 중" : "예약자 1 완료 대기 중"
+    }));
+    const completed = [];
+    try {
+      for (const profileEntry of profiles) {
+        let sessions = this.prioritySessions
+          .filter((session) => session.profileIndex === profileEntry.index)
+          .sort((left, right) => left.rank - right.rank);
+        if (!sessions.length) {
+          const fallback = this.createPrioritySession(config, null, profileEntry);
+          this.prioritySessions.push(fallback);
+          sessions = [fallback];
+        }
+        profileStatuses[profileEntry.index] = { ...profileStatuses[profileEntry.index], state: "예약 진행 중" };
+        await this.store.updateStatus({ state: "running", stage: "profile-running", profileStatuses, message: `${profileEntry.label} 예약을 시작합니다.` });
+        let success = null;
+        for (const session of sessions) {
+          profileStatuses[profileEntry.index] = {
+            ...profileStatuses[profileEntry.index], state: "예약 진행 중", room: session.room,
+            message: `${session.rank}순위 객실 예약 진행 중`
+          };
+          await this.store.updateStatus({ profileStatuses, selectedRoom: session.room, message: `${profileEntry.label}: ${session.rank}순위 ${session.room} 예약 진행 중` });
+          try {
+            const result = await session.engine.runSingle(session.config, { prepared: Boolean(session.room), allowFallback: !session.room });
+            success = { room: result?.room || session.room, rank: session.rank };
+            break;
+          } catch (error) {
+            if (error.code !== "ROOM_UNAVAILABLE" && error.code !== "NO_AVAILABLE_ROOM") {
+              profileStatuses[profileEntry.index] = { ...profileStatuses[profileEntry.index], state: "결과 확인 필요", message: error.message };
+              await this.store.updateStatus({ state: "failed", stage: "profile-uncertain", profileStatuses, message: `${profileEntry.label} 결과가 불확실하여 다음 예약을 중단했습니다: ${error.message}` });
+              error.statusRecorded = true;
+              throw error;
+            }
+            profileStatuses[profileEntry.index] = { ...profileStatuses[profileEntry.index], state: "다음 순위 시도 중" };
+          }
+        }
+        if (!success) {
+          profileStatuses[profileEntry.index] = { ...profileStatuses[profileEntry.index], state: "예약 실패", message: "모든 우선순위 실패" };
+          await this.store.updateStatus({ state: "failed", stage: "profile-failed", profileStatuses, message: `${profileEntry.label}의 모든 우선순위 예약이 실패했습니다.` });
+          const error = new Error(`${profileEntry.label} 예약 실패`);
+          error.statusRecorded = true;
+          throw error;
+        }
+        completed.push({ profileIndex: profileEntry.index, room: success.room });
+        profileStatuses[profileEntry.index] = { ...profileStatuses[profileEntry.index], state: "예약 완료", room: success.room, message: `${success.rank}순위 성공` };
+        if (profiles[profileEntry.index + 1]) {
+          profileStatuses[profileEntry.index + 1] = { ...profileStatuses[profileEntry.index + 1], state: "예약 진행 준비" };
+        }
+        await this.store.updateStatus({ profileStatuses, succeededRooms: completed.map((item) => item.room), message: `${profileEntry.label} 예약 완료 화면을 확인했습니다.` });
+      }
+      await this.store.updateStatus({
+        state: "success",
+        stage: profiles.length > 1 ? "profiles-complete" : "complete",
+        profileStatuses,
+        succeededRooms: completed.map((item) => item.room),
+        message: profiles.length > 1 ? "예약자 1과 예약자 2의 순차 예약을 모두 완료했습니다." : "사이트에서 예약 완료 화면을 확인했습니다."
+      });
+      return completed;
+    } finally {
+      await this.close();
+    }
+  }
+
+  async runProfilesSequential(config) {
+    const profiles = activeProfiles(config);
+    this.prioritySessions = profiles.map((profileEntry) => this.createPrioritySession(config, null, profileEntry));
+    for (const session of this.prioritySessions) session.rank = 1;
+    return this.runUnpreparedProfiles(config);
+  }
+
+  async runUnpreparedProfiles(config) {
+    const profiles = activeProfiles(config);
+    const profileStatuses = profiles.map((entry) => ({ index: entry.index, label: entry.label, state: entry.index ? "예약자 1 완료 대기 중" : "예약 진행 중" }));
+    const completed = [];
+    try {
+      for (const profileEntry of profiles) {
+        const session = this.prioritySessions.find((item) => item.profileIndex === profileEntry.index);
+        await this.store.updateStatus({ state: "running", stage: "profile-running", profileStatuses, message: `${profileEntry.label} 예약을 시작합니다.` });
+        let result;
+        try {
+          result = await session.engine.runSingle(session.config, { prepared: false, allowFallback: true });
+        } catch (error) {
+          profileStatuses[profileEntry.index] = { ...profileStatuses[profileEntry.index], state: "예약 실패" };
+          await this.store.updateStatus({ state: "failed", stage: "profile-failed", profileStatuses, message: `${profileEntry.label} 예약 실패: ${error.message}` });
+          error.statusRecorded = true;
+          throw error;
+        }
+        completed.push({ profileIndex: profileEntry.index, room: result?.room || session.status.selectedRoom || "선택 객실" });
+        profileStatuses[profileEntry.index] = { ...profileStatuses[profileEntry.index], state: "예약 완료", room: completed.at(-1).room };
+        if (profiles[profileEntry.index + 1]) profileStatuses[profileEntry.index + 1] = { ...profileStatuses[profileEntry.index + 1], state: "예약 진행 중" };
+        await this.store.updateStatus({ profileStatuses, succeededRooms: completed.map((item) => item.room), message: `${profileEntry.label} 예약 완료 화면을 확인했습니다.` });
+      }
+      await this.store.updateStatus({ state: "success", stage: "profiles-complete", profileStatuses, succeededRooms: completed.map((item) => item.room), message: "예약자 1과 예약자 2의 순차 예약을 모두 완료했습니다." });
+      return completed;
+    } finally {
+      await this.close();
+    }
+  }
+
   async runMultiple(config, { prepared = false } = {}) {
     if (!prepared || !this.childSessions.length) await this.prepareMultiple(config);
     const sessions = [...this.childSessions];
@@ -375,16 +550,55 @@ export class ReservationEngine {
       room,
       status,
       config: childConfig,
-      engine: new ReservationEngine({ store: scopedStore, executablePath: this.executablePath })
+      engine: new ReservationEngine({ store: scopedStore, executablePath: this.executablePath, browserProvider: () => this.ensureBrowser() })
+    };
+  }
+
+  createPrioritySession(config, room, profileEntry) {
+    const status = {};
+    const enabledRooms = config.roomPriority.filter((item) => item.enabled);
+    const rank = room ? enabledRooms.findIndex((item) => item.name === room) + 1 : 1;
+    const scopedStore = { updateStatus: async (patch) => Object.assign(status, patch) };
+    const childConfig = {
+      ...config,
+      useSecondProfile: false,
+      profile: { ...profileEntry.profile },
+      profile1: { ...profileEntry.profile },
+      roomPriority: room ? config.roomPriority.map((item) => ({ ...item, enabled: item.name === room })) : config.roomPriority.map((item) => ({ ...item }))
+    };
+    return {
+      room,
+      rank,
+      profileIndex: profileEntry.index,
+      status,
+      config: childConfig,
+      engine: new ReservationEngine({ store: scopedStore, executablePath: this.executablePath, browserProvider: () => this.ensureBrowser() })
     };
   }
 
   async close() {
     const children = this.childSessions.splice(0);
-    await Promise.all(children.map((session) => session.engine.close().catch(() => {})));
-    if (this.browser) await this.browser.close().catch(() => {});
+    const priority = this.prioritySessions.splice(0);
+    await Promise.all([...children, ...priority].map((session) => session.engine.close().catch(() => {})));
+    await this.closeMainPage();
+  }
+
+  async closeMainPage() {
+    if (this.context) await this.context.close().catch(() => {});
+    if (this.ownsBrowser && this.browser) await this.browser.close().catch(() => {});
+    this.context = null;
     this.browser = null;
+    this.browserPromise = null;
+    this.ownsBrowser = false;
     this.page = null;
     this.selectedRoom = null;
   }
+}
+
+function activeProfiles(config) {
+  const profiles = [
+    { index: 0, label: "예약자 1", profile: config.profile1 || config.profile }
+  ];
+  if (config.useSecondProfile) profiles.push({ index: 1, label: "예약자 2", profile: config.profile2 });
+  return profiles;
 }

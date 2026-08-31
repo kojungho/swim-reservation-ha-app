@@ -11,13 +11,17 @@ export function defaultConfig(now = new Date()) {
   const currentMonth = Number(formatSeoul(now, "month"));
   const start = new Date(Date.UTC(currentYear, currentMonth + 1, 1));
   const startDate = `${start.getUTCFullYear()}-${pad(start.getUTCMonth() + 1)}-01`;
+  const profile1 = emptyProfile();
   return {
     startDate,
     triggerAt: bookingOpenIso(startDate),
     nights: 1,
     bookingMode: "priority",
     roomPriority: ROOM_NAMES.map((name) => ({ name, enabled: false })),
-    profile: { reserverName: "", depositorName: "", phone: "", birthDate: "" },
+    profile: profile1,
+    profile1,
+    profile2: emptyProfile(),
+    useSecondProfile: false,
     autoFinalSubmit: true
   };
 }
@@ -36,23 +40,23 @@ export function normalizeConfig(input = {}) {
     if (!knownRooms.has(name)) ordered.push({ name, enabled: false });
   }
 
+  const profile1 = normalizeProfile(input.profile1 || input.profiles?.[0] || input.profile);
+  const profile2 = normalizeProfile(input.profile2 || input.profiles?.[1]);
   return {
     startDate: String(input.startDate || ""),
     triggerAt: String(input.triggerAt || ""),
     nights: Number(input.nights),
     bookingMode: input.bookingMode === "multiple" ? "multiple" : "priority",
     roomPriority: ordered,
-    profile: {
-      reserverName: String(input.profile?.reserverName || "").trim(),
-      depositorName: String(input.profile?.depositorName || "").trim(),
-      phone: String(input.profile?.phone || "").replace(/\D/g, ""),
-      birthDate: String(input.profile?.birthDate || "").replace(/\D/g, "").slice(0, 8)
-    },
+    profile: profile1,
+    profile1,
+    profile2,
+    useSecondProfile: Boolean(input.useSecondProfile),
     autoFinalSubmit: input.autoFinalSubmit !== false
   };
 }
 
-export function validateConfig(config, { futureTrigger = false } = {}) {
+export function validateConfig(config, { futureTrigger = false, nowMs = Date.now() } = {}) {
   const errors = [];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(config.startDate) || !Number.isFinite(startEpoch(config.startDate))) {
     errors.push("숙박 시작 날짜");
@@ -60,14 +64,35 @@ export function validateConfig(config, { futureTrigger = false } = {}) {
   if (!Number.isInteger(config.nights) || config.nights < 1 || config.nights > 6) errors.push("박수");
   if (!config.roomPriority.some((room) => room.enabled)) errors.push("예약할 객실");
   if (config.bookingMode === "multiple" && config.roomPriority.filter((room) => room.enabled).length > 5) errors.push("동시 예약 객실은 최대 5개");
-  if (!config.profile.reserverName) errors.push("예약자명");
-  if (!config.profile.depositorName) errors.push("입금자명");
-  if (!/^01\d{8,9}$/.test(config.profile.phone)) errors.push("휴대폰 번호");
-  if (!/^\d{8}$/.test(config.profile.birthDate)) errors.push("생년월일 8자리");
+  validateProfile(config.profile1 || config.profile, "예약자 1", errors);
+  if (config.useSecondProfile) {
+    validateProfile(config.profile2, "예약자 2", errors);
+    if (config.bookingMode !== "priority") errors.push("예약자 2명 사용은 1개 예약 · 우선순위 방식에서만 지원");
+  }
   const trigger = triggerEpoch(config.triggerAt);
   if (!Number.isFinite(trigger)) errors.push("예약 실행 시각");
-  else if (futureTrigger && trigger <= Date.now()) errors.push("현재 이후의 예약 실행 시각");
+  else if (futureTrigger && trigger <= nowMs) errors.push("현재 이후의 예약 실행 시각");
   return errors;
+}
+
+function emptyProfile() {
+  return { reserverName: "", depositorName: "", phone: "", birthDate: "" };
+}
+
+function normalizeProfile(profile = {}) {
+  return {
+    reserverName: String(profile?.reserverName || "").trim(),
+    depositorName: String(profile?.depositorName || "").trim(),
+    phone: String(profile?.phone || "").replace(/\D/g, ""),
+    birthDate: String(profile?.birthDate || "").replace(/\D/g, "").slice(0, 8)
+  };
+}
+
+function validateProfile(profile, label, errors) {
+  if (!profile?.reserverName) errors.push(`${label} 예약자명`);
+  if (!profile?.depositorName) errors.push(`${label} 입금자명`);
+  if (!/^01\d{8,9}$/.test(profile?.phone || "")) errors.push(`${label} 휴대폰 번호`);
+  if (!/^\d{8}$/.test(profile?.birthDate || "")) errors.push(`${label} 생년월일 8자리`);
 }
 
 export function reservationUrl(startDate) {

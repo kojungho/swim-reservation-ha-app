@@ -75,3 +75,16 @@ test("저장된 order_ok4 완료 진단은 App 재시작 시 성공 상태로 �
   assert.deepEqual(statuses[0].succeededRooms, ["숨_산맥존"]);
   assert.deepEqual(statuses[0].failedRooms, []);
 });
+
+test("예약 오픈 판단은 로컬 시계가 아니라 동기화된 사이트 서버 시간을 사용한다", async () => {
+  const calls = [];
+  const target = Date.parse("2026-09-01T00:00:00+09:00");
+  const timeSync = { ensureSynced: async () => target - 1, now: () => target - 1 };
+  const scheduler = new Scheduler({
+    store: { updateStatus: async (patch) => patch },
+    engine: { run: async () => calls.push("run"), close: async () => {} },
+    timeSync
+  });
+  await assert.rejects(() => scheduler.runNow({ triggerAt: "2026-09-01T00:00:00" }), /예약 오픈 전/);
+  assert.deepEqual(calls, []);
+});

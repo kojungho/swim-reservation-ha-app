@@ -21,7 +21,7 @@ http.createServer(async (request, response) => {
     return json(response, { ok: true, config: { ...config, reservationUrl: reservationUrl(config.startDate) } });
   }
   if (url.pathname === "/api/history" && request.method === "GET") {
-    return json(response, { entries: history.map((entry) => ({ id: entry.id, savedAt: entry.savedAt, startDate: entry.config.startDate, nights: entry.config.nights, bookingMode: entry.config.bookingMode, enabledRooms: entry.config.roomPriority.filter((room) => room.enabled).map((room) => room.name) })) });
+    return json(response, { entries: history.map((entry) => ({ id: entry.id, savedAt: entry.savedAt, startDate: entry.config.startDate, nights: entry.config.nights, bookingMode: entry.config.bookingMode, useSecondProfile: Boolean(entry.config.useSecondProfile), enabledRooms: entry.config.roomPriority.filter((room) => room.enabled).map((room) => room.name) })) });
   }
   const historyMatch = /^\/api\/history\/([^/]+)(?:\/(load))?$/.exec(url.pathname);
   if (historyMatch && request.method === "POST" && historyMatch[2] === "load") {
@@ -35,13 +35,22 @@ http.createServer(async (request, response) => {
     return json(response, { ok: true });
   }
   if (url.pathname === "/api/status") return json(response, status);
+  if (url.pathname === "/api/site-time" || url.pathname === "/api/site-time/sync") return json(response, {
+    synced: true, serverNowMs: Date.parse("2026-08-31T09:59:58+09:00"), lastSyncedAt: Date.now(), offsetMs: 327, rttMs: 42, precisionMs: 1000, stale: false
+  });
+  if (url.pathname === "/api/reservation-check-url") return json(response, { ok: true, url: "http://newpension.logosweb.or.kr/reservation/order_ok7.php?id=swim" });
   if (url.pathname === "/api/reservations" && request.method === "GET") return json(response, {
     ok: true,
     reservations: [{ id: "493304", room: "숨_산맥존", stayDate: "2026년10월07일", nights: "1박", total: "60,000원", status: "예약대기 중", cancelable: true }]
   });
   if (/^\/api\/reservations\/\d+\/cancel$/.test(url.pathname) && request.method === "POST") return json(response, { ok: true, reservations: [] });
-  if (url.pathname === "/api/inspect") return json(response, { ok: true, rooms: config.roomPriority.map((room, index) => ({ name: room.name, available: index % 3 !== 2 })) });
-  if (url.pathname === "/api/start" || url.pathname === "/api/stop" || url.pathname === "/api/run-now") return json(response, { ok: true });
+  if (url.pathname === "/api/inspect") return json(response, {
+    ok: true,
+    rooms: process.env.MOCK_EMPTY_ROOMS === "1" ? [] : config.roomPriority.map((room, index) => ({ name: room.name, available: index % 3 !== 2 }))
+  });
+  if (url.pathname === "/api/start") { status.state = "waiting"; status.stage = "armed"; return json(response, { ok: true }); }
+  if (url.pathname === "/api/stop") { status.state = "stopped"; status.stage = "stopped"; return json(response, { ok: true }); }
+  if (url.pathname === "/api/run-now") { status.state = "running"; status.stage = "starting-now"; return json(response, { ok: true }); }
   const files = { "/": ["index.html", "text/html"], "/styles.css": ["styles.css", "text/css"], "/app.js": ["app.js", "text/javascript"], "/site-map.png": ["site-map.png", "image/png"] };
   const file = files[url.pathname];
   if (!file) { response.writeHead(404); return response.end(); }

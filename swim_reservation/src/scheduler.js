@@ -1,17 +1,21 @@
 import { triggerEpoch } from "./config.js";
 
 const HOUR = 60 * 60 * 1000;
-const PREWARM_MS = 30_000;
+const MIN_PREWARM_MS = 30_000;
+const MAX_PREWARM_MS = 5 * 60_000;
+const PREWARM_PER_SESSION_MS = 12_000;
 
 export class Scheduler {
-  constructor({ store, engine }) {
+  constructor({ store, engine, timeSync = null }) {
     this.store = store;
     this.engine = engine;
     this.timer = null;
     this.armed = false;
     this.prepared = false;
     this.running = false;
+    this.preparing = false;
     this.cancelRequested = false;
+    this.timeSync = timeSync || { now: () => Date.now(), ensureSynced: async () => Date.now() };
   }
 
   async restore() {
@@ -32,26 +36,31 @@ export class Scheduler {
     }
     if (status.state !== "waiting") return;
     const config = await this.store.getConfig();
-    if (triggerEpoch(config.triggerAt) <= Date.now()) {
+    await this.timeSync.ensureSynced();
+    if (triggerEpoch(config.triggerAt) <= this.timeSync.now()) {
       await this.store.updateStatus({ state: "failed", stage: "missed", message: "App이 중지된 동안 예약 실행 시각이 지났습니다." });
       return;
     }
-    this.arm(config, { restored: true });
+    await this.arm(config, { restored: true });
   }
 
   async arm(config, { restored = false } = {}) {
     if (this.running) throw new Error("이미 예약 엔진이 실행 중입니다.");
+    const siteNow = await this.timeSync.ensureSynced();
+    if (triggerEpoch(config.triggerAt) <= siteNow) throw new Error("예약 실행 시각이 이미 지났습니다.");
     this.stopTimer();
     this.armed = true;
     this.prepared = false;
+    this.preparing = false;
     this.cancelRequested = false;
     if (!restored) {
       const targetAt = triggerEpoch(config.triggerAt);
+      const prewarmMs = preparationLeadMs(config);
       await this.store.updateStatus({
         state: "waiting",
         stage: "armed",
         targetAt,
-        prepareAt: targetAt - PREWARM_MS,
+        prepareAt: targetAt - prewarmMs,
         startDate: config.startDate,
         selectedRoom: null,
         selectedRooms: [],
@@ -69,6 +78,7 @@ export class Scheduler {
     this.cancelRequested = true;
     this.armed = false;
     this.prepared = false;
+    this.preparing = false;
     this.running = false;
     this.stopTimer();
     await this.engine.close();
@@ -77,19 +87,21 @@ export class Scheduler {
 
   async runNow(config) {
     if (this.running) throw new Error("이미 예약 엔진이 실행 중입니다.");
+    await this.timeSync.ensureSynced();
     const opensAt = triggerEpoch(config.triggerAt);
-    if (Number.isFinite(opensAt) && opensAt > Date.now()) {
+    if (Number.isFinite(opensAt) && opensAt > this.timeSync.now()) {
       throw new Error(`아직 예약 오픈 전입니다. ${config.triggerAt} 이후 예약하거나 예약 대기를 시작하세요.`);
     }
     this.stopTimer();
     this.armed = false;
     this.prepared = false;
+    this.preparing = false;
     this.running = true;
     this.cancelRequested = false;
     await this.store.updateStatus({
       state: "running",
       stage: "starting-now",
-      targetAt: Date.now(),
+      targetAt: this.timeSync.now(),
       prepareAt: null,
       startDate: config.startDate,
       selectedRoom: null,
@@ -99,7 +111,7 @@ export class Scheduler {
       attemptedRooms: [],
       diagnostics: null,
       message: "즉시 예약을 시작합니다.",
-      startedAt: Date.now()
+      startedAt: this.timeSync.now()
     });
     this.execute(config, { prepared: false }).catch((error) => this.fail(error));
   }
@@ -113,30 +125,37 @@ export class Scheduler {
     if (!this.armed) return;
     const config = await this.store.getConfig();
     const target = triggerEpoch(config.triggerAt);
-    let remaining = target - Date.now();
+    const prewarmMs = preparationLeadMs(config);
+    let remaining = target - this.timeSync.now();
 
-    if (!this.prepared && remaining <= PREWARM_MS && remaining > 0) {
+    if (!this.prepared && remaining <= prewarmMs && remaining > 0) {
       await this.store.updateStatus({ stage: "prewarming", message: "객실 선택부터 예약자 정보 입력까지 미리 준비하고 있습니다." });
-      await this.engine.prepare(config);
-      this.prepared = true;
-      remaining = target - Date.now();
+      this.preparing = true;
+      try {
+        await this.engine.prepare(config);
+        this.prepared = true;
+      } finally {
+        this.preparing = false;
+      }
+      remaining = target - this.timeSync.now();
     }
 
     if (remaining <= 0) {
       this.armed = false;
       this.running = true;
-      await this.store.updateStatus({ state: "running", stage: "starting", message: "예약을 시작합니다.", startedAt: Date.now() });
+      await this.store.updateStatus({ state: "running", stage: "starting", message: "예약을 시작합니다.", startedAt: this.timeSync.now() });
       await this.execute(config, { prepared: this.prepared });
       return;
     }
 
-    const delay = remaining > HOUR ? HOUR : remaining > PREWARM_MS ? Math.min(remaining - PREWARM_MS, 30_000) : Math.min(remaining, 50);
+    const delay = remaining > HOUR ? HOUR : remaining > prewarmMs ? Math.min(remaining - prewarmMs, 30_000) : Math.min(remaining, 50);
     this.timer = setTimeout(() => this.tick().catch((error) => this.fail(error)), Math.max(10, delay));
   }
 
   async fail(error) {
     this.armed = false;
     this.running = false;
+    this.preparing = false;
     this.stopTimer();
     await this.engine.close();
     if (this.cancelRequested) {
@@ -170,4 +189,11 @@ export class Scheduler {
 function isCompletedReservationDiagnostics(diagnostics) {
   if (!diagnostics || !/\/order_ok4\.php(?:\?|$)/i.test(String(diagnostics.url || ""))) return false;
   return Array.isArray(diagnostics.buttons) && diagnostics.buttons.some((button) => String(button?.label || "").includes("예약취소"));
+}
+
+function preparationLeadMs(config) {
+  if (config.bookingMode === "multiple") return MIN_PREWARM_MS;
+  const rooms = config.roomPriority.filter((room) => room.enabled).length;
+  const profiles = config.useSecondProfile ? 2 : 1;
+  return Math.min(MAX_PREWARM_MS, Math.max(MIN_PREWARM_MS, rooms * profiles * PREWARM_PER_SESSION_MS + MIN_PREWARM_MS));
 }

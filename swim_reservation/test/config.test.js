@@ -61,3 +61,39 @@ test("동시 예약은 미니 PC 보호를 위해 최대 5개 객실로 제한�
   });
   assert.match(validateConfig(config).join(","), /최대 5개/);
 });
+
+test("기존 단일 예약자 설정은 예약자 1로 복원되고 예약자 2 사용은 기본 OFF다", () => {
+  const config = normalizeConfig({
+    startDate: "2026-11-07", triggerAt: "2026-09-01T00:00:00", nights: 1,
+    roomPriority: [{ name: "해_하늘존", enabled: true }],
+    profile: { reserverName: "기존예약자", depositorName: "기존입금자", phone: "01012345678", birthDate: "19900101" }
+  });
+  assert.equal(config.profile1.reserverName, "기존예약자");
+  assert.deepEqual(config.profile, config.profile1);
+  assert.equal(config.useSecondProfile, false);
+});
+
+test("예약자 2명 사용 시 두 정보를 독립 저장하고 예약자 2도 검증한다", () => {
+  const config = normalizeConfig({
+    startDate: "2026-11-07", triggerAt: "2026-09-01T00:00:00", nights: 1,
+    roomPriority: [{ name: "해_하늘존", enabled: true }], useSecondProfile: true,
+    profile1: { reserverName: "예약자1", depositorName: "입금자1", phone: "01011112222", birthDate: "19900101" },
+    profile2: { reserverName: "예약자2", depositorName: "입금자2", phone: "01033334444", birthDate: "19920202" }
+  });
+  assert.equal(config.profile1.phone, "01011112222");
+  assert.equal(config.profile2.phone, "01033334444");
+  assert.deepEqual(validateConfig(config), []);
+  config.profile2.phone = "";
+  assert.match(validateConfig(config).join(","), /예약자 2 휴대폰 번호/);
+});
+
+test("예약 대기 시각 검증에 사이트 서버 기준 시각을 주입할 수 있다", () => {
+  const config = normalizeConfig({
+    startDate: "2026-11-07", triggerAt: "2026-09-01T00:00:00", nights: 1,
+    roomPriority: [{ name: "해_하늘존", enabled: true }],
+    profile: { reserverName: "예약자", depositorName: "입금자", phone: "01012345678", birthDate: "19900101" }
+  });
+  const trigger = triggerEpoch(config.triggerAt);
+  assert.deepEqual(validateConfig(config, { futureTrigger: true, nowMs: trigger - 1 }), []);
+  assert.match(validateConfig(config, { futureTrigger: true, nowMs: trigger }).join(","), /현재 이후/);
+});
