@@ -219,8 +219,10 @@ function renderHistory(entries) {
       <div class="history-actions"><button class="load" type="button">불러오기</button><button class="delete" type="button">삭제</button></div>`;
     row.querySelector(".load").addEventListener("click", () => perform(async () => {
       const result = await request(`history/${encodeURIComponent(entry.id)}/load`, { method: "POST" });
+      availabilityByRoom.clear();
       loadConfig(result.config);
-      showMessage(`${entry.startDate} · ${entry.nights}박 설정을 불러왔습니다.`);
+      await refreshAvailability();
+      showMessage(`${entry.startDate} · ${entry.nights}박 설정과 객실 정보를 불러왔습니다.`);
     }));
     row.querySelector(".delete").addEventListener("click", () => perform(async () => {
       const approved = window.confirm(`${entry.startDate} · ${entry.nights}박 저장 이력을 삭제할까요?\n\n현재 화면에 불러온 설정은 삭제되지 않습니다.`);
