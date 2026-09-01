@@ -4,7 +4,8 @@ const elements = Object.fromEntries([
   "depositorName", "phone", "birthDate", "useSecondProfile", "secondProfilePanel", "reserverName2", "depositorName2", "phone2", "birthDate2",
   "historyList", "statusBadge", "statusText", "statusDetails", "profileStatusList", "inspectResult", "siteClock", "siteTimeMeta", "siteTimeSyncButton",
   "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
-  "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton", "startButton"
+  "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton", "startButton",
+  "logList", "refreshLogsButton", "copyLogsButton", "saveLogsButton"
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
@@ -14,6 +15,10 @@ let currentStage = "idle";
 let availabilityTimer = null;
 let availabilityRequest = 0;
 let siteTimeBase = null;
+let autoLookupCompletedKey = "";
+let autoLookupRunning = false;
+let lastAutoLookupAttempt = 0;
+let currentLogText = "";
 const availabilityByRoom = new Map();
 const STATE_LABELS = {
   idle: "설정 중", waiting: "예약 대기", running: "자동 실행 중",
@@ -49,6 +54,7 @@ async function init() {
   bindEvents();
   await refreshHistory();
   await refreshStatus();
+  await refreshLogs();
   await refreshSiteTime(false);
   scheduleAvailabilityCheck(0);
   setInterval(refreshStatus, 1500);
@@ -119,13 +125,13 @@ function bindEvents() {
     await saveConfig();
     showMessage("미니 PC에서 예약 페이지에 연결하고 있습니다.");
     const result = await request("inspect", { method: "POST", body: JSON.stringify({ startDate: elements.startDate.value, nights: Number(elements.nights.value) }) });
-    renderInspection(result.rooms, { beforeOpen: isBeforeOpen(elements.startDate.value) });
+    renderInspection(result.rooms, { beforeOpen: isBeforeOpen(elements.startDate.value), addedRooms: result.addedRooms || [] });
     await refreshStatus();
   }));
-  elements.reservationLookupButton.addEventListener("click", () => perform(async () => {
-    const result = await request("reservations");
-    renderReservations(result.reservations || []);
-  }));
+  elements.reservationLookupButton.addEventListener("click", () => perform(() => loadReservations()));
+  elements.refreshLogsButton.addEventListener("click", () => perform(() => refreshLogs()));
+  elements.copyLogsButton.addEventListener("click", () => perform(() => copyLogs()));
+  elements.saveLogsButton.addEventListener("click", () => perform(() => saveLogs()));
   elements.reservationSiteButton.addEventListener("click", () => openReservationSite());
   elements.copyDiagnosticsButton.addEventListener("click", () => copyDiagnostics());
   elements.siteMapButton.addEventListener("click", () => elements.siteMapDialog.showModal());
@@ -251,7 +257,7 @@ function renderRooms() {
     const availabilityLabel = AVAILABILITY_LABELS[availability] || AVAILABILITY_LABELS.unknown;
     row.innerHTML = `
       <label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} aria-label="${escapeHtml(room.name)} 선택"></label>
-      <div class="room-name"><span class="room-rank">${room.enabled ? (multiple ? "예약" : `${rank}순위`) : "—"}</span>${escapeHtml(room.name)}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
+      <div class="room-name"><span class="room-rank">${room.enabled ? (multiple ? "예약" : `${rank}순위`) : "—"}</span>${escapeHtml(room.name)}${room.newlyDetected ? '<span class="room-detected">신규 자동 추가</span>' : ""}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
       <div class="move-buttons"><button type="button" data-move="up" ${index === 0 ? "disabled" : ""} aria-label="위로 이동">↑</button><button type="button" data-move="down" ${index === rooms.length - 1 ? "disabled" : ""} aria-label="아래로 이동">↓</button></div>`;
     row.querySelector("input").addEventListener("change", (event) => { room.enabled = event.target.checked; renderRooms(); });
     row.querySelector('[data-move="up"]').addEventListener("click", () => moveRoom(index, -1));
@@ -352,10 +358,35 @@ function renderSiteClock() {
 
 async function refreshStatus() {
   try {
-    renderStatus(await request("status"));
+    const status = await request("status");
+    renderStatus(status);
+    void maybeAutoLookupReservations(status);
   } catch (error) {
     if (!busy) showMessage(`상태 확인 실패: ${error.message}`, true);
   }
+}
+
+async function maybeAutoLookupReservations(status) {
+  if (!["success", "failed"].includes(status.state) || autoLookupRunning) return;
+  const key = `${status.state}:${status.stage}:${status.updatedAt}`;
+  if (key === autoLookupCompletedKey || Date.now() - lastAutoLookupAttempt < 5_000) return;
+  lastAutoLookupAttempt = Date.now();
+  autoLookupRunning = true;
+  try {
+    await loadReservations();
+    autoLookupCompletedKey = key;
+    await refreshLogs();
+  } catch (error) {
+    elements.reservationList.hidden = false;
+    elements.reservationList.innerHTML = `<strong>예약확인</strong><p>자동 예약확인 실패: ${escapeHtml(error.message)}</p>`;
+  } finally {
+    autoLookupRunning = false;
+  }
+}
+
+async function loadReservations() {
+  const result = await request("reservations");
+  renderReservations(result.reservations || []);
 }
 
 function renderStatus(status) {
@@ -413,7 +444,16 @@ async function copyDiagnostics() {
   showMessage("진단 정보를 복사했습니다. 이 대화에 그대로 붙여 넣어 주세요.");
 }
 
-function renderInspection(result, { beforeOpen = false } = {}) {
+function renderInspection(result, { beforeOpen = false, addedRooms = [] } = {}) {
+  const existingNames = new Set(rooms.map((room) => room.name));
+  for (const found of result) {
+    const name = String(found?.name || "").trim();
+    if (!name || existingNames.has(name)) continue;
+    existingNames.add(name);
+    rooms.push({ name, enabled: false, newlyDetected: true });
+  }
+  const addedSet = new Set(addedRooms);
+  for (const room of rooms) if (addedSet.has(room.name)) room.newlyDetected = true;
   const returned = new Map(result.map((room) => [room.name, room]));
   const source = beforeOpen ? rooms.map((configured) => returned.get(configured.name) || { name: configured.name, serverProvided: false }) : result;
   const displayed = source.map((room) => ({
@@ -426,7 +466,8 @@ function renderInspection(result, { beforeOpen = false } = {}) {
   renderRooms();
   elements.inspectResult.hidden = false;
   const opening = beforeOpen ? `<small>예약 가능 시작: ${escapeHtml(formatOpeningTime(elements.startDate.value))}</small><br>` : "";
-  elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${opening}${displayed.map((room) => {
+  const addedNotice = addedRooms.length ? `<small>신규 객실 자동 추가: ${escapeHtml(addedRooms.join(" · "))}</small><br>` : "";
+  elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${addedNotice}${opening}${displayed.map((room) => {
     const status = room.displayStatus;
     const label = ["available-before-open", "unavailable-before-open", "before-open", "before-open-no-data", "booked"].includes(status)
       ? AVAILABILITY_LABELS[status]
@@ -494,7 +535,7 @@ async function refreshAvailability() {
   try {
     const result = await request("inspect", { method: "POST", body: JSON.stringify({ startDate, nights }) });
     if (requestId !== availabilityRequest) return;
-    renderInspection(result.rooms || [], { beforeOpen });
+    renderInspection(result.rooms || [], { beforeOpen, addedRooms: result.addedRooms || [] });
   } catch (error) {
     if (requestId !== availabilityRequest) return;
     availabilityByRoom.clear();
@@ -519,8 +560,63 @@ async function perform(action) {
 }
 
 function setButtonsDisabled(disabled) {
-  for (const button of [elements.inspectButton, elements.reservationSiteButton, elements.reservationLookupButton, elements.siteTimeSyncButton, elements.saveButton, elements.stopButton, elements.runNowButton, elements.startButton]) button.disabled = disabled;
+  for (const button of [elements.inspectButton, elements.reservationSiteButton, elements.reservationLookupButton, elements.siteTimeSyncButton, elements.saveButton, elements.stopButton, elements.runNowButton, elements.startButton, elements.refreshLogsButton, elements.copyLogsButton, elements.saveLogsButton]) button.disabled = disabled;
   for (const button of elements.reservationList.querySelectorAll("button")) button.disabled = disabled;
+}
+
+async function refreshLogs() {
+  const result = await request("logs?limit=300");
+  const entries = result.entries || [];
+  currentLogText = entries.slice().reverse().map(formatLogEntry).join("\n");
+  elements.logList.replaceChildren();
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "저장된 실행 로그가 없습니다.";
+    elements.logList.append(empty);
+    return;
+  }
+  for (const entry of entries) {
+    const row = document.createElement("div");
+    row.className = `log-row ${entry.level || "info"}`;
+    const time = new Date(entry.timestamp).toLocaleString("ko-KR");
+    row.innerHTML = `<time>${escapeHtml(time)}</time><strong>${entry.level === "error" ? "오류" : "정보"}</strong><span>${escapeHtml(entry.message || entry.event || "")}</span>`;
+    elements.logList.append(row);
+  }
+}
+
+function formatLogEntry(entry) {
+  const time = new Date(entry.timestamp).toLocaleString("ko-KR");
+  const details = entry.details && Object.keys(entry.details).length ? ` | ${JSON.stringify(entry.details)}` : "";
+  return `[${time}] [${entry.level === "error" ? "오류" : "정보"}] ${entry.message || entry.event || ""}${details}`;
+}
+
+async function copyLogs() {
+  if (!currentLogText) await refreshLogs();
+  const text = currentLogText || "저장된 실행 로그가 없습니다.";
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  showMessage("실행 로그를 복사했습니다.");
+}
+
+async function saveLogs() {
+  const response = await fetch(API("logs/download"));
+  if (!response.ok) throw new Error(`로그 파일 저장 실패 (${response.status})`);
+  const blob = await response.blob();
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+  link.download = `swim-reservation-log-${day}.txt`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
+  showMessage("실행 로그 파일을 저장했습니다.");
 }
 
 function showMessage(message, error = false, successLabel = "저장 완료") {

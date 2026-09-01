@@ -248,3 +248,36 @@ test("단일 예약의 사전 준비 데이터가 없으면 오픈 시 준비됨
 
   assert.equal(receivedOptions.prepared, false);
 });
+
+test("예약 대기 중 객실 조회는 준비 세션이 공유하는 브라우저를 닫지 않는다", async () => {
+  let browserClosed = false;
+  let contextClosed = false;
+  const engine = new ReservationEngine({ store: { updateStatus: async () => {} } });
+  engine.browser = { close: async () => { browserClosed = true; } };
+  engine.ownsBrowser = true;
+  engine.context = { close: async () => { contextClosed = true; } };
+  engine.page = {};
+
+  await engine.closeMainPage({ keepBrowser: true });
+
+  assert.equal(contextClosed, true);
+  assert.equal(browserClosed, false);
+  assert.ok(engine.browser);
+  assert.equal(engine.page, null);
+});
+
+test("브라우저 종료 오류는 한글 안내로 표시하고 기술 원문은 로그용으로 보존한다", async () => {
+  const statuses = [];
+  const engine = new ReservationEngine({ store: { updateStatus: async (patch) => { statuses.push(structuredClone(patch)); } } });
+  const closedError = new Error("locator.evaluateAll: Target page, context or browser has been closed");
+  engine.prioritySessions = [{
+    profileIndex: 0, rank: 1, room: "들_하늘존", config,
+    engine: { runSingle: async () => { throw closedError; }, close: async () => {} }
+  }];
+
+  await assert.rejects(() => engine.runPreparedProfiles(config), /Target page/);
+
+  const failed = statuses.find((status) => status.stage === "profile-uncertain");
+  assert.match(failed.message, /예약 준비 브라우저 연결이 종료/);
+  assert.equal(failed.technicalMessage, closedError.message);
+});

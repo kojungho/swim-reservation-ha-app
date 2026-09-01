@@ -97,3 +97,13 @@ test("예약 대기 시각 검증에 사이트 서버 기준 시각을 주입할
   assert.deepEqual(validateConfig(config, { futureTrigger: true, nowMs: trigger - 1 }), []);
   assert.match(validateConfig(config, { futureTrigger: true, nowMs: trigger }).join(","), /현재 이후/);
 });
+
+test("사이트에서 새로 감지한 객실을 고정 목록에 없어도 유지한다", () => {
+  const config = normalizeConfig({
+    startDate: "2026-11-07", triggerAt: "2026-09-01T00:00:00", nights: 1,
+    roomPriority: [{ name: "신규_계곡존", enabled: true }],
+    profile: { reserverName: "예약자", depositorName: "입금자", phone: "01012345678", birthDate: "19900101" }
+  });
+  assert.deepEqual(config.roomPriority[0], { name: "신규_계곡존", enabled: true });
+  assert.equal(config.roomPriority.some((room) => room.name === "해_하늘존"), true);
+});

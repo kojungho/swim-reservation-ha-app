@@ -22,6 +22,7 @@ const scheduler = new Scheduler({ store, engine, timeSync });
 const reservationManager = new ReservationManager({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
 
 await store.init();
+await store.recordLog("info", "startup", "쉼오지 예약 도우미를 시작했습니다.").catch(() => {});
 await timeSync.sync().catch((error) => console.error(`서버 시간 초기 동기화 실패: ${error.message}`));
 timeSync.start();
 await scheduler.restore().catch(async (error) => {
@@ -45,6 +46,20 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/api/status" && request.method === "GET") {
       return json(response, 200, await store.getStatus());
+    }
+    if (url.pathname === "/api/logs" && request.method === "GET") {
+      return json(response, 200, { ok: true, entries: await store.listLogs(url.searchParams.get("limit")) });
+    }
+    if (url.pathname === "/api/logs/download" && request.method === "GET") {
+      const entries = await store.listLogs(1000);
+      const body = entries.slice().reverse().map(formatLogEntry).join("\n");
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+      response.writeHead(200, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": `attachment; filename="swim-reservation-log-${day}.txt"`,
+        "Cache-Control": "no-store"
+      });
+      return response.end(`${body}${body ? "\n" : ""}`);
     }
     if (url.pathname === "/api/reservation-check-url" && request.method === "GET") {
       const config = await store.getConfig();
@@ -74,6 +89,7 @@ const server = http.createServer(async (request, response) => {
         const found = await reservationManager.list(entry.profile);
         reservations.push(...found.map((item) => ({ ...item, profileIndex: entry.index, profileLabel: entry.label })));
       }
+      await store.recordLog("info", "reservation-check", `예약확인 결과 ${reservations.length}건을 찾았습니다.`);
       return json(response, 200, { ok: true, reservations });
     }
     const cancelMatch = /^\/api\/reservations\/(\d+)\/cancel$/.exec(url.pathname);
@@ -132,15 +148,17 @@ const server = http.createServer(async (request, response) => {
         nights: Number(input.nights || stored.nights)
       });
       const rooms = await engine.inspect(config);
+      const { addedRooms } = await store.mergeDiscoveredRooms(rooms.map((room) => room.name));
       if (!scheduler.armed) {
         await store.updateStatus({ state: "idle", stage: "inspected", message: "예약 페이지 연결과 객실 목록을 확인했습니다." });
       }
-      return json(response, 200, { ok: true, rooms, reservationUrl: reservationUrl(config.startDate) });
+      return json(response, 200, { ok: true, rooms, addedRooms, reservationUrl: reservationUrl(config.startDate) });
     }
     if (url.pathname === "/health" && request.method === "GET") return json(response, 200, { ok: true });
     return serveStatic(url.pathname, response);
   } catch (error) {
     console.error(error);
+    await store.recordLog("error", "server-error", error.message || "서버 오류가 발생했습니다.").catch(() => {});
     return json(response, 500, { ok: false, error: error.message || "서버 오류가 발생했습니다." });
   }
 });
@@ -186,4 +204,10 @@ async function readJsonBody(request) {
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
+function formatLogEntry(entry) {
+  const timestamp = new Date(entry.timestamp).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false });
+  const details = entry.details && Object.keys(entry.details).length ? ` | ${JSON.stringify(entry.details)}` : "";
+  return `[${timestamp}] [${entry.level === "error" ? "오류" : "정보"}] ${entry.message || entry.event || ""}${details}`;
 }

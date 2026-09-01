@@ -3,7 +3,7 @@ export const BASE_URL = "http://newpension.logosweb.or.kr/reservation/reservatio
 
 export const ROOM_NAMES = [
   "해_하늘존", "달_하늘존", "별_하늘존", "빛_하늘존", "강_하늘존", "산_하늘존", "들_하늘존",
-  "숲_하늘존", "샘_산맥존", "숨_산맥존", "꿈_산맥존", "솔_산맥존", "결_산맥존"
+  "숲_하늘존", "샘_산맥존", "온_산맥존", "숨_산맥존", "꿈_산맥존", "솔_산맥존", "결_산맥존"
 ];
 
 export function defaultConfig(now = new Date()) {
@@ -27,17 +27,15 @@ export function defaultConfig(now = new Date()) {
 }
 
 export function normalizeConfig(input = {}) {
-  const knownRooms = new Map(
-    (Array.isArray(input.roomPriority) ? input.roomPriority : []).map((room) => [room?.name, room])
-  );
   const ordered = [];
   for (const room of Array.isArray(input.roomPriority) ? input.roomPriority : []) {
-    if (ROOM_NAMES.includes(room?.name) && !ordered.some((item) => item.name === room.name)) {
-      ordered.push({ name: room.name, enabled: Boolean(room.enabled) });
+    const name = normalizeRoomName(room?.name);
+    if (name && !ordered.some((item) => item.name === name)) {
+      ordered.push({ name, enabled: Boolean(room.enabled) });
     }
   }
   for (const name of ROOM_NAMES) {
-    if (!knownRooms.has(name)) ordered.push({ name, enabled: false });
+    if (!ordered.some((item) => item.name === name)) ordered.push({ name, enabled: false });
   }
 
   const profile1 = normalizeProfile(input.profile1 || input.profiles?.[0] || input.profile);
@@ -54,6 +52,11 @@ export function normalizeConfig(input = {}) {
     useSecondProfile: Boolean(input.useSecondProfile),
     autoFinalSubmit: input.autoFinalSubmit !== false
   };
+}
+
+function normalizeRoomName(value) {
+  const name = String(value || "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim();
+  return name.slice(0, 80);
 }
 
 export function validateConfig(config, { futureTrigger = false, nowMs = Date.now() } = {}) {

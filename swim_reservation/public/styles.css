@@ -56,6 +56,7 @@ input[readonly] { background: #f3f6f4; color: #516159; }
 .room-toggle input { width: 19px; height: 19px; }
 .room-name { font-weight: 760; }
 .room-rank { display: inline-block; min-width: 48px; margin-right: 7px; color: var(--green); }
+.room-detected { display: inline-block; margin-left: 7px; padding: 3px 6px; border-radius: 999px; background: #dcefe4; color: #12603d; font-size: 10px; vertical-align: 1px; }
 .availability { display: inline-block; margin-left: 9px; padding: 4px 7px; border-radius: 999px; background: #e7ece9; color: #5a6861; font-size: 11px; vertical-align: 1px; }
 .availability.available { background: #d8f1e2; color: #12603d; }
 .availability.booked { background: #fae3e1; color: #97372f; }
@@ -113,6 +114,15 @@ dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: any
 .history-actions button { padding: 9px 12px; font-size: 12px; }
 .history-actions .load { background: #e3efe8; color: var(--green-dark); }
 .history-actions .delete { background: #f9e7e5; color: var(--red); }
+.log-list { display: grid; max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: #f8faf9; }
+.log-list > p { margin: 0; padding: 18px; color: var(--muted); text-align: center; }
+.log-row { display: grid; grid-template-columns: 155px 42px 1fr; gap: 10px; padding: 9px 11px; border-bottom: 1px solid var(--line); font-size: 12px; line-height: 1.45; }
+.log-row:last-child { border-bottom: 0; }
+.log-row time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.log-row strong { color: var(--green-dark); }
+.log-row.error { background: #fff6f5; }
+.log-row.error strong { color: var(--red); }
+.log-actions { gap: 8px; }
 .notice { margin: 18px 4px 0; padding: 16px 18px; border-left: 4px solid #d29b30; background: #fff9e9; color: #674e20; border-radius: 4px 12px 12px 4px; font-size: 13px; line-height: 1.65; }
 .notice p { margin: 5px 0 0; }
 .site-map-dialog { width: min(780px, calc(100% - 24px)); max-height: calc(100vh - 24px); padding: 14px; border: 0; border-radius: 18px; box-shadow: 0 24px 80px rgba(0,0,0,.28); }
@@ -139,4 +149,7 @@ dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: any
   .history-actions { justify-content: stretch; }
   .history-actions button { flex: 1; }
   .diagnostics-heading { align-items: stretch; flex-direction: column; }
+  .log-row { grid-template-columns: 1fr auto; }
+  .log-row span { grid-column: 1 / -1; }
+  .log-actions { display: grid; grid-template-columns: 1fr; }
 }

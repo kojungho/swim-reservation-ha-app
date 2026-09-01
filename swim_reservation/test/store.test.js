@@ -69,3 +69,19 @@ test("예약자 1·2 정보와 사용 여부를 저장 후 독립적으로 복�
   assert.equal(restored.profile2.reserverName, "예약자2");
   assert.notDeepEqual(restored.profile1, restored.profile2);
 });
+
+test("새로 감지한 객실을 미선택 상태로 영구 추가하고 로그를 남긴다", async (context) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "swim-store-"));
+  context.after(() => rm(dataDir, { recursive: true, force: true }));
+  const store = new Store(dataDir);
+  await store.init();
+  await store.saveConfig(sampleConfig("2026-11-07", 1), { recordHistory: false });
+
+  const result = await store.mergeDiscoveredRooms(["신규_계곡존", "신규_계곡존"]);
+  const restored = await store.getConfig();
+  const logs = await store.listLogs();
+
+  assert.deepEqual(result.addedRooms, ["신규_계곡존"]);
+  assert.deepEqual(restored.roomPriority.find((room) => room.name === "신규_계곡존"), { name: "신규_계곡존", enabled: false });
+  assert.equal(logs.some((entry) => entry.event === "room-detected"), true);
+});

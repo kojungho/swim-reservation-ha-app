@@ -7,7 +7,13 @@ import { defaultConfig, reservationUrl } from "../src/config.js";
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
 let config = defaultConfig(new Date("2026-08-30T12:00:00+09:00"));
 let history = [];
-const status = { state: "idle", stage: "idle", message: "UI 테스트 서버", updatedAt: Date.now() };
+const status = {
+  state: process.env.MOCK_STATUS_STATE || "idle",
+  stage: process.env.MOCK_STATUS_STATE === "success" ? "complete" : process.env.MOCK_STATUS_STATE === "failed" ? "profile-uncertain" : "idle",
+  message: "UI 테스트 서버",
+  updatedAt: Date.now()
+};
+const logs = [{ timestamp: Date.now(), level: "info", event: "startup", message: "UI 테스트 로그", details: {} }];
 
 http.createServer(async (request, response) => {
   const url = new URL(request.url, "http://127.0.0.1:8877");
@@ -35,19 +41,29 @@ http.createServer(async (request, response) => {
     return json(response, { ok: true });
   }
   if (url.pathname === "/api/status") return json(response, status);
+  if (url.pathname === "/api/logs") return json(response, { ok: true, entries: logs });
+  if (url.pathname === "/api/logs/download") {
+    response.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": "attachment; filename=swim-reservation-log.txt" });
+    return response.end("UI 테스트 로그\n");
+  }
   if (url.pathname === "/api/site-time" || url.pathname === "/api/site-time/sync") return json(response, {
     synced: true, serverNowMs: Date.parse("2026-08-31T09:59:58+09:00"), lastSyncedAt: Date.now(), offsetMs: 327, rttMs: 42, precisionMs: 1000, stale: false
   });
   if (url.pathname === "/api/reservation-check-url") return json(response, { ok: true, url: "http://newpension.logosweb.or.kr/reservation/order_ok7.php?id=swim" });
-  if (url.pathname === "/api/reservations" && request.method === "GET") return json(response, {
+  if (url.pathname === "/api/reservations" && request.method === "GET") {
+    logs.push({ timestamp: Date.now(), level: "info", event: "reservation-check", message: "자동 예약확인 실행", details: {} });
+    return json(response, {
     ok: true,
     reservations: [{ id: "493304", room: "숨_산맥존", stayDate: "2026년10월07일", nights: "1박", total: "60,000원", status: "예약대기 중", cancelable: true }]
-  });
+    });
+  }
   if (/^\/api\/reservations\/\d+\/cancel$/.test(url.pathname) && request.method === "POST") return json(response, { ok: true, reservations: [] });
-  if (url.pathname === "/api/inspect") return json(response, {
-    ok: true,
-    rooms: process.env.MOCK_EMPTY_ROOMS === "1" ? [] : config.roomPriority.map((room, index) => ({ name: room.name, available: index % 3 !== 2 }))
-  });
+  if (url.pathname === "/api/inspect") {
+    const newRoom = process.env.MOCK_NEW_ROOM || "";
+    const rooms = process.env.MOCK_EMPTY_ROOMS === "1" ? [] : config.roomPriority.map((room, index) => ({ name: room.name, available: index % 3 !== 2 }));
+    if (newRoom && !rooms.some((room) => room.name === newRoom)) rooms.push({ name: newRoom, available: true });
+    return json(response, { ok: true, rooms, addedRooms: newRoom ? [newRoom] : [] });
+  }
   if (url.pathname === "/api/start") { status.state = "waiting"; status.stage = "armed"; return json(response, { ok: true }); }
   if (url.pathname === "/api/stop") { status.state = "stopped"; status.stage = "stopped"; return json(response, { ok: true }); }
   if (url.pathname === "/api/run-now") { status.state = "running"; status.stage = "starting-now"; return json(response, { ok: true }); }

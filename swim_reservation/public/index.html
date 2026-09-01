@@ -88,11 +88,21 @@
       </div>
       <div class="actions">
         <button id="reservationSiteButton" class="secondary">예약확인 사이트 이동</button>
-        <button id="reservationLookupButton" class="secondary">예약 정보 불러오기</button>
+        <button id="reservationLookupButton" class="secondary">예약확인</button>
         <button id="inspectButton" class="secondary">페이지 연결 확인</button>
         <button id="stopButton" class="danger">실행 중지</button>
         <button id="runNowButton" class="now">지금 바로 예약</button>
         <button id="startButton" class="primary">예약 대기 시작</button>
+      </div>
+    </section>
+
+    <section class="card status-card">
+      <div class="section-title"><span>6</span><div><h2>실행 로그</h2><p>최근 실행 과정과 오류를 HA App 데이터 영역에 저장합니다.</p></div></div>
+      <div id="logList" class="log-list"><p>로그를 불러오는 중입니다.</p></div>
+      <div class="section-actions log-actions">
+        <button id="refreshLogsButton" class="secondary" type="button">로그 새로고침</button>
+        <button id="copyLogsButton" class="secondary" type="button">로그 복사</button>
+        <button id="saveLogsButton" class="secondary" type="button">로그 파일 저장</button>
       </div>
     </section>
 

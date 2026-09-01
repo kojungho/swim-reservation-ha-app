@@ -8,6 +8,8 @@ export class Store {
     this.configPath = path.join(dataDir, "reservation-config.json");
     this.statusPath = path.join(dataDir, "reservation-status.json");
     this.historyPath = path.join(dataDir, "reservation-history.json");
+    this.logPath = path.join(dataDir, "reservation-log.json");
+    this.logQueue = Promise.resolve();
   }
 
   async init() {
@@ -24,6 +26,24 @@ export class Store {
     await atomicWrite(this.configPath, normalized);
     if (recordHistory) await this.saveHistory(normalized);
     return normalized;
+  }
+
+  async mergeDiscoveredRooms(names) {
+    const config = await this.getConfig();
+    const existing = new Set(config.roomPriority.map((room) => room.name));
+    const addedRooms = [];
+    for (const value of names) {
+      const name = String(value || "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
+      if (!name || existing.has(name)) continue;
+      existing.add(name);
+      addedRooms.push(name);
+      config.roomPriority.push({ name, enabled: false });
+    }
+    if (addedRooms.length) {
+      await this.saveConfig(config, { recordHistory: false });
+      await this.recordLog("info", "room-detected", `신규 객실 ${addedRooms.length}개를 자동 추가했습니다.`, { rooms: addedRooms }).catch(() => {});
+    }
+    return { config, addedRooms };
   }
 
   async listHistory() {
@@ -82,7 +102,34 @@ export class Store {
     const current = await this.getStatus();
     const next = { ...current, ...patch, updatedAt: Date.now() };
     await atomicWrite(this.statusPath, next);
+    void this.recordLog(next.state === "failed" ? "error" : "info", "status", next.message || next.stage || next.state, {
+      state: next.state,
+      stage: next.stage,
+      selectedRoom: next.selectedRoom || null,
+      selectedRooms: next.selectedRooms || [],
+      succeededRooms: next.succeededRooms || [],
+      failedRooms: next.failedRooms || [],
+      technicalMessage: patch.technicalMessage || null,
+      profileStatuses: next.profileStatuses || []
+    }).catch(() => {});
     return next;
+  }
+
+  async recordLog(level, event, message, details = {}) {
+    const entry = { timestamp: Date.now(), level, event, message: String(message || ""), details };
+    this.logQueue = this.logQueue.catch(() => {}).then(async () => {
+      const entries = await readJson(this.logPath, []);
+      entries.push(entry);
+      await atomicWrite(this.logPath, entries.slice(-1000));
+    });
+    await this.logQueue;
+    return entry;
+  }
+
+  async listLogs(limit = 500) {
+    await this.logQueue;
+    const entries = await readJson(this.logPath, []);
+    return entries.slice(-Math.max(1, Math.min(Number(limit) || 500, 1000))).reverse();
   }
 }
 

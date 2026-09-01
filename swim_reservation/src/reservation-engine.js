@@ -68,7 +68,10 @@ export class ReservationEngine {
       await this.assertReservationDate(config, { required: true });
       return await this.readRooms(config.nights);
     } finally {
-      if (temporary) await this.closeMainPage();
+      if (temporary) {
+        const keepPreparedBrowser = this.childSessions.length > 0 || this.prioritySessions.length > 0;
+        await this.closeMainPage({ keepBrowser: keepPreparedBrowser });
+      }
     }
   }
 
@@ -137,7 +140,8 @@ export class ReservationEngine {
       await this.store.updateStatus({
         state: "failed",
         stage: "reservation-error",
-        message: error.message || String(error),
+        message: userErrorMessage(error),
+        technicalMessage: error.message || String(error),
         diagnostics
       });
       throw error;
@@ -429,8 +433,9 @@ export class ReservationEngine {
             break;
           } catch (error) {
             if (error.code !== "ROOM_UNAVAILABLE" && error.code !== "NO_AVAILABLE_ROOM") {
-              profileStatuses[profileEntry.index] = { ...profileStatuses[profileEntry.index], state: "결과 확인 필요", message: error.message };
-              await this.store.updateStatus({ state: "failed", stage: "profile-uncertain", profileStatuses, message: `${profileEntry.label} 결과가 불확실하여 다음 예약을 중단했습니다: ${error.message}` });
+              const message = userErrorMessage(error);
+              profileStatuses[profileEntry.index] = { ...profileStatuses[profileEntry.index], state: "결과 확인 필요", message };
+              await this.store.updateStatus({ state: "failed", stage: "profile-uncertain", profileStatuses, message: `${profileEntry.label} 결과가 불확실하여 다음 예약을 중단했습니다: ${message}`, technicalMessage: error.message || String(error) });
               error.statusRecorded = true;
               throw error;
             }
@@ -484,7 +489,7 @@ export class ReservationEngine {
           result = await session.engine.runSingle(session.config, { prepared: false, allowFallback: true });
         } catch (error) {
           profileStatuses[profileEntry.index] = { ...profileStatuses[profileEntry.index], state: "예약 실패" };
-          await this.store.updateStatus({ state: "failed", stage: "profile-failed", profileStatuses, message: `${profileEntry.label} 예약 실패: ${error.message}` });
+          await this.store.updateStatus({ state: "failed", stage: "profile-failed", profileStatuses, message: `${profileEntry.label} 예약 실패: ${userErrorMessage(error)}`, technicalMessage: error.message || String(error) });
           error.statusRecorded = true;
           throw error;
         }
@@ -583,15 +588,16 @@ export class ReservationEngine {
     await this.closeMainPage();
   }
 
-  async closeMainPage() {
+  async closeMainPage({ keepBrowser = false } = {}) {
     if (this.context) await this.context.close().catch(() => {});
-    if (this.ownsBrowser && this.browser) await this.browser.close().catch(() => {});
     this.context = null;
+    this.page = null;
+    this.selectedRoom = null;
+    if (keepBrowser) return;
+    if (this.ownsBrowser && this.browser) await this.browser.close().catch(() => {});
     this.browser = null;
     this.browserPromise = null;
     this.ownsBrowser = false;
-    this.page = null;
-    this.selectedRoom = null;
   }
 }
 
@@ -601,4 +607,12 @@ function activeProfiles(config) {
   ];
   if (config.useSecondProfile) profiles.push({ index: 1, label: "예약자 2", profile: config.profile2 });
   return profiles;
+}
+
+function userErrorMessage(error) {
+  const message = error?.message || String(error);
+  if (/Target page, context or browser has been closed|locator\.evaluateAll/i.test(message)) {
+    return "예약 준비 브라우저 연결이 종료되어 결과 확인이 필요합니다. 예약확인 결과를 확인한 뒤 다시 실행해 주세요.";
+  }
+  return message;
 }
