@@ -1,5 +1,5 @@
 name: "쉼오지 예약 도우미"
-version: "1.4.1"
+version: "1.4.2"
 slug: "swim_reservation"
 description: "신규 객실을 자동 감지하고 최대 2명의 예약자를 서버 시각에 맞춰 순차 예약합니다."
 url: "https://github.com/kojungho/swim-reservation-ha-app"

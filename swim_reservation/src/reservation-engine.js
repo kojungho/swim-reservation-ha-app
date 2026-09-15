@@ -5,6 +5,11 @@ import { readPageDiagnostics } from "./page-diagnostics.js";
 
 const NAVIGATION_TIMEOUT = 20_000;
 
+export function chromiumUserAgent(browser) {
+  const version = typeof browser?.version === "function" ? browser.version() : "140.0.0.0";
+  return `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version} Safari/537.36`;
+}
+
 export class ReservationEngine {
   constructor({ store, executablePath = "/usr/bin/chromium", browserProvider = null }) {
     this.store = store;
@@ -153,7 +158,11 @@ export class ReservationEngine {
   async ensurePage() {
     if (this.page) return;
     this.browser = this.browserProvider ? await this.browserProvider() : await this.ensureBrowser();
-    this.context = await this.browser.newContext({ locale: "ko-KR", timezoneId: "Asia/Seoul" });
+    this.context = await this.browser.newContext({
+      locale: "ko-KR",
+      timezoneId: "Asia/Seoul",
+      userAgent: chromiumUserAgent(this.browser)
+    });
     this.page = await this.context.newPage();
     this.page.setDefaultTimeout(10_000);
     this.page.on("dialog", (dialog) => dialog.accept().catch(() => {}));
