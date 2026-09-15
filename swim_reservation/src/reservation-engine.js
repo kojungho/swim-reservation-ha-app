@@ -265,11 +265,28 @@ export class ReservationEngine {
 
   async assertReservationDate(config, { required = false } = {}) {
     const expected = String(Math.floor(startEpoch(config.startDate) / 1000));
-    const found = await this.page.locator('input[name="adaystart"]').evaluateAll((inputs) => (
-      [...new Set(inputs.map((input) => String(input.value || "")).filter(Boolean))]
-    ));
+    const evidence = await this.page.evaluate(() => {
+      const inputValues = [...document.querySelectorAll('input[name="adaystart" i]')]
+        .map((input) => String(input.value || "").trim())
+        .filter(Boolean);
+      const urlValue = new URL(location.href).searchParams.get("adaystart");
+      const hasRoomList = Boolean(
+        document.querySelector('input[type="checkbox"][name^="room_rid"]')
+        && document.querySelector('select[name^="daytype"]')
+      );
+      return {
+        found: [...new Set(inputValues)],
+        urlValue: urlValue ? String(urlValue) : "",
+        hasRoomList
+      };
+    });
+    const found = evidence.found;
+    if (!found.length && evidence.hasRoomList && evidence.urlValue) found.push(evidence.urlValue);
     if (required && !found.length) {
-      throw new Error(`숙박 날짜 확인값을 찾지 못해 예약을 중지했습니다: ${config.startDate}`);
+      const detail = evidence.hasRoomList
+        ? "객실 목록은 확인했지만 날짜 값이 없습니다."
+        : "정상적인 객실 목록도 함께 찾지 못했습니다.";
+      throw new Error(`숙박 날짜 확인값을 찾지 못해 예약을 중지했습니다: ${config.startDate} (${detail})`);
     }
     if (found.length && !found.includes(expected)) {
       throw new Error(`사이트의 숙박 날짜가 선택한 날짜와 달라 예약을 중지했습니다: 선택 ${config.startDate} (${expected}), 사이트 ${found.join(", ")}`);
