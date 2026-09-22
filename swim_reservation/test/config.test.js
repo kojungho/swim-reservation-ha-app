@@ -13,7 +13,7 @@ test("2026-11-07 링크 타임스탬프를 정확히 생성한다", () => {
   assert.equal(startEpoch("2026-11-07") / 1000, 1793977200);
   assert.equal(
     reservationUrl("2026-11-07"),
-    "http://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim&adaystart=1793977200"
+    "https://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim&adaystart=1793977200"
   );
 });
 

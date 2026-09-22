@@ -14,6 +14,7 @@ let currentState = "idle";
 let currentStage = "idle";
 let availabilityTimer = null;
 let availabilityRequest = 0;
+let availabilityController = null;
 let siteTimeBase = null;
 let autoLookupCompletedKey = "";
 let autoLookupRunning = false;
@@ -118,14 +119,16 @@ function bindEvents() {
     await refreshStatus();
   }));
   elements.stopButton.addEventListener("click", () => perform(async () => {
+    clearTimeout(availabilityTimer);
+    availabilityController?.abort();
+    availabilityRequest += 1;
     await request("stop", { method: "POST" });
     await refreshStatus();
   }));
   elements.inspectButton.addEventListener("click", () => perform(async () => {
     await saveConfig();
     showMessage("미니 PC에서 예약 페이지에 연결하고 있습니다.");
-    const result = await request("inspect", { method: "POST", body: JSON.stringify({ startDate: elements.startDate.value, nights: Number(elements.nights.value) }) });
-    renderInspection(result.rooms, { beforeOpen: isBeforeOpen(elements.startDate.value), addedRooms: result.addedRooms || [] });
+    await refreshAvailability();
     await refreshStatus();
   }));
   elements.reservationLookupButton.addEventListener("click", () => perform(() => loadReservations()));
@@ -284,7 +287,7 @@ function updateGeneratedValues() {
   const epoch = Math.floor(Date.parse(`${date}T00:00:00+09:00`) / 1000);
   elements.epochValue.textContent = String(epoch);
   elements.openAtValue.textContent = formatOpeningTime(date);
-  elements.reservationUrl.value = `http://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim&adaystart=${epoch}`;
+  elements.reservationUrl.value = `https://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim&adaystart=${epoch}`;
 }
 
 function bookingOpenIso(startDate) {
@@ -514,11 +517,16 @@ function renderReservations(reservations) {
 }
 
 function scheduleAvailabilityCheck(delay = 500) {
+  availabilityController?.abort();
+  availabilityRequest += 1;
   clearTimeout(availabilityTimer);
   availabilityTimer = setTimeout(() => refreshAvailability(), delay);
 }
 
 async function refreshAvailability() {
+  availabilityController?.abort();
+  const controller = new AbortController();
+  availabilityController = controller;
   const startDate = elements.startDate.value;
   const nights = Number(elements.nights.value);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !Number.isInteger(nights)) return;
@@ -533,15 +541,16 @@ async function refreshAvailability() {
   for (const room of rooms) availabilityByRoom.set(room.name, beforeOpen ? "checking-before-open" : "checking");
   renderRooms();
   try {
-    const result = await request("inspect", { method: "POST", body: JSON.stringify({ startDate, nights }) });
+    const result = await request("inspect", { method: "POST", signal: controller.signal, body: JSON.stringify({ startDate, nights }) });
     if (requestId !== availabilityRequest) return;
     renderInspection(result.rooms || [], { beforeOpen, addedRooms: result.addedRooms || [] });
   } catch (error) {
+    if (controller.signal.aborted || ["INSPECTION_CANCELED", "INSPECTION_BUSY"].includes(error.code)) return;
     if (requestId !== availabilityRequest) return;
     availabilityByRoom.clear();
     if (beforeOpen) for (const room of rooms) availabilityByRoom.set(room.name, "before-open");
     renderRooms();
-    if (!busy) showMessage(`객실 가능 여부 확인 실패: ${error.message}`, true);
+    showMessage(`객실 가능 여부 확인 실패: ${error.message}`, true);
   }
 }
 
@@ -628,7 +637,7 @@ function showMessage(message, error = false, successLabel = "저장 완료") {
 async function request(path, options = {}) {
   const response = await fetch(API(path), { headers: { "Content-Type": "application/json" }, ...options });
   const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(value.error || `요청 실패 (${response.status})`);
+  if (!response.ok) throw Object.assign(new Error(value.error || `요청 실패 (${response.status})`), { code: value.code });
   return value;
 }
 

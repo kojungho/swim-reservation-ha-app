@@ -9,6 +9,7 @@ import { Store } from "./store.js";
 import { reservationCheckUrl } from "./reservation-check.js";
 import { ReservationManager } from "./reservation-manager.js";
 import { SiteTimeSync } from "./site-time.js";
+import { InspectionService } from "./inspection-service.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -19,6 +20,10 @@ const store = new Store(DATA_DIR);
 const engine = new ReservationEngine({ store, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
 const timeSync = new SiteTimeSync();
 const scheduler = new Scheduler({ store, engine, timeSync });
+const inspections = new InspectionService(
+  () => new ReservationEngine({ store, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" }),
+  () => !scheduler.running && !scheduler.preparing
+);
 const reservationManager = new ReservationManager({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
 
 await store.init();
@@ -135,11 +140,11 @@ const server = http.createServer(async (request, response) => {
       return json(response, 202, { ok: true, startedAt: timeSync.now() });
     }
     if (url.pathname === "/api/stop" && request.method === "POST") {
-      await scheduler.stop();
+      await Promise.all([scheduler.stop(), inspections.cancelAll()]);
       return json(response, 200, { ok: true });
     }
     if (url.pathname === "/api/inspect" && request.method === "POST") {
-      if (scheduler.running || scheduler.preparing) return json(response, 409, { ok: false, error: "예약 실행 또는 사전 준비 중에는 객실 확인을 사용할 수 없습니다." });
+      if (scheduler.running || scheduler.preparing) return json(response, 409, { ok: false, code: "INSPECTION_BUSY", error: "예약 실행 또는 사전 준비 중에는 객실 확인을 사용할 수 없습니다." });
       const input = await readJsonBody(request);
       const stored = await store.getConfig();
       const config = normalizeConfig({
@@ -147,9 +152,18 @@ const server = http.createServer(async (request, response) => {
         startDate: input.startDate || stored.startDate,
         nights: Number(input.nights || stored.nights)
       });
-      const rooms = await engine.inspect(config);
+      const controller = new AbortController();
+      const cancel = () => { if (!response.writableEnded) controller.abort(); };
+      response.once("close", cancel);
+      if (response.destroyed) controller.abort();
+      let rooms;
+      try {
+        rooms = await inspections.inspect(config, controller.signal);
+      } finally {
+        response.off("close", cancel);
+      }
       const { addedRooms } = await store.mergeDiscoveredRooms(rooms.map((room) => room.name));
-      if (!scheduler.armed) {
+      if (!scheduler.armed && !scheduler.running && !scheduler.preparing) {
         await store.updateStatus({ state: "idle", stage: "inspected", message: "예약 페이지 연결과 객실 목록을 확인했습니다." });
       }
       return json(response, 200, { ok: true, rooms, addedRooms, reservationUrl: reservationUrl(config.startDate) });
@@ -157,6 +171,10 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/health" && request.method === "GET") return json(response, 200, { ok: true });
     return serveStatic(url.pathname, response);
   } catch (error) {
+    if (error.code === "INSPECTION_CANCELED" || error.code === "INSPECTION_BUSY") {
+      if (response.destroyed) return;
+      return json(response, 409, { ok: false, error: error.message, code: error.code });
+    }
     console.error(error);
     await store.recordLog("error", "server-error", error.message || "서버 오류가 발생했습니다.").catch(() => {});
     return json(response, 500, { ok: false, error: error.message || "서버 오류가 발생했습니다." });
@@ -170,6 +188,7 @@ server.listen(PORT, "0.0.0.0", () => {
 for (const signal of ["SIGTERM", "SIGINT"]) {
   process.on(signal, async () => {
     timeSync.stop();
+    await inspections.cancelAll();
     await engine.close();
     server.close(() => process.exit(0));
   });

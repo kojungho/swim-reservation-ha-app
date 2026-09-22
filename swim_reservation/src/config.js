@@ -1,5 +1,5 @@
 export const SEOUL_OFFSET = "+09:00";
-export const BASE_URL = "http://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim";
+export const BASE_URL = "https://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim";
 
 export const ROOM_NAMES = [
   "해_하늘존", "달_하늘존", "별_하늘존", "빛_하늘존", "강_하늘존", "산_하늘존", "들_하늘존",

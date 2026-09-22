@@ -70,6 +70,8 @@ export class Scheduler {
         diagnostics: null,
         message: "예약 실행 시각을 기다리는 중입니다."
       });
+    } else {
+      await this.store.updateStatus({ state: "waiting", stage: "armed", message: "예약 실행 시각을 기다리는 중입니다." });
     }
     this.scheduleTick();
   }

@@ -101,6 +101,11 @@ export class Store {
   async updateStatus(patch) {
     const current = await this.getStatus();
     const next = { ...current, ...patch, updatedAt: Date.now() };
+    if (["armed", "starting-now", "starting", "inspected"].includes(patch.stage)) {
+      next.profileStatuses = patch.profileStatuses || [];
+      next.technicalMessage = null;
+      next.diagnostics = null;
+    }
     await atomicWrite(this.statusPath, next);
     void this.recordLog(next.state === "failed" ? "error" : "info", "status", next.message || next.stage || next.state, {
       state: next.state,

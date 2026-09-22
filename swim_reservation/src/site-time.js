@@ -1,6 +1,6 @@
 import { performance } from "node:perf_hooks";
 
-const DEFAULT_URL = "http://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim";
+const DEFAULT_URL = "https://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim";
 const RESYNC_MS = 5 * 60 * 1000;
 
 export class SiteTimeSync {

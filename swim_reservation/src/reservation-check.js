@@ -1,6 +1,6 @@
 import iconv from "iconv-lite";
 
-const CHECK_URL = "http://newpension.logosweb.or.kr/reservation/order_ok7.php?id=swim";
+const CHECK_URL = "https://newpension.logosweb.or.kr/reservation/order_ok7.php?id=swim";
 
 export function reservationCheckUrl(profile = {}) {
   return `${CHECK_URL}&${profileQuery(profile)}`;
@@ -9,7 +9,7 @@ export function reservationCheckUrl(profile = {}) {
 export function reservationCancelUrl(profile = {}, reservationId) {
   const id = String(reservationId || "");
   if (!/^\d+$/.test(id)) throw new Error("취소할 예약 식별값이 올바르지 않습니다.");
-  return `http://newpension.logosweb.or.kr/reservation/order_del3.php?no=${id}&id=swim&${profileQuery(profile)}`;
+  return `https://newpension.logosweb.or.kr/reservation/order_del3.php?no=${id}&id=swim&${profileQuery(profile)}`;
 }
 
 function profileQuery(profile) {

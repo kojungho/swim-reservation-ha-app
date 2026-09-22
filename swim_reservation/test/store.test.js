@@ -19,6 +19,22 @@ function sampleConfig(startDate, nights, firstRoom = "해_하늘존") {
   };
 }
 
+test("정상 조회와 새 예약 대기는 과거 오류를 지우고 이전 로그는 보존한다", async (context) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "swim-store-"));
+  const store = new Store(dataDir);
+  context.after(async () => { await store.logQueue; await rm(dataDir, { recursive: true, force: true }); });
+  await store.init();
+  for (const stage of ["inspected", "armed", "starting-now"]) {
+    await store.updateStatus({ state: "failed", stage: "exception", message: "이전 오류", technicalMessage: "closed", profileStatuses: [{ message: "closed" }], diagnostics: { url: "old" } });
+    const status = await store.updateStatus({ state: "idle", stage, message: "새 작업" });
+    assert.deepEqual(status.profileStatuses, []);
+    assert.equal(status.technicalMessage, null);
+    assert.equal(status.diagnostics, null);
+  }
+  const logs = await store.listLogs();
+  assert.equal(logs.filter(entry => entry.message === "이전 오류").length, 3);
+});
+
 test("날짜와 박수 조합별 이력을 저장하고 같은 조합은 갱신한다", async (context) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "swim-store-"));
   context.after(() => rm(dataDir, { recursive: true, force: true }));
