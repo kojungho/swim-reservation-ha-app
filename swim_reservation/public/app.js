@@ -4,6 +4,7 @@ const elements = Object.fromEntries([
   "depositorName", "phone", "birthDate", "useSecondProfile", "secondProfilePanel", "reserverName2", "depositorName2", "phone2", "birthDate2",
   "historyList", "statusBadge", "statusText", "statusDetails", "profileStatusList", "inspectResult", "siteClock", "siteTimeMeta", "siteTimeSyncButton",
   "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
+  "siteMapUploadButton", "siteMapFile", "siteMapImage", "siteMapMessage",
   "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton", "startButton",
   "logList", "refreshLogsButton", "copyLogsButton", "saveLogsButton"
 ].map((id) => [id, document.getElementById(id)]));
@@ -137,11 +138,45 @@ function bindEvents() {
   elements.saveLogsButton.addEventListener("click", () => perform(() => saveLogs()));
   elements.reservationSiteButton.addEventListener("click", () => openReservationSite());
   elements.copyDiagnosticsButton.addEventListener("click", () => copyDiagnostics());
-  elements.siteMapButton.addEventListener("click", () => elements.siteMapDialog.showModal());
+  elements.siteMapButton.addEventListener("click", () => {
+    elements.siteMapImage.src = `${API("site-map")}?v=${Date.now()}`;
+    elements.siteMapDialog.showModal();
+  });
+  elements.siteMapUploadButton.addEventListener("click", () => elements.siteMapFile.click());
+  elements.siteMapFile.addEventListener("change", uploadSiteMap);
   elements.siteMapCloseButton.addEventListener("click", () => elements.siteMapDialog.close());
   elements.siteMapDialog.addEventListener("click", (event) => {
     if (event.target === elements.siteMapDialog) elements.siteMapDialog.close();
   });
+}
+
+async function uploadSiteMap() {
+  const file = elements.siteMapFile.files?.[0];
+  if (!file) return;
+  elements.siteMapUploadButton.disabled = true;
+  elements.siteMapMessage.textContent = "사진을 등록하고 있습니다…";
+  let bitmap;
+  try {
+    if (file.size > 30 * 1024 * 1024) throw new Error("30MB 이하 사진을 선택해 주세요.");
+    try { bitmap = await createImageBitmap(file); }
+    catch { throw new Error("이 사진 형식을 읽을 수 없습니다. JPG, PNG 또는 WebP로 저장한 사진을 선택해 주세요."); }
+    const scale = Math.min(1, 2400 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+    if (!blob || blob.size > 12 * 1024 * 1024) throw new Error("사진 용량이 너무 큽니다. 더 작은 사진을 선택해 주세요.");
+    await request("site-map", { method: "PUT", headers: { "Content-Type": "image/png" }, body: blob });
+    elements.siteMapImage.src = `${API("site-map")}?v=${Date.now()}`;
+    elements.siteMapMessage.textContent = "사진을 등록했습니다. 앱을 재시작하거나 업데이트해도 유지됩니다.";
+  } catch (error) {
+    elements.siteMapMessage.textContent = `등록 실패: ${error.message}`;
+  } finally {
+    bitmap?.close();
+    elements.siteMapFile.value = "";
+    elements.siteMapUploadButton.disabled = false;
+  }
 }
 
 function loadConfig(config) {

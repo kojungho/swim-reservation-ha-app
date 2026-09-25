@@ -113,7 +113,12 @@
   </main>
   <dialog id="siteMapDialog" class="site-map-dialog">
     <div class="site-map-heading"><strong>쉼오지캠프 사이트 위치 안내</strong><button id="siteMapCloseButton" type="button" aria-label="닫기">×</button></div>
-    <img src="site-map.png" alt="쉼오지캠프 하늘존과 산맥존 사이트 위치 안내도">
+    <div class="site-map-upload">
+      <button id="siteMapUploadButton" class="secondary" type="button">사진 선택·등록</button>
+      <input id="siteMapFile" type="file" accept="image/*" hidden>
+      <p id="siteMapMessage" role="status" aria-live="polite">PC나 휴대폰의 사진을 선택하면 안내 사진이 변경됩니다. 등록한 사진은 모든 기기에 적용됩니다.</p>
+    </div>
+    <img id="siteMapImage" src="api/site-map" alt="쉼오지캠프 하늘존과 산맥존 사이트 위치 안내도">
   </dialog>
   <script src="app.js"></script>
 </body>

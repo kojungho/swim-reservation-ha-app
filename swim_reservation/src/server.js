@@ -10,6 +10,7 @@ import { reservationCheckUrl } from "./reservation-check.js";
 import { ReservationManager } from "./reservation-manager.js";
 import { SiteTimeSync } from "./site-time.js";
 import { InspectionService } from "./inspection-service.js";
+import { SiteMap } from "./site-map.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -17,6 +18,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
 
 const store = new Store(DATA_DIR);
+const siteMap = new SiteMap(DATA_DIR, path.join(PUBLIC_DIR, "site-map.png"));
 const engine = new ReservationEngine({ store, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
 const timeSync = new SiteTimeSync();
 const scheduler = new Scheduler({ store, engine, timeSync });
@@ -38,6 +40,20 @@ await scheduler.restore().catch(async (error) => {
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+    if (url.pathname === "/api/site-map" && request.method === "GET") {
+      const body = await siteMap.read();
+      response.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+      return response.end(body);
+    }
+    if (url.pathname === "/api/site-map" && request.method === "PUT") {
+      try {
+        await siteMap.save(request);
+        return json(response, 200, { ok: true });
+      } catch (error) {
+        if (error.statusCode) return json(response, error.statusCode, { ok: false, error: error.message });
+        throw error;
+      }
+    }
     if (url.pathname === "/api/config" && request.method === "GET") {
       const config = await store.getConfig();
       return json(response, 200, { ...config, reservationUrl: reservationUrl(config.startDate) });

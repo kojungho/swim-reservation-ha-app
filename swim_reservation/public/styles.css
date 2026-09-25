@@ -130,6 +130,8 @@ dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: any
 .site-map-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 2px 4px 12px; }
 .site-map-heading button { width: 38px; height: 38px; padding: 0; border-radius: 50%; background: #e9efeb; color: #34473d; font-size: 24px; line-height: 1; }
 .site-map-dialog img { display: block; width: 100%; height: auto; border-radius: 10px; }
+.site-map-upload { padding: 0 4px 12px; }
+.site-map-upload p { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: #52635a; }
 @media (max-width: 680px) {
   .shell { margin-top: 22px; }
   header { display: block; }
