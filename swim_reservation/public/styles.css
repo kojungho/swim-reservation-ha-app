@@ -65,9 +65,13 @@ input[readonly] { background: #f3f6f4; color: #516159; }
 .availability.available-before-open, .availability.checking-before-open { background: #fff0bf; color: #815c00; }
 .availability.unavailable-before-open { background: #fae3e1; color: #97372f; }
 .availability.before-open-no-data { background: #e7ece9; color: #59665f; }
-.move-buttons { display: flex; gap: 5px; }
-.move-buttons button { width: 34px; height: 34px; padding: 0; border-radius: 9px; border: 1px solid #ccd7d0; background: white; color: #425149; cursor: pointer; }
-.move-buttons button:disabled { opacity: .3; cursor: default; }
+.room-drag-handle { width: 44px; height: 44px; padding: 0; border-radius: 9px; border: 1px solid #ccd7d0; background: white; color: #425149; cursor: grab; touch-action: none; user-select: none; font-size: 28px; }
+.room-drag-handle:active { cursor: grabbing; }
+.room-drag-handle:focus-visible { outline: 3px solid #267a50; outline-offset: 2px; }
+.room-row.dragging { opacity: .55; }
+.room-row.drop-before { box-shadow: 0 -4px 0 #267a50; }
+.room-row.drop-after { box-shadow: 0 4px 0 #267a50; }
+.room-drag-help { font-size: 13px; color: #52635a; line-height: 1.5; }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; margin-top: 22px; }
 button { border: 0; border-radius: 11px; padding: 12px 17px; font-weight: 800; cursor: pointer; }
 .button { display: inline-flex; align-items: center; border: 0; border-radius: 11px; padding: 12px 17px; font-weight: 800; cursor: pointer; text-decoration: none; }

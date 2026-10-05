@@ -10,6 +10,7 @@ const elements = Object.fromEntries([
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
+let roomDrag = null;
 let busy = false;
 let currentState = "idle";
 let currentStage = "idle";
@@ -180,6 +181,7 @@ async function uploadSiteMap() {
 }
 
 function loadConfig(config) {
+  roomDrag?.cancel?.();
   elements.startDate.value = config.startDate || "";
   elements.triggerAt.value = (config.triggerAt || "").slice(0, 19);
   elements.nights.value = String(config.nights || 1);
@@ -280,6 +282,7 @@ function renderHistory(entries) {
 }
 
 function renderRooms() {
+  if (roomDrag) return;
   const multiple = elements.bookingMode.value === "multiple";
   elements.roomSectionTitle.textContent = multiple ? "동시 예약할 객실" : "객실 우선순위";
   elements.roomSectionHelp.textContent = multiple
@@ -296,10 +299,15 @@ function renderRooms() {
     row.innerHTML = `
       <label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} aria-label="${escapeHtml(room.name)} 선택"></label>
       <div class="room-name"><span class="room-rank">${room.enabled ? (multiple ? "예약" : `${rank}순위`) : "—"}</span>${escapeHtml(room.name)}${room.newlyDetected ? '<span class="room-detected">신규 자동 추가</span>' : ""}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
-      <div class="move-buttons"><button type="button" data-move="up" ${index === 0 ? "disabled" : ""} aria-label="위로 이동">↑</button><button type="button" data-move="down" ${index === rooms.length - 1 ? "disabled" : ""} aria-label="아래로 이동">↓</button></div>`;
+      <button class="room-drag-handle" type="button" aria-label="${escapeHtml(room.name)} 순서 이동" title="누른 채 드래그하여 이동 · 키보드 위아래 방향키" aria-describedby="roomDragHelp">⠿</button>`;
     row.querySelector("input").addEventListener("change", (event) => { room.enabled = event.target.checked; renderRooms(); });
-    row.querySelector('[data-move="up"]').addEventListener("click", () => moveRoom(index, -1));
-    row.querySelector('[data-move="down"]').addEventListener("click", () => moveRoom(index, 1));
+    const handle = row.querySelector(".room-drag-handle");
+    handle.addEventListener("pointerdown", event => startRoomDrag(event, row, index));
+    handle.addEventListener("keydown", event => {
+      if (!["ArrowUp", "ArrowDown"].includes(event.key) || roomDrag) return;
+      event.preventDefault();
+      moveRoom(index, event.key === "ArrowUp" ? -1 : 1);
+    });
     elements.roomList.append(row);
   });
 }
@@ -309,6 +317,77 @@ function moveRoom(index, delta) {
   if (target < 0 || target >= rooms.length) return;
   [rooms[index], rooms[target]] = [rooms[target], rooms[index]];
   renderRooms();
+  elements.roomList.children[target]?.querySelector(".room-drag-handle").focus({ preventScroll: true });
+  document.getElementById("roomDragStatus").textContent = `${rooms[target].name}, ${target + 1}번째로 이동했습니다. 설정 저장을 눌러 주세요.`;
+}
+
+function startRoomDrag(event, row, index) {
+  if (roomDrag || !event.isPrimary || event.button !== 0) return;
+  event.preventDefault();
+  const handle = event.currentTarget;
+  const pointerId = event.pointerId;
+  let y = event.clientY, moved = false, target = index, frame;
+  const initialY = y;
+  roomDrag = { index };
+  handle.setPointerCapture(pointerId);
+  row.classList.add("dragging");
+  const rows = [...elements.roomList.children];
+  const mark = () => {
+    rows.forEach(item => item.classList.remove("drop-before", "drop-after"));
+    const boundary = rows.findIndex(item => {
+      const rect = item.getBoundingClientRect();
+      return y < rect.top + rect.height / 2;
+    });
+    const insertion = boundary < 0 ? rows.length : boundary;
+    target = insertion > index ? insertion - 1 : insertion;
+    if (target !== index) {
+      if (insertion === rows.length) rows.at(-1).classList.add("drop-after");
+      else rows[insertion].classList.add("drop-before");
+    }
+  };
+  const scroll = () => {
+    if (moved) {
+      const edge = 70;
+      const delta = y < edge ? -12 : y > window.innerHeight - edge ? 12 : 0;
+      if (delta) window.scrollBy(0, delta);
+      mark();
+    }
+    frame = requestAnimationFrame(scroll);
+  };
+  const move = e => {
+    if (e.pointerId !== pointerId) return;
+    y = e.clientY;
+    moved ||= Math.abs(y - initialY) > 5;
+    if (moved) mark();
+  };
+  const finish = (commit) => {
+    cancelAnimationFrame(frame);
+    handle.removeEventListener("pointermove", move);
+    handle.removeEventListener("pointerup", up);
+    handle.removeEventListener("pointercancel", cancel);
+    handle.removeEventListener("lostpointercapture", cancel);
+    window.removeEventListener("keydown", escape);
+    window.removeEventListener("blur", cancel);
+    if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+    const changed = commit && moved && target !== index;
+    if (changed) rooms.splice(target, 0, ...rooms.splice(index, 1));
+    roomDrag = null;
+    renderRooms();
+    const position = changed ? target : index;
+    elements.roomList.children[position]?.querySelector(".room-drag-handle").focus({ preventScroll: true });
+    if (changed) document.getElementById("roomDragStatus").textContent = `${rooms[position].name}, ${position + 1}번째로 이동했습니다. 설정 저장을 눌러 주세요.`;
+  };
+  const up = e => { if (e.pointerId === pointerId) finish(true); };
+  const cancel = () => finish(false);
+  roomDrag.cancel = cancel;
+  const escape = e => { if (e.key === "Escape") finish(false); };
+  handle.addEventListener("pointermove", move);
+  handle.addEventListener("pointerup", up);
+  handle.addEventListener("pointercancel", cancel);
+  handle.addEventListener("lostpointercapture", cancel);
+  window.addEventListener("keydown", escape);
+  window.addEventListener("blur", cancel);
+  frame = requestAnimationFrame(scroll);
 }
 
 function updateGeneratedValues() {
