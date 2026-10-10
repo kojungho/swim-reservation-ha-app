@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { defaultConfig, normalizeConfig } from "./config.js";
+import { defaultConfig, normalizeConfig, getProfiles } from "./config.js";
 
 export class Store {
   constructor(dataDir) {
@@ -56,6 +56,7 @@ export class Store {
         nights: config.nights,
         bookingMode: config.bookingMode,
         useSecondProfile: Boolean(config.useSecondProfile),
+        profileCount: getProfiles(config).length,
         enabledRooms: config.roomPriority.filter((room) => room.enabled).map((room) => room.name)
       }))
       .sort((left, right) => right.savedAt - left.savedAt);

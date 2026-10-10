@@ -56,17 +56,9 @@
         <label>휴대폰 번호<input id="phone" inputmode="numeric" autocomplete="off" placeholder="01012345678"></label>
         <label>생년월일<input id="birthDate" inputmode="numeric" autocomplete="off" placeholder="YYYYMMDD" maxlength="8"></label>
       </div>
-      <label class="second-profile-toggle"><input id="useSecondProfile" type="checkbox"> 예약자 2명 사용</label>
-      <div id="secondProfilePanel" class="second-profile-panel" hidden>
-        <h3>예약자 2</h3>
-        <p>예약자 1의 실제 완료 화면이 확인된 뒤 순차적으로 예약합니다.</p>
-        <div class="grid two">
-          <label>예약자명<input id="reserverName2" autocomplete="off"></label>
-          <label>입금자명<input id="depositorName2" autocomplete="off"></label>
-          <label>휴대폰 번호<input id="phone2" inputmode="numeric" autocomplete="off" placeholder="01012345678"></label>
-          <label>생년월일<input id="birthDate2" inputmode="numeric" autocomplete="off" placeholder="YYYYMMDD" maxlength="8"></label>
-        </div>
-      </div>
+      <div id="extraProfiles"></div>
+      <button id="addProfileButton" class="secondary" type="button">+ 예약자 추가</button>
+      <p>최대 5명까지 등록할 수 있습니다. 앞 예약자의 완료를 확인한 뒤 다음 예약자를 진행하며, 실패하거나 결과가 불확실하면 중단합니다.</p>
     </section>
 
     <section class="card status-card">

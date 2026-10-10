@@ -1,5 +1,5 @@
 import { chromium } from "playwright-core";
-import { reservationUrl, startEpoch } from "./config.js";
+import { reservationUrl, startEpoch, getProfiles } from "./config.js";
 import { fillPersonalFields } from "./personal-fields.js";
 import { readPageDiagnostics } from "./page-diagnostics.js";
 
@@ -83,7 +83,7 @@ export class ReservationEngine {
   async run(config, options = {}) {
     if (config.bookingMode === "multiple") return this.runMultiple(config, options);
     if (options.prepared && this.prioritySessions.length) return this.runPreparedProfiles(config);
-    if (config.useSecondProfile) return this.runProfilesSequential(config);
+    if (getProfiles(config).length > 1) return this.runProfilesSequential(config);
     return this.runSingle(config, { ...options, prepared: Boolean(options.prepared && this.page) });
   }
 
@@ -415,7 +415,7 @@ export class ReservationEngine {
     const profileStatuses = profiles.map((entry) => ({
       index: entry.index,
       label: entry.label,
-      state: entry.index === 0 ? "준비 완료" : "예약자 1 완료 대기 중",
+      state: entry.index === 0 ? "준비 완료" : "앞 예약자 완료 대기 중",
       preparedRooms: prepared.filter((session) => session.profileIndex === entry.index).map((session) => session.room)
     }));
     await this.store.updateStatus({
@@ -431,7 +431,7 @@ export class ReservationEngine {
     const profiles = activeProfiles(config);
     const profileStatuses = profiles.map((entry) => ({
       index: entry.index, label: entry.label,
-      state: entry.index === 0 ? "예약 진행 중" : "예약자 1 완료 대기 중"
+      state: entry.index === 0 ? "예약 진행 중" : "앞 예약자 완료 대기 중"
     }));
     const completed = [];
     try {
@@ -487,7 +487,7 @@ export class ReservationEngine {
         stage: profiles.length > 1 ? "profiles-complete" : "complete",
         profileStatuses,
         succeededRooms: completed.map((item) => item.room),
-        message: profiles.length > 1 ? "예약자 1과 예약자 2의 순차 예약을 모두 완료했습니다." : "사이트에서 예약 완료 화면을 확인했습니다."
+        message: profiles.length > 1 ? `예약자 ${profiles.length}명의 순차 예약을 모두 완료했습니다.` : "사이트에서 예약 완료 화면을 확인했습니다."
       });
       return completed;
     } finally {
@@ -504,7 +504,7 @@ export class ReservationEngine {
 
   async runUnpreparedProfiles(config) {
     const profiles = activeProfiles(config);
-    const profileStatuses = profiles.map((entry) => ({ index: entry.index, label: entry.label, state: entry.index ? "예약자 1 완료 대기 중" : "예약 진행 중" }));
+    const profileStatuses = profiles.map((entry) => ({ index: entry.index, label: entry.label, state: entry.index ? "앞 예약자 완료 대기 중" : "예약 진행 중" }));
     const completed = [];
     try {
       for (const profileEntry of profiles) {
@@ -524,7 +524,7 @@ export class ReservationEngine {
         if (profiles[profileEntry.index + 1]) profileStatuses[profileEntry.index + 1] = { ...profileStatuses[profileEntry.index + 1], state: "예약 진행 중" };
         await this.store.updateStatus({ profileStatuses, succeededRooms: completed.map((item) => item.room), message: `${profileEntry.label} 예약 완료 화면을 확인했습니다.` });
       }
-      await this.store.updateStatus({ state: "success", stage: "profiles-complete", profileStatuses, succeededRooms: completed.map((item) => item.room), message: "예약자 1과 예약자 2의 순차 예약을 모두 완료했습니다." });
+      await this.store.updateStatus({ state: "success", stage: "profiles-complete", profileStatuses, succeededRooms: completed.map((item) => item.room), message: `예약자 ${profiles.length}명의 순차 예약을 모두 완료했습니다.` });
       return completed;
     } finally {
       await this.close();
@@ -593,6 +593,7 @@ export class ReservationEngine {
     const childConfig = {
       ...config,
       useSecondProfile: false,
+      profiles: [{ ...profileEntry.profile }],
       profile: { ...profileEntry.profile },
       profile1: { ...profileEntry.profile },
       roomPriority: room ? config.roomPriority.map((item) => ({ ...item, enabled: item.name === room })) : config.roomPriority.map((item) => ({ ...item }))
@@ -628,11 +629,7 @@ export class ReservationEngine {
 }
 
 function activeProfiles(config) {
-  const profiles = [
-    { index: 0, label: "예약자 1", profile: config.profile1 || config.profile }
-  ];
-  if (config.useSecondProfile) profiles.push({ index: 1, label: "예약자 2", profile: config.profile2 });
-  return profiles;
+  return getProfiles(config).map((profile, index) => ({ index, label: `예약자 ${index + 1}`, profile }));
 }
 
 function userErrorMessage(error) {

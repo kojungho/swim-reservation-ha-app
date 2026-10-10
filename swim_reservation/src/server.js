@@ -2,7 +2,7 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { normalizeConfig, reservationUrl, triggerEpoch, validateConfig } from "./config.js";
+import { normalizeConfig, reservationUrl, triggerEpoch, validateConfig, getProfiles } from "./config.js";
 import { ReservationEngine } from "./reservation-engine.js";
 import { Scheduler } from "./scheduler.js";
 import { Store } from "./store.js";
@@ -84,7 +84,8 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/api/reservation-check-url" && request.method === "GET") {
       const config = await store.getConfig();
-      const requestedProfile = url.searchParams.get("profile") === "2" && config.useSecondProfile ? config.profile2 : config.profile1 || config.profile;
+      const requestedProfile = getProfiles(config)[Number(url.searchParams.get("profile") || 1) - 1];
+      if (!requestedProfile) return json(response, 400, { error: "예약자를 확인해 주세요." });
       return json(response, 200, { ok: true, url: reservationCheckUrl(requestedProfile) });
     }
     if (url.pathname === "/api/site-time" && request.method === "GET") {
@@ -103,8 +104,7 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/api/reservations" && request.method === "GET") {
       if (scheduler.running || scheduler.armed) return json(response, 409, { ok: false, error: "예약 대기 또는 실행 중에는 예약 내역 조회를 사용할 수 없습니다." });
       const config = await store.getConfig();
-      const profiles = [{ index: 0, label: "예약자 1", profile: config.profile1 || config.profile }];
-      if (config.useSecondProfile) profiles.push({ index: 1, label: "예약자 2", profile: config.profile2 });
+      const profiles = getProfiles(config).map((profile, index) => ({ index, label: `예약자 ${index + 1}`, profile }));
       const reservations = [];
       for (const entry of profiles) {
         const found = await reservationManager.list(entry.profile);
@@ -119,8 +119,9 @@ const server = http.createServer(async (request, response) => {
       const input = await readJsonBody(request);
       if (input.confirmed !== true) return json(response, 400, { ok: false, error: "예약 취소 최종 확인이 필요합니다." });
       const config = await store.getConfig();
-      const profileIndex = input.profileIndex === 1 && config.useSecondProfile ? 1 : 0;
-      const profile = profileIndex === 1 ? config.profile2 : config.profile1 || config.profile;
+      const profileIndex = input.profileIndex ?? 0;
+      const profile = Number.isInteger(profileIndex) && getProfiles(config)[profileIndex];
+      if (!profile) return json(response, 400, { error: "예약자를 확인해 주세요." });
       const result = await reservationManager.cancel(profile, cancelMatch[1]);
       return json(response, 200, {
         ok: true,

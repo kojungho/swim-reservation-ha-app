@@ -1,4 +1,4 @@
-import { triggerEpoch } from "./config.js";
+import { triggerEpoch, getProfiles } from "./config.js";
 
 const HOUR = 60 * 60 * 1000;
 const MIN_PREWARM_MS = 30_000;
@@ -196,6 +196,6 @@ function isCompletedReservationDiagnostics(diagnostics) {
 function preparationLeadMs(config) {
   if (config.bookingMode === "multiple") return MIN_PREWARM_MS;
   const rooms = config.roomPriority.filter((room) => room.enabled).length;
-  const profiles = config.useSecondProfile ? 2 : 1;
+  const profiles = getProfiles(config).length;
   return Math.min(MAX_PREWARM_MS, Math.max(MIN_PREWARM_MS, rooms * profiles * PREWARM_PER_SESSION_MS + MIN_PREWARM_MS));
 }
