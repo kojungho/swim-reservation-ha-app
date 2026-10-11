@@ -47,6 +47,26 @@ test("예약확인은 5명 모두 조회하며 한 명 오류에도 나머지 �
   assert.equal(result.reservations.at(-1).profileIndex, 4);
 });
 
+test("저장 내역의 개인별 순위는 공통 목록과 무관하며 기존 이력도 그대로 복원된다", async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), "swim-priority-history-"));
+  const store = new Store(dir);
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await store.init();
+  const config = sample();
+  config.roomPriority = [{ name: "사용하지 않는 공통 객실", enabled: true }];
+  config.profiles[1].roomPriority.reverse();
+  await store.saveConfig(config);
+  const summary = (await store.listHistory())[0];
+  assert.equal(summary.profilePriorities.length, 5);
+  assert.deepEqual(summary.profilePriorities[1], { index: 1, reserverName: "예약자2", enabledRooms: ["객실1-2", "객실1-1"] });
+  assert.equal(summary.enabledRooms.includes("사용하지 않는 공통 객실"), false);
+  const loaded = await store.loadHistory(summary.id);
+  assert.deepEqual(loaded.config.profiles, config.profiles);
+  const multiple = { ...config, bookingMode: "multiple", multipleProfileIndex: 3 };
+  await store.saveConfig(multiple);
+  assert.equal((await store.listHistory())[0].multipleProfileName, "예약자4");
+});
+
 test("조회 페이지 HTTP 오류와 정상 페이지 아님을 0건으로 판정하지 않는다", async () => {
   const manager = new ReservationManager();
   await assert.rejects(manager.load({ goto: async () => ({ ok: () => false, status: () => 403 }) }, profiles[0]), /응답 403/);

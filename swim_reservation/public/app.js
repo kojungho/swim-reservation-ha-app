@@ -385,9 +385,16 @@ function renderHistory(entries) {
     const savedAt = new Date(entry.savedAt).toLocaleString("ko-KR");
     const multiple = entry.bookingMode === "multiple";
     const roomsText = entry.enabledRooms?.length ? entry.enabledRooms.join(multiple ? " + " : " → ") : "선택된 객실 없음";
+    const roomSummary = entry.bookingMode === "profiles-parallel"
+      ? entry.profilePriorities?.length ? entry.profilePriorities.map(profile => {
+        const label = `예약자 ${profile.index + 1}${profile.reserverName ? ` · ${profile.reserverName}` : ""}`;
+        const priority = profile.enabledRooms?.length ? profile.enabledRooms.map((name, index) => `${index + 1}순위 ${name}`).join(" → ") : "선택된 객실 없음";
+        return `<div class="history-profile-priority"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(priority)}</span></div>`;
+      }).join("") : "예약자별 우선순위 정보를 확인할 수 없습니다. 설정을 불러와 확인해 주세요."
+      : `${multiple && entry.multipleProfileName ? `<strong>예약자 · ${escapeHtml(entry.multipleProfileName)}</strong><br>` : ""}${escapeHtml(roomsText)}`;
     row.innerHTML = `
       <div class="history-key"><strong>${escapeHtml(entry.startDate)} · ${entry.nights}박</strong><small>${entry.bookingMode === "profiles-parallel" ? `예약자 ${entry.profileCount || 1}명 동시 우선순위 예약` : multiple ? `동시 ${entry.enabledRooms.length}개 예약` : (entry.profileCount || (entry.useSecondProfile ? 2 : 1)) > 1 ? `예약자 ${entry.profileCount || 2}명 순차 예약` : "1개 우선순위 예약"} · ${escapeHtml(savedAt)} 저장</small></div>
-      <div class="history-rooms">${escapeHtml(roomsText)}</div>
+      <div class="history-rooms">${roomSummary}</div>
       <div class="history-actions"><button class="load" type="button">불러오기</button><button class="delete" type="button">삭제</button></div>`;
     row.querySelector(".load").addEventListener("click", () => perform(async () => {
       const result = await request(`history/${encodeURIComponent(entry.id)}/load`, { method: "POST" });

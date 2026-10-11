@@ -136,6 +136,9 @@ dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: any
 .history-key { display: grid; gap: 4px; }
 .history-key strong { color: var(--green-dark); font-size: 15px; }
 .history-key small, .history-rooms { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.history-profile-priority { display: grid; gap: 3px; margin-bottom: 8px; overflow-wrap: anywhere; }
+.history-profile-priority:last-child { margin-bottom: 0; }
+.history-profile-priority strong { color: var(--ink); }
 .history-actions { display: flex; gap: 6px; }
 .history-actions button { padding: 9px 12px; font-size: 12px; }
 .history-actions .load { background: #e3efe8; color: var(--green-dark); }

@@ -31,6 +31,10 @@ test("모바일 예약자 별도 저장·복원, 5명 조회, 선택한 한 명 
       } else if (pathname === "/api/reservations") {
         lookupCount = book.length;
         data = { reservations: book.map((profile, index) => ({ profileIndex: index, profileLabel: profile.reserverName, room: "해_하늘존", stayDate: "2026년12월04일", nights: "1박", status: "예약 완료", total: "60,000원" })) };
+      } else if (pathname === "/api/history") {
+        data = { entries: config.profiles ? [{ id: "saved", savedAt: Date.now(), startDate: config.startDate, nights: config.nights, bookingMode: config.bookingMode, profileCount: config.profiles.length,
+          enabledRooms: ["표시하면 안 되는 공통 순위"], multipleProfileName: config.profiles[config.multipleProfileIndex || 0].reserverName,
+          profilePriorities: config.profiles.map((profile, index) => ({ index, reserverName: profile.reserverName, enabledRooms: profile.roomPriority.filter(room => room.enabled).map(room => room.name) })) }] : [] };
       } else if (pathname === "/api/status") data = { state: "idle", stage: "idle" };
       else data = { entries: [], rooms: [], synced: true, serverNowMs: Date.now(), lastSyncedAt: Date.now(), offsetMs: 0, rttMs: 1 };
       return route.fulfill({ json: data });
@@ -83,6 +87,13 @@ test("모바일 예약자 별도 저장·복원, 5명 조회, 선택한 한 명 
   assert.equal(book[0].roomPriority.find(room => room.name === "해_하늘존").enabled, true);
   assert.equal(book[1].roomPriority[0].name, "달_하늘존");
   assert.equal(book[0].roomPriority[0].name, "해_하늘존");
+  await page.locator("#saveButton").click();
+  await page.locator("#historyList .history-profile-priority").nth(4).waitFor();
+  assert.equal(await page.locator("#historyList .history-profile-priority").count(), 5);
+  const historyText = await page.locator("#historyList").innerText();
+  assert.match(historyText, /예약자 1 · 저장된첫째\s+1순위 해_하늘존/);
+  assert.match(historyText, /예약자 2 · 사람2\s+1순위 달_하늘존/);
+  assert.equal(historyText.includes("표시하면 안 되는 공통 순위"), false);
   await page.locator("#reservationLookupButton").click();
   await page.locator("#reservationList .reservation-row").nth(4).waitFor();
   assert.equal(lookupCount, 5);

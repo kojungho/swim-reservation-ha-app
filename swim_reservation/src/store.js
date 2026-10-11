@@ -69,7 +69,13 @@ export class Store {
         bookingMode: config.bookingMode,
         useSecondProfile: Boolean(config.useSecondProfile),
         profileCount: getProfiles(config).length,
-        enabledRooms: config.roomPriority.filter((room) => room.enabled).map((room) => room.name)
+        enabledRooms: config.bookingMode === "profiles-parallel"
+          ? [...new Set(getProfiles(config).flatMap(profile => (profile.roomPriority || []).filter(room => room.enabled).map(room => room.name)))]
+          : config.roomPriority.filter((room) => room.enabled).map((room) => room.name),
+        profilePriorities: config.bookingMode === "profiles-parallel" ? getProfiles(config).map((profile, index) => ({
+          index, reserverName: profile.reserverName || "", enabledRooms: (profile.roomPriority || []).filter(room => room.enabled).map(room => room.name)
+        })) : [],
+        multipleProfileName: config.bookingMode === "multiple" ? getProfiles(config)[config.multipleProfileIndex ?? 0]?.reserverName || "" : ""
       }))
       .sort((left, right) => right.savedAt - left.savedAt);
   }
