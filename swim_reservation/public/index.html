@@ -43,6 +43,7 @@
 
     <section class="card">
       <div class="section-title section-title-actions"><span>2</span><div><h2 id="roomSectionTitle">객실 우선순위</h2><p id="roomSectionHelp">체크된 객실 중 위에 있는 객실부터 하나가 성공할 때까지 시도합니다.</p></div><button id="siteMapButton" class="secondary">사이트 위치 안내</button></div>
+      <div class="room-view-actions"><button id="monthlyButton" class="secondary" type="button" aria-haspopup="dialog" aria-controls="monthlyDialog">월별 전체 예약 현황</button></div>
       <div id="roomList" class="room-list"></div>
       <p id="roomDragHelp" class="room-drag-help">오른쪽 ⠿ 손잡이를 누른 채 원하는 위치로 옮기세요. 순서를 바꾼 뒤 설정 저장을 눌러 주세요.</p>
       <p id="roomDragStatus" class="room-drag-help" role="status" aria-live="polite"></p>
@@ -141,6 +142,15 @@
       <p class="booking-help-warning">같은 객실을 여러 사람의 1순위로 선택하면 서로 경쟁할 수 있습니다. 확실한 마감만 다음 순위로 넘어가며, 결과가 불확실하면 그 사람의 추가 제출을 중단합니다.</p>
     </details>
     <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>예약 대기는 사이트가 허용하는 경우 정보 입력까지 미리 준비하고, 서버 시간에 맞춰 지정 시각에 최종 제출합니다. 오픈 전 다음 단계 접근이 제한되면 지정 시각에 처음부터 진행합니다. ‘지금 바로 예약’은 기다리지 않고 진행하지만 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약자 정보 저장’은 사람 정보만 별도로 저장합니다. 날짜·박수·모드·객실 순위는 ‘설정 저장’으로 저장하며, 예약 실행 시에도 현재 설정을 저장합니다.</p></div>
+  </dialog>
+  <dialog id="monthlyDialog" class="monthly-dialog" aria-labelledby="monthlyTitle">
+    <div class="booking-help-heading"><h2 id="monthlyTitle">월별 전체 예약 현황</h2><button id="monthlyCloseButton" class="secondary" type="button" aria-label="월별 현황 닫기">닫기</button></div>
+    <div class="monthly-controls"><button id="monthlyPrevButton" class="secondary" type="button" aria-label="이전 달">‹</button><label>조회할 월<input id="monthlyMonth" type="month" min="2000-01" max="2100-12"></label><button id="monthlyNextButton" class="secondary" type="button" aria-label="다음 달">›</button><button id="monthlyQueryButton" class="secondary" type="button">조회</button></div>
+    <p id="monthlyStatus" role="status" aria-live="polite"></p>
+    <p class="monthly-legend"><span class="monthly-cell available">예약 가능</span><span class="monthly-cell booked">예약 완료</span><span class="monthly-cell pending">예약 대기</span><span class="monthly-cell unknown">현황 미제공</span></p>
+    <p class="monthly-note">오픈 전이어도 사이트가 제공하는 현황은 표시합니다. 현황 미제공은 예약 가능 또는 예약 완료를 뜻하지 않습니다. 날짜별 현황이므로 여러 박 연속 예약 가능 여부는 별도 확인이 필요합니다. 표는 좌우로 밀어 모든 날짜를 볼 수 있습니다.</p>
+    <div id="monthlyContent" class="monthly-content"></div>
+    <a id="monthlySourceLink" class="button secondary" href="https://newpension.logosweb.or.kr/reservation/reservation2.php?id=swim" target="_blank" rel="noopener noreferrer">원본 월별 현황 사이트</a>
   </dialog>
   <script src="app.js"></script>
 </body>

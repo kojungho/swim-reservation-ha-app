@@ -6,7 +6,8 @@ const elements = Object.fromEntries([
   "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
   "siteMapUploadButton", "siteMapFile", "siteMapImage", "siteMapMessage",
   "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton", "startButton",
-  "logList", "refreshLogsButton", "copyLogsButton", "saveLogsButton", "bookingHelpButton", "bookingHelpDialog", "bookingHelpCloseButton", "bookingHelpCurrent"
+  "logList", "refreshLogsButton", "copyLogsButton", "saveLogsButton", "bookingHelpButton", "bookingHelpDialog", "bookingHelpCloseButton", "bookingHelpCurrent",
+  "monthlyButton", "monthlyDialog", "monthlyCloseButton", "monthlyPrevButton", "monthlyNextButton", "monthlyMonth", "monthlyQueryButton", "monthlyStatus", "monthlyContent", "monthlySourceLink"
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
@@ -25,6 +26,8 @@ let autoLookupCompletedKey = "";
 let autoLookupRunning = false;
 let lastAutoLookupAttempt = 0;
 let currentLogText = "";
+let monthlyController = null;
+let monthlyRequest = 0;
 const availabilityByRoom = new Map();
 const STATE_LABELS = {
   idle: "설정 중", waiting: "예약 대기", running: "자동 실행 중",
@@ -75,6 +78,26 @@ async function init() {
 }
 
 function bindEvents() {
+  elements.monthlyButton.addEventListener("click", () => {
+    const date = elements.startDate.value;
+    elements.monthlyMonth.value = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 7) : new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" }).format(new Date());
+    elements.monthlyDialog.showModal();
+    void loadMonthlyAvailability();
+  });
+  elements.monthlyQueryButton.addEventListener("click", () => void loadMonthlyAvailability());
+  elements.monthlyPrevButton.addEventListener("click", () => changeMonthlyMonth(-1));
+  elements.monthlyNextButton.addEventListener("click", () => changeMonthlyMonth(1));
+  elements.monthlyCloseButton.addEventListener("click", () => elements.monthlyDialog.close());
+  elements.monthlyDialog.addEventListener("click", event => {
+    if (event.target !== elements.monthlyDialog) return;
+    const rect = elements.monthlyDialog.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) elements.monthlyDialog.close();
+  });
+  elements.monthlyDialog.addEventListener("close", () => {
+    monthlyController?.abort();
+    monthlyRequest++;
+    elements.monthlyButton.focus({ preventScroll: true });
+  });
   elements.bookingHelpButton.addEventListener("click", () => {
     elements.bookingHelpCurrent.textContent = `현재 선택: ${elements.bookingMode.selectedOptions[0]?.textContent || ""}`;
     for (const section of elements.bookingHelpDialog.querySelectorAll("[data-booking-help]")) section.open = section.dataset.bookingHelp === elements.bookingMode.value;
@@ -208,6 +231,92 @@ async function uploadSiteMap() {
     elements.siteMapFile.value = "";
     elements.siteMapUploadButton.disabled = false;
   }
+}
+
+function changeMonthlyMonth(delta) {
+  if (!/^\d{4}-\d{2}$/.test(elements.monthlyMonth.value)) return;
+  const [year, month] = elements.monthlyMonth.value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + delta, 1));
+  if (date.getUTCFullYear() < 2000 || date.getUTCFullYear() > 2100) return;
+  elements.monthlyMonth.value = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  void loadMonthlyAvailability();
+}
+
+async function loadMonthlyAvailability() {
+  const month = elements.monthlyMonth.value;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    elements.monthlyStatus.textContent = "조회할 월을 선택해 주세요.";
+    return;
+  }
+  monthlyController?.abort();
+  const controller = new AbortController();
+  monthlyController = controller;
+  const id = ++monthlyRequest;
+  elements.monthlyQueryButton.disabled = true;
+  elements.monthlyStatus.textContent = `${month} 전체 객실 현황을 조회하고 있습니다…`;
+  elements.monthlyContent.replaceChildren();
+  const sourceUrl = `https://newpension.logosweb.or.kr/reservation/reservation2.php?id=swim&year=${month.slice(0, 4)}&month=${Number(month.slice(5))}`;
+  elements.monthlySourceLink.href = sourceUrl;
+  try {
+    const result = await request(`monthly-availability?month=${encodeURIComponent(month)}`, { signal: controller.signal });
+    if (id !== monthlyRequest) return;
+    renderMonthlyAvailability(result);
+  } catch (error) {
+    if (controller.signal.aborted || id !== monthlyRequest) return;
+    elements.monthlyStatus.textContent = `월별 조회 실패: ${error.message}`;
+  } finally {
+    if (id === monthlyRequest) elements.monthlyQueryButton.disabled = false;
+  }
+}
+
+function renderMonthlyAvailability(result) {
+  const opened = result.beforeOpen ? "예약 오픈 전" : "예약 오픈 일시 경과";
+  const opening = result.opensAt ? new Date(`${result.opensAt}+09:00`).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false }) : "미확인";
+  const captured = new Date(result.capturedAt).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour12: false });
+  elements.monthlyStatus.textContent = `${result.month} · ${opened} · 예약 오픈 ${opening} · 조회 ${captured}. ${result.message || ""}`;
+  const days = result.days || [], names = result.roomNames || [];
+  const labels = { available: "예약 가능", booked: "예약 완료", pending: "예약 대기", unknown: "현황 미제공" };
+  const short = { available: "가능", booked: "완료", pending: "대기", unknown: "미제공" };
+  const table = document.createElement("table");
+  table.className = "monthly-table";
+  const caption = document.createElement("caption");
+  caption.textContent = `${result.month} 전체 객실 날짜별 예약 현황${result.beforeOpen ? " (예약 오픈 전)" : ""}`;
+  const head = document.createElement("thead");
+  const header = document.createElement("tr");
+  const roomHeading = document.createElement("th");
+  roomHeading.scope = "col";
+  roomHeading.textContent = "객실 / 날짜";
+  header.append(roomHeading);
+  for (const day of days) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = `${Number(day.date.slice(-2))}일`;
+    th.title = day.date;
+    header.append(th);
+  }
+  head.append(header);
+  const body = document.createElement("tbody");
+  for (const name of names) {
+    const row = document.createElement("tr");
+    const heading = document.createElement("th");
+    heading.scope = "row";
+    heading.textContent = name;
+    row.append(heading);
+    for (const day of days) {
+      const status = day.rooms.find(room => room.name === name)?.status || "unknown";
+      const td = document.createElement("td");
+      const badge = document.createElement("span");
+      badge.className = `monthly-cell ${labels[status] ? status : "unknown"}`;
+      badge.textContent = short[status] || short.unknown;
+      td.title = `${day.date} · ${name} · ${labels[status] || labels.unknown}${result.beforeOpen ? " (예약 오픈 전)" : ""}`;
+      td.setAttribute("aria-label", td.title);
+      td.append(badge);
+      row.append(td);
+    }
+    body.append(row);
+  }
+  table.append(caption, head, body);
+  elements.monthlyContent.replaceChildren(table);
 }
 
 function loadConfig(config) {
