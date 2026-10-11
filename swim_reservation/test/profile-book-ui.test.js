@@ -47,12 +47,28 @@ test("모바일 예약자 별도 저장·복원, 5명 조회, 선택한 한 명 
     await page.locator(`#depositorName${n}`).fill(`입금${n}`);
     await page.locator(`#phone${n}`).fill(`0101234567${n}`);
     await page.locator(`#birthDate${n}`).fill("19900101");
+    if (n === 2) await page.locator("#bookingMode").selectOption("multiple");
+    assert.equal(await page.locator("#bookingMode").inputValue(), "multiple");
   }
   await page.locator("#startDate").fill("");
   await page.locator("#saveProfilesButton").click();
   await page.waitForFunction(() => document.body.innerText.includes("예약자 정보를 별도로 저장했습니다."));
   assert.equal(book.length, 5);
   assert.equal(config.profiles, undefined);
+  await page.locator("#bookingMode").selectOption("multiple");
+  assert.equal(await page.locator("#bookingMode").inputValue(), "multiple");
+  assert.equal(await page.locator("#multipleProfileField").isVisible(), true);
+  assert.equal(await page.locator("#multipleProfileSelect option").count(), 5);
+  await page.locator("#multipleProfileSelect").selectOption("3");
+  await page.locator("#saveButton").click();
+  await page.waitForFunction(() => document.body.innerText.includes("설정을 HA 미니 PC에 저장했습니다."));
+  assert.equal(config.bookingMode, "multiple");
+  assert.equal(config.multipleProfileIndex, 3);
+  assert.equal(config.profiles.length, 5);
+  await page.reload();
+  await page.locator("#reserverName5").waitFor();
+  assert.equal(await page.locator("#bookingMode").inputValue(), "multiple");
+  assert.equal(await page.locator("#multipleProfileSelect").inputValue(), "3");
   await page.locator("#bookingMode").selectOption("profiles-parallel");
   assert.equal(await page.locator("#roomList").isVisible(), false);
   assert.equal(await page.locator("#profilePriorities .room-list").count(), 5);

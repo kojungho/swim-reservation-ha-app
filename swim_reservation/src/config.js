@@ -17,6 +17,7 @@ export function defaultConfig(now = new Date()) {
     triggerAt: bookingOpenIso(startDate),
     nights: 1,
     bookingMode: "priority",
+    multipleProfileIndex: 0,
     roomPriority: ROOM_NAMES.map((name) => ({ name, enabled: false })),
     profile: profile1,
     profile1,
@@ -46,6 +47,7 @@ export function normalizeConfig(input = {}) {
     triggerAt: String(input.triggerAt || ""),
     nights: Number(input.nights),
     bookingMode: ["multiple", "profiles-parallel"].includes(input.bookingMode) ? input.bookingMode : "priority",
+    multipleProfileIndex: Number(input.multipleProfileIndex ?? 0),
     roomPriority: ordered,
     profile: profile1,
     profile1,
@@ -72,7 +74,7 @@ export function validateConfig(config, { futureTrigger = false, nowMs = Date.now
   const profiles = getProfiles(config);
   if (profiles.length < 1 || profiles.length > 5) errors.push("예약자는 1~5명까지 등록 가능");
   profiles.forEach((profile, index) => validateProfile(profile, `예약자 ${index + 1}`, errors));
-  if (profiles.length > 1 && config.bookingMode === "multiple") errors.push("여러 객실 동시 예약은 예약자 1명만 지원합니다. 예약자별 동시 예약을 선택해 주세요.");
+  if (config.bookingMode === "multiple" && (!Number.isInteger(config.multipleProfileIndex) || !profiles[config.multipleProfileIndex])) errors.push("여러 객실 동시 예약에 사용할 예약자");
   if (config.bookingMode === "profiles-parallel") profiles.forEach((profile, index) => {
     if (!profile.roomPriority?.some(room => room.enabled)) errors.push(`예약자 ${index + 1}의 예약할 객실`);
   });

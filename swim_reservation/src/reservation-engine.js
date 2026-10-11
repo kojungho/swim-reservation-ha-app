@@ -626,9 +626,14 @@ export class ReservationEngine {
     const scopedStore = {
       updateStatus: async (patch) => Object.assign(status, patch)
     };
+    const profile = getProfiles(config)[config.multipleProfileIndex ?? 0];
     const childConfig = {
       ...config,
       bookingMode: "priority",
+      profiles: [{ ...profile }],
+      profile: { ...profile },
+      profile1: { ...profile },
+      useSecondProfile: false,
       roomPriority: config.roomPriority.map((item) => ({ ...item, enabled: item.name === room }))
     };
     return {

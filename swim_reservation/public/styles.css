@@ -51,6 +51,7 @@ input[readonly] { background: #f3f6f4; color: #516159; }
 .section-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 .room-list { display: grid; gap: 8px; }
 .room-list[hidden], #profilePriorities[hidden] { display: none; }
+#multipleProfileField[hidden] { display: none; }
 .room-row { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; min-height: 52px; gap: 12px; background: var(--wash); border: 1px solid transparent; border-radius: 12px; padding: 8px 10px; }
 .room-row.enabled { background: #f5faf7; border-color: #bed6c7; }
 .room-toggle { display: flex; justify-content: center; margin: 0; }

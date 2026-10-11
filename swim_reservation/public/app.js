@@ -1,7 +1,7 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
 const elements = Object.fromEntries([
   "startDate", "triggerAt", "nights", "bookingMode", "epochValue", "openAtValue", "reservationUrl", "roomList", "roomSectionTitle", "roomSectionHelp", "reserverName",
-  "depositorName", "phone", "birthDate", "extraProfiles", "addProfileButton", "saveProfilesButton", "loadProfilesButton", "siteProfileSelect", "profilePriorities", "profileModeHelp",
+  "depositorName", "phone", "birthDate", "extraProfiles", "addProfileButton", "saveProfilesButton", "loadProfilesButton", "siteProfileSelect", "profilePriorities", "profileModeHelp", "multipleProfileField", "multipleProfileSelect",
   "historyList", "statusBadge", "statusText", "statusDetails", "profileStatusList", "inspectResult", "siteClock", "siteTimeMeta", "siteTimeSyncButton",
   "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
   "siteMapUploadButton", "siteMapFile", "siteMapImage", "siteMapMessage",
@@ -82,10 +82,6 @@ function bindEvents() {
   });
   elements.nights.addEventListener("change", () => scheduleAvailabilityCheck());
   elements.bookingMode.addEventListener("change", () => {
-    if (elements.bookingMode.value === "multiple" && extraProfiles.length) {
-      elements.bookingMode.value = "priority";
-      showMessage("여러 객실 동시 예약은 예약자 1명일 때 사용할 수 있습니다. 추가 예약자를 삭제한 뒤 변경해 주세요.", true);
-    }
     renderRooms();
   });
   for (const id of ["reserverName", "phone"]) elements[id].addEventListener("input", refreshSiteProfileSelector);
@@ -101,7 +97,6 @@ function bindEvents() {
   elements.addProfileButton.addEventListener("click", () => {
     if (extraProfiles.length >= 4) return;
     extraProfiles.push(extraProfiles.length === 0 ? { ...savedSecondProfile } : {});
-    if (elements.bookingMode.value === "multiple") elements.bookingMode.value = "profiles-parallel";
     renderExtraProfiles();
     renderRooms();
   });
@@ -115,7 +110,7 @@ function bindEvents() {
     if (elements.bookingMode.value === "multiple") {
       const selectedRooms = rooms.filter((room) => room.enabled).map((room) => room.name);
       const approved = window.confirm(
-        `여러 객실 동시 예약을 대기시킵니다.\n\n숙박: ${elements.startDate.value}부터 ${elements.nights.value}박\n실제 예약 객실 ${selectedRooms.length}개: ${selectedRooms.join(", ") || "선택 없음"}\n\n지정 시각에 각 객실이 별도 예약으로 최종 제출됩니다. 계속할까요?`
+        `여러 객실 동시 예약을 대기시킵니다.\n\n예약자: ${elements.multipleProfileSelect.selectedOptions[0]?.textContent}\n숙박: ${elements.startDate.value}부터 ${elements.nights.value}박\n실제 예약 객실 ${selectedRooms.length}개: ${selectedRooms.join(", ") || "선택 없음"}\n\n선택한 한 명의 정보로 각 객실이 별도 예약으로 최종 제출됩니다. 계속할까요?`
       );
       if (!approved) return;
     }
@@ -132,7 +127,7 @@ function bindEvents() {
     const date = elements.startDate.value;
     const selectedRooms = elements.bookingMode.value === "profiles-parallel" ? readConfig().profiles.map((profile, index) => `예약자 ${index + 1}: ${(profile.roomPriority || []).filter(room => room.enabled).map(room => room.name).join(" → ") || "선택 없음"}`) : rooms.filter((room) => room.enabled).map((room) => room.name);
     const multiple = elements.bookingMode.value === "multiple";
-    const modeText = elements.bookingMode.value === "profiles-parallel" ? `예약자 ${extraProfiles.length + 1}명 동시 예약 · 각자 우선순위` : multiple ? `여러 객실 동시 예약 (${selectedRooms.length}개)`
+    const modeText = elements.bookingMode.value === "profiles-parallel" ? `예약자 ${extraProfiles.length + 1}명 동시 예약 · 각자 우선순위` : multiple ? `여러 객실 동시 예약 (${selectedRooms.length}개) · ${elements.multipleProfileSelect.selectedOptions[0]?.textContent}`
       : extraProfiles.length > 0 ? `1개 예약 · 예약자 ${extraProfiles.length + 1}명 순차 방식` : "1개 예약 · 우선순위 방식";
     const approved = window.confirm(
       `${date}부터 ${elements.nights.value}박 예약을 지금 즉시 실행합니다.\n\n예약 방식: ${modeText}\n예약 대상: ${selectedRooms.join(", ") || "선택 없음"}\n\n환불 규정 동의와 최종 예약하기까지 자동 진행됩니다. 실행할까요?`
@@ -218,6 +213,7 @@ function loadConfig(config) {
   elements.birthDate.value = profile1.birthDate || "";
   extraProfiles = profiles.slice(1, 5).map(profile => ({ ...profile }));
   renderExtraProfiles();
+  elements.multipleProfileSelect.value = String(config.multipleProfileIndex ?? 0);
   rooms = Array.isArray(config.roomPriority) ? config.roomPriority : [];
   renderRooms();
   updateGeneratedValues();
@@ -236,6 +232,7 @@ function readConfig() {
     triggerAt: elements.triggerAt.value,
     nights: Number(elements.nights.value),
     bookingMode: elements.bookingMode.value,
+    multipleProfileIndex: Number(elements.multipleProfileSelect.value || 0),
     roomPriority: rooms,
     profile: profile1,
     profile1,
@@ -281,6 +278,7 @@ function renderExtraProfiles() {
 
 function refreshSiteProfileSelector() {
   const selected = elements.siteProfileSelect.value;
+  const multipleSelected = elements.multipleProfileSelect.value;
   elements.siteProfileSelect.replaceChildren(...readConfig().profiles.map((profile, index) => {
     const option = document.createElement("option");
     option.value = String(index + 1);
@@ -288,6 +286,13 @@ function refreshSiteProfileSelector() {
     return option;
   }));
   elements.siteProfileSelect.value = selected && Number(selected) <= extraProfiles.length + 1 ? selected : "1";
+  elements.multipleProfileSelect.replaceChildren(...readConfig().profiles.map((profile, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `예약자 ${index + 1}${profile.reserverName ? ` · ${profile.reserverName}` : ""}`;
+    return option;
+  }));
+  elements.multipleProfileSelect.value = Number(multipleSelected) <= extraProfiles.length ? multipleSelected || "0" : "0";
 }
 
 async function saveProfiles() {
@@ -296,8 +301,10 @@ async function saveProfiles() {
 
 function renderProfilePriorities() {
   const parallel = elements.bookingMode.value === "profiles-parallel";
+  const multiple = elements.bookingMode.value === "multiple";
+  elements.multipleProfileField.hidden = !multiple;
   elements.profilePriorities.hidden = !parallel;
-  elements.profileModeHelp.textContent = parallel ? "최대 5명 · 사람마다 우선순위 객실 하나를 동시에 예약합니다. 같은 객실을 지정하면 서로 경쟁할 수 있습니다. 불확실한 결과에서는 해당 예약자의 다음 순위를 중단합니다." : "최대 5명 · 일반 우선순위 방식은 앞 예약자의 완료를 확인한 뒤 다음 사람을 진행합니다. 예약자 정보는 날짜·객실과 별도로 저장할 수 있습니다.";
+  elements.profileModeHelp.textContent = parallel ? "최대 5명 · 사람마다 우선순위 객실 하나를 동시에 예약합니다. 같은 객실을 지정하면 서로 경쟁할 수 있습니다. 불확실한 결과에서는 해당 예약자의 다음 순위를 중단합니다." : multiple ? "등록된 예약자는 유지됩니다. 위에서 선택한 한 명의 정보로 체크한 객실을 모두 예약하며, 다른 예약자는 이 모드에서 실행하지 않습니다." : "최대 5명 · 일반 우선순위 방식은 앞 예약자의 완료를 확인한 뒤 다음 사람을 진행합니다. 예약자 정보는 날짜·객실과 별도로 저장할 수 있습니다.";
   elements.profilePriorities.replaceChildren();
   if (!parallel) return;
   const profiles = readConfig().profiles;
