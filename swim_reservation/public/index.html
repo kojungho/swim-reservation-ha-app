@@ -26,9 +26,10 @@
         <label>박수
           <select id="nights"><option value="1">1박</option><option value="2">2박</option><option value="3">3박</option><option value="4">4박</option><option value="5">5박</option><option value="6">6박</option></select>
         </label>
-        <label>예약 방식
+        <div class="booking-mode-field">
+          <div class="booking-mode-label"><label for="bookingMode">예약 방식</label><button id="bookingHelpButton" class="info-button" type="button" aria-label="예약 모드별 사용 방법" aria-haspopup="dialog" aria-controls="bookingHelpDialog" title="예약 모드별 사용 방법">ⓘ</button></div>
           <select id="bookingMode"><option value="priority">1개 예약 · 우선순위 방식</option><option value="multiple">여러 객실 동시 예약</option><option value="profiles-parallel">예약자별 동시 예약 · 우선순위</option></select>
-        </label>
+        </div>
         <div class="generated"><span>생성된 날짜 숫자</span><strong id="epochValue">—</strong></div>
         <div class="generated"><span>예약 가능 시작 일시</span><strong id="openAtValue">—</strong></div>
       </div>
@@ -117,6 +118,29 @@
       <p id="siteMapMessage" role="status" aria-live="polite">PC나 휴대폰의 사진을 선택하면 안내 사진이 변경됩니다. 등록한 사진은 모든 기기에 적용됩니다.</p>
     </div>
     <img id="siteMapImage" src="api/site-map" alt="쉼오지캠프 하늘존과 산맥존 사이트 위치 안내도">
+  </dialog>
+  <dialog id="bookingHelpDialog" class="booking-help-dialog" aria-labelledby="bookingHelpTitle">
+    <div class="booking-help-heading"><h2 id="bookingHelpTitle">예약 모드별 사용 방법</h2><button id="bookingHelpCloseButton" class="secondary" type="button" aria-label="사용 방법 닫기">닫기</button></div>
+    <p id="bookingHelpCurrent" class="booking-help-current"></p>
+    <details data-booking-help="priority">
+      <summary>1개 예약 · 우선순위 방식</summary>
+      <p>공통 객실 순위를 사용해 예약자마다 객실 하나를 예약합니다. 예약자가 여러 명이면 순서대로 진행합니다.</p>
+      <ol><li>객실을 체크하고 ⠿ 손잡이를 끌어 위에서부터 원하는 순서로 정합니다.</li><li>예약자 정보를 입력합니다. 최대 5명까지 추가할 수 있습니다.</li><li>날짜·박수·실행 시각을 확인하고 ‘예약 대기 시작’ 또는 ‘지금 바로 예약’을 누릅니다.</li></ol>
+      <p class="booking-help-warning">객실이 확실히 마감된 경우 다음 순위를 시도합니다. 앞 예약자가 실패하거나 결과가 불확실하면 이후 예약자는 중단합니다.</p>
+    </details>
+    <details data-booking-help="multiple">
+      <summary>여러 객실 동시 예약</summary>
+      <p>선택한 예약자 한 명으로 체크한 객실을 모두 예약하는 방식입니다. 순위별 대체 예약이 아닙니다.</p>
+      <ol><li>동시에 예약할 객실을 최대 5개까지 체크합니다. 표시 순서는 예약 우선순위가 아닙니다.</li><li>예약자 정보 영역의 ‘여러 객실을 예약할 예약자’에서 사용할 한 명을 선택합니다. 나머지 사람의 정보는 유지되지만 실행하지 않습니다.</li><li>날짜·박수·실행 시각을 확인하고 대기 또는 즉시 예약을 실행합니다.</li></ol>
+      <p class="booking-help-warning">체크한 객실 수만큼 실제 예약이 생성될 수 있습니다. 일부 객실만 성공할 수 있으니 완료 후 예약확인에서 결과를 확인하세요.</p>
+    </details>
+    <details data-booking-help="profiles-parallel">
+      <summary>예약자별 동시 예약 · 우선순위</summary>
+      <p>최대 5명의 예약자를 동시에 진행하고, 각 사람의 우선순위에 따라 객실 하나씩 예약합니다.</p>
+      <ol><li>예약자 정보를 입력하고 필요한 사람을 추가합니다.</li><li>각 예약자의 객실 우선순위에서 후보를 체크하고 ⠿ 손잡이로 순서를 정합니다. 개인별 순위는 이 모드에서만 사용합니다.</li><li>날짜·박수·실행 시각을 확인하고 대기 또는 즉시 예약을 실행합니다.</li></ol>
+      <p class="booking-help-warning">같은 객실을 여러 사람의 1순위로 선택하면 서로 경쟁할 수 있습니다. 확실한 마감만 다음 순위로 넘어가며, 결과가 불확실하면 그 사람의 추가 제출을 중단합니다.</p>
+    </details>
+    <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>예약 대기는 사이트가 허용하는 경우 정보 입력까지 미리 준비하고, 서버 시간에 맞춰 지정 시각에 최종 제출합니다. 오픈 전 다음 단계 접근이 제한되면 지정 시각에 처음부터 진행합니다. ‘지금 바로 예약’은 기다리지 않고 진행하지만 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약자 정보 저장’은 사람 정보만 별도로 저장합니다. 날짜·박수·모드·객실 순위는 ‘설정 저장’으로 저장하며, 예약 실행 시에도 현재 설정을 저장합니다.</p></div>
   </dialog>
   <script src="app.js"></script>
 </body>

@@ -6,7 +6,7 @@ const elements = Object.fromEntries([
   "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
   "siteMapUploadButton", "siteMapFile", "siteMapImage", "siteMapMessage",
   "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton", "startButton",
-  "logList", "refreshLogsButton", "copyLogsButton", "saveLogsButton"
+  "logList", "refreshLogsButton", "copyLogsButton", "saveLogsButton", "bookingHelpButton", "bookingHelpDialog", "bookingHelpCloseButton", "bookingHelpCurrent"
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
@@ -75,6 +75,19 @@ async function init() {
 }
 
 function bindEvents() {
+  elements.bookingHelpButton.addEventListener("click", () => {
+    elements.bookingHelpCurrent.textContent = `현재 선택: ${elements.bookingMode.selectedOptions[0]?.textContent || ""}`;
+    for (const section of elements.bookingHelpDialog.querySelectorAll("[data-booking-help]")) section.open = section.dataset.bookingHelp === elements.bookingMode.value;
+    elements.bookingHelpDialog.showModal();
+    elements.bookingHelpDialog.scrollTop = 0;
+  });
+  elements.bookingHelpCloseButton.addEventListener("click", () => elements.bookingHelpDialog.close());
+  elements.bookingHelpDialog.addEventListener("click", event => {
+    if (event.target !== elements.bookingHelpDialog) return;
+    const rect = elements.bookingHelpDialog.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) elements.bookingHelpDialog.close();
+  });
+  elements.bookingHelpDialog.addEventListener("close", () => elements.bookingHelpButton.focus({ preventScroll: true }));
   elements.startDate.addEventListener("change", () => {
     updateGeneratedValues();
     elements.triggerAt.value = bookingOpenIso(elements.startDate.value);
