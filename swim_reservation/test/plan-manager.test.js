@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { PlanManager, matchWatchRooms, watchConfiguration } from "../src/plan-manager.js";
+import { PlanManager, matchWatchRooms, watchConfiguration, normalizeWatchConfig } from "../src/plan-manager.js";
 import { defaultConfig } from "../src/config.js";
 
 const profile = { reserverName: "테스트", depositorName: "테스트", phone: "01012345678", birthDate: "19900101" };
@@ -92,18 +92,23 @@ test("조회 실패·오픈 전·다른 박수 불가에서는 예약하지 않�
   assert.equal((await manager.get(id).store.getStatus()).stage, "watch-read-error");
   assert.equal(matchWatchRooms(config(), found.map(room => ({ ...room, available: true, status: "unavailable" }))), false);
 });
-test("여러 객실 감시는 모든 객실의 박수 조건을 요구하며 미확인·예약 대기를 가능으로 취급하지 않는다", () => {
-  assert.equal(matchWatchRooms(config("multiple"), found), false);
+test("취소 자리 감시는 다른 객실이 마감이어도 한 객실만 가능하면 시작하고 미확인·예약 대기는 제외한다", () => {
+  assert.equal(matchWatchRooms(config("multiple"), found), true);
   assert.equal(matchWatchRooms(config("multiple"), found.map(room => ({ ...room, status: "available", available: true }))), true);
   assert.equal(matchWatchRooms(config(), found.map(room => ({ ...room, status: "pending", available: true }))), false);
 });
-test("예약자별 감시는 서로 다른 가능 객실을 확보할 때만 시작하며 배정된 객실을 먼저 시도한다", () => {
-  const input = { ...config("profiles-parallel"), profiles: [{ ...profile, roomPriority: config().roomPriority }, { ...profile, roomPriority: config().roomPriority }] };
-  assert.equal(matchWatchRooms(input, found), false);
-  const matched = watchConfiguration(input, found.map(room => ({ ...room, available: true, status: "available" })));
+test("취소 자리 예약에는 선택한 한 명만 사용하고 저장 순위 대신 사이트 순서로 가능 객실을 선택한다", () => {
+  const input = { ...config("profiles-parallel"), profiles: [{ ...profile, roomPriority: config().roomPriority }, { ...profile, reserverName: "두번째", roomPriority: config().roomPriority }] };
+  const normalized = normalizeWatchConfig(input, 1);
+  assert.equal(normalized.profiles.length, 1);
+  assert.equal(normalized.profiles[0].reserverName, "두번째");
+  assert.equal(normalized.bookingMode, "priority");
+  assert.equal(matchWatchRooms(normalized, found), true);
+  const matched = watchConfiguration(normalized, found.toReversed().map(room => ({ ...room, available: true, status: "available" })));
   assert.ok(matched);
-  assert.notEqual(matched.profiles[0].roomPriority[0].name, matched.profiles[1].roomPriority[0].name);
+  assert.equal(matched.roomPriority[0].name, "샘_산맥존");
   assert.equal(input.profiles[0].roomPriority[0].name, "해_하늘존");
+  assert.throws(() => normalizeWatchConfig(input, 5), /한 명/);
 });
 test("예약 대기 이후 편집 설정이 바뀌어도 최초 등록한 날짜와 모드로 실행한다", async t => {
   const { manager, calls } = await fixture(t);
@@ -160,4 +165,25 @@ test("동시 진행 5개 제한·진행 중 삭제 제한·안전한 감시 대�
   await manager.stop(ids[0]);
   await manager.remove(ids[0]);
   assert.equal(manager.plans.has(ids[0]), false);
+});
+test("기존 모드형 취소 감시는 업데이트 후 자동으로 행동을 바꾸지 않고 중지·재확인을 요구한다", async t => {
+  const { manager, calls } = await fixture(t);
+  const id = await manager.add({ kind: "watch", config: config() });
+  await manager.start(id);
+  const old = manager.get(id);
+  old.config = config("multiple");
+  old.watchVersion = undefined;
+  await manager.persist();
+  await manager.close();
+  manager.closed = false;
+  manager.plans.clear();
+  await manager.init();
+  const migrated = manager.get(id);
+  assert.equal(migrated.enabled, false);
+  assert.equal(migrated.config.bookingMode, "priority");
+  assert.equal(migrated.config.profiles.length, 1);
+  assert.equal(migrated.watchVersion, 2);
+  assert.equal((await migrated.store.getStatus()).state, "stopped");
+  assert.match((await migrated.store.getStatus()).message, /확인한 후 시작/);
+  assert.equal(calls.length, 0);
 });

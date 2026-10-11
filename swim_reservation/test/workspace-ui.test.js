@@ -66,9 +66,17 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
     assert.equal(plans[1].enabled, true);
     await page.locator('[data-workspace-tab="watch"]').click();
     assert.equal(await page.locator("#watchHelp").isVisible(), true);
+    assert.equal(await page.locator("#bookingMode").isVisible(), false);
+    assert.equal(await page.locator("#triggerAt").isVisible(), false);
+    assert.equal(await page.locator("#watchProfileSelect").isVisible(), true);
+    assert.equal(await page.locator("#roomList .room-drag-handle").count(), 0);
+    assert.equal(await page.locator("#roomList .room-rank").count(), 0);
+    assert.match(await page.locator("#roomSectionTitle").innerText(), /감시할 객실/);
     await page.locator("#addPlanButton").click();
     await page.waitForFunction(() => document.querySelectorAll("#planList .plan-entry").length === 3);
     assert.equal(plans[2].kind, "watch");
+    assert.equal(plans[2].config.bookingMode, "priority");
+    assert.equal(plans[2].watchProfileIndex, 0);
     await page.locator('[data-workspace-tab="people"]').click();
     await page.waitForFunction(() => !document.querySelector("#reservationList").hidden);
     assert.equal(lookups, 1);

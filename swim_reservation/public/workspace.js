@@ -26,13 +26,19 @@ function seoulCurrentMonth() {
 function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   const modes = ["priority", "multiple", "profiles-parallel"];
   if (![...modes, "watch", "people", "monthly"].includes(tab)) return;
-  if (modes.includes(workspaceTab)) modeDrafts.set(workspaceTab, readConfig());
+  if (modes.includes(workspaceTab) || workspaceTab === "watch") modeDrafts.set(workspaceTab, readConfig());
   const entering = workspaceTab !== tab;
   workspaceTab = tab;
   if (modes.includes(tab) && !keepEditor) {
     const current = readConfig();
     loadConfig({ ...(modeDrafts.get(tab) || current), profiles: current.profiles, bookingMode: tab });
     scheduleAvailabilityCheck();
+  }
+  if (tab === "watch") {
+    const current = readConfig();
+    loadConfig({ ...(!keepEditor ? modeDrafts.get("watch") || current : current), profiles: current.profiles, bookingMode: "priority" });
+    refreshWatchProfileSelector();
+    renderWatchRooms();
   }
   document.querySelectorAll("[data-workspace-tab]").forEach(button => {
     const selected = button.dataset.workspaceTab === tab;
@@ -46,6 +52,11 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   document.getElementById("planCard").hidden = !booking;
   document.getElementById("watchHelp").hidden = tab !== "watch";
   document.getElementById("watchInterval").closest("label").hidden = tab !== "watch";
+  document.getElementById("watchProfileField").hidden = tab !== "watch";
+  if (tab === "watch") elements.historyList.closest("section").hidden = true;
+  elements.bookingMode.closest(".booking-mode-field").hidden = tab === "watch";
+  elements.triggerAt.closest("label").hidden = tab === "watch";
+  elements.startDate.closest("section").querySelector("h2").textContent = tab === "watch" ? "숙박 조건" : "예약 날짜와 시각";
   document.getElementById("addPlanButton").textContent = tab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 예약 일정 등록";
   elements.startButton.hidden = tab === "watch";
   elements.runNowButton.hidden = tab === "watch";
@@ -67,7 +78,7 @@ function planMessage(text) { document.getElementById("planMessage").textContent 
 
 async function registerPlan(kind, start) {
   const config = readConfig();
-  const result = await request("plans", { method: "POST", body: JSON.stringify({ name: document.getElementById("planName").value, kind, intervalSeconds: document.getElementById("watchInterval").value, config }) });
+  const result = await request("plans", { method: "POST", body: JSON.stringify({ name: document.getElementById("planName").value, kind, watchProfileIndex: Number(document.getElementById("watchProfileSelect").value || 0), intervalSeconds: document.getElementById("watchInterval").value, config }) });
   if (!result.id) throw new Error("일정 등록 결과를 확인하지 못했습니다.");
   if (start) await request(`plans/${result.id}/start`, { method: "POST" });
   planMessage(start ? "독립 일정으로 실행했습니다. 다른 일정도 추가할 수 있습니다." : "일정을 등록했습니다. 목록에서 시작을 누르면 실행됩니다.");
@@ -92,12 +103,12 @@ async function refreshPlans() {
       const title = document.createElement("strong");
       title.textContent = `${entry.name} · ${entry.config.startDate} / ${entry.config.nights}박`;
       const info = document.createElement("p");
-      info.textContent = `${entry.kind === "watch" ? `취소 자리 감시 (${entry.intervalSeconds}초)` : entry.kind === "now" ? "즉시 예약" : `예약 대기 ${entry.config.triggerAt.replace("T", " ")}`} · ${modes[entry.config.bookingMode]} · ${entry.enabled ? "진행 중" : "중지/종료"}`;
+      info.textContent = `${entry.kind === "watch" ? `취소 자리 감시 (${entry.intervalSeconds}초) · 조건 일치 시 객실 하나 예약` : `${entry.kind === "now" ? "즉시 예약" : `예약 대기 ${entry.config.triggerAt.replace("T", " ")}`} · ${modes[entry.config.bookingMode]}`} · ${entry.enabled ? "진행 중" : "중지/종료"}`;
       const status = document.createElement("p");
       status.textContent = `${entry.status.message || "설정 완료"}${entry.status.lastCheckedAt ? ` · 마지막 확인 ${new Date(entry.status.lastCheckedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}` : ""}`;
       const targets = document.createElement("p");
       const profiles = entry.config.profiles || [entry.config.profile1 || entry.config.profile || {}];
-      const names = entry.config.bookingMode === "profiles-parallel" ? profiles.map((profile, index) => `${profile.reserverName || `예약자 ${index + 1}`}: ${(profile.roomPriority || []).filter(room => room.enabled).map(room => room.name).join(" → ")}`).join(" / ") : entry.config.roomPriority.filter(room => room.enabled).map(room => room.name).join(" → ");
+      const names = entry.kind === "watch" ? entry.config.roomPriority.filter(room => room.enabled).map(room => room.name).join(", ") : entry.config.bookingMode === "profiles-parallel" ? profiles.map((profile, index) => `${profile.reserverName || `예약자 ${index + 1}`}: ${(profile.roomPriority || []).filter(room => room.enabled).map(room => room.name).join(" → ")}`).join(" / ") : entry.config.roomPriority.filter(room => room.enabled).map(room => room.name).join(" → ");
       targets.textContent = `객실 조건: ${names} · 예약자 ${profiles.map(profile => profile.reserverName || "미입력").join(", ")}`;
       detail.append(title, info, targets, status);
       const controls = document.createElement("div");
@@ -112,12 +123,19 @@ async function refreshPlans() {
           button.disabled = true;
           try {
             if (action === "load") {
-              loadConfig(entry.config);
+              let watchIndex = 0;
+              if (entry.kind === "watch") {
+                const current = readConfig().profiles, saved = entry.config.profiles[0];
+                watchIndex = current.findIndex(profile => profile.reserverName === saved.reserverName && profile.phone === saved.phone && profile.birthDate === saved.birthDate);
+                loadConfig({ ...entry.config, profiles: watchIndex >= 0 ? current : [saved, ...current].slice(0, 5) });
+                if (watchIndex < 0) watchIndex = 0;
+              } else loadConfig(entry.config);
               switchWorkspaceTab(entry.kind === "watch" ? "watch" : entry.config.bookingMode, { keepEditor: true });
+              if (entry.kind === "watch") document.getElementById("watchProfileSelect").value = String(watchIndex);
               document.getElementById("planName").value = entry.name;
               scheduleAvailabilityCheck();
             } else {
-              if (action === "start" && !window.confirm(`${entry.name}\n${entry.config.startDate}부터 ${entry.config.nights}박 · ${modes[entry.config.bookingMode]}\n${entry.kind === "watch" ? "조건이 맞는 자리가 나오면" : "지정 시각에"} 환불 규정 동의와 최종 예약 제출까지 자동 진행합니다. 다른 일정과 중복되는지 확인하셨나요?`)) return;
+              if (action === "start" && !window.confirm(`${entry.name}\n${entry.config.startDate}부터 ${entry.config.nights}박 · ${entry.kind === "watch" ? "체크한 객실 중 조건에 맞는 하나 예약" : modes[entry.config.bookingMode]}\n${entry.kind === "watch" ? "조건이 맞는 자리가 나오면" : "지정 시각에"} 환불 규정 동의와 최종 예약 제출까지 자동 진행합니다. 다른 일정과 중복되는지 확인하셨나요?`)) return;
               if (action === "delete" && !window.confirm("이 일정을 목록에서 삭제할까요? 실제 예약은 취소되지 않습니다.")) return;
               await request(`plans/${entry.id}${action === "delete" ? "" : `/${action}`}`, { method: action === "delete" ? "DELETE" : "POST" });
               planMessage(`${entry.name}: ${label} 완료`);
@@ -140,4 +158,34 @@ function renderPlanBadge() {
   const running = active.some(entry => entry.status.state === "running");
   elements.statusBadge.className = `badge ${running ? "running" : "waiting"}`;
   elements.statusBadge.textContent = `${active.length}개 일정 ${running ? "실행 중" : "대기·감시 중"}`;
+}
+
+function refreshWatchProfileSelector() {
+  const select = document.getElementById("watchProfileSelect"), previous = select.value;
+  select.replaceChildren(...readConfig().profiles.map((profile, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `예약자 ${index + 1}${profile.reserverName ? ` · ${profile.reserverName}` : ""}`;
+    return option;
+  }));
+  select.value = [...select.options].some(option => option.value === previous) ? previous : "0";
+}
+
+function renderWatchRooms() {
+  elements.roomSectionTitle.textContent = "감시할 객실";
+  elements.roomSectionHelp.textContent = "원하는 객실을 체크만 하세요. 순위 없이 조건에 맞는 자리가 나오면 객실 하나를 예약합니다.";
+  elements.roomList.hidden = false;
+  elements.profilePriorities.hidden = true;
+  elements.multipleProfileField.hidden = true;
+  document.getElementById("roomDragHelp").hidden = true;
+  document.getElementById("roomDragStatus").textContent = "";
+  elements.roomList.replaceChildren();
+  for (const room of rooms) {
+    const row = document.createElement("div");
+    row.className = `room-row${room.enabled ? " enabled" : ""}`;
+    const state = availabilityByRoom.get(room.name) || "unknown";
+    row.innerHTML = `<label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} aria-label="${escapeHtml(room.name)} 감시 대상"></label><div class="room-name">${escapeHtml(room.name)}<span class="availability ${state}">${AVAILABILITY_LABELS[state] || AVAILABILITY_LABELS.unknown}</span></div>`;
+    row.querySelector("input").addEventListener("change", event => { room.enabled = event.target.checked; renderWatchRooms(); });
+    elements.roomList.append(row);
+  }
 }

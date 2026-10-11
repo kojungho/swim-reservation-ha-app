@@ -20,7 +20,7 @@ export class PlanManager {
     return result;
   }
   async persist() {
-    const rows = [...this.plans.values()].map(({ id, name, kind, intervalSeconds, enabled, config }) => ({ id, name, kind, intervalSeconds, enabled, config }));
+    const rows = [...this.plans.values()].map(({ id, name, kind, intervalSeconds, enabled, config, watchVersion }) => ({ id, name, kind, intervalSeconds, enabled, config, watchVersion }));
     await writeFile(`${this.file}.tmp`, JSON.stringify(rows), { mode: 0o600 });
     await rename(`${this.file}.tmp`, this.file);
   }
@@ -43,8 +43,19 @@ export class PlanManager {
     try { rows = JSON.parse(await readFile(this.file, "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; rows = []; }
     for (const row of rows) {
       if (!/^[a-f0-9-]{36}$/.test(row.id)) throw new Error("일정 저장 파일의 식별값을 확인해 주세요.");
+      const legacyWatch = row.kind === "watch" && row.watchVersion !== 2;
+      if (legacyWatch) {
+        row.config = normalizeWatchConfig(row.config, row.config.bookingMode === "multiple" ? row.config.multipleProfileIndex || 0 : 0);
+        row.watchVersion = 2;
+        row.enabled = false;
+      }
       const plan = await this.createRuntime(row);
       this.plans.set(plan.id, plan);
+      if (legacyWatch) {
+        const old = await plan.store.getStatus();
+        if (old.state === "running") await plan.store.updateStatus({ state: "failed", stage: "review-required", message: "기존 감시 실행 결과를 예약확인에서 확인하세요. 자동 재제출하지 않습니다." });
+        else if (!["success", "failed"].includes(old.state)) await plan.store.updateStatus({ state: "stopped", stage: "stopped", message: "취소 자리 감시가 순위 없는 한 객실 예약으로 변경되었습니다. 예약자와 체크한 객실을 확인한 후 시작하세요." });
+      }
       if (!plan.enabled) continue;
       const status = await plan.store.getStatus();
       if (["running", "failed", "success"].includes(status.state) || status.stage === "prewarming" || /final-ready/.test(status.stage || "")) {
@@ -66,10 +77,10 @@ export class PlanManager {
     return this.locked(async () => {
       if (this.plans.size >= 20) throw new Error("저장 일정은 최대 20개입니다. 사용하지 않는 일정을 삭제해 주세요.");
       if (!["scheduled", "watch", "now"].includes(input.kind)) throw new Error("일정 종류를 확인해 주세요.");
-      const config = normalizeConfig(input.config);
+      const config = input.kind === "watch" ? normalizeWatchConfig(input.config, Number(input.watchProfileIndex ?? 0)) : normalizeConfig(input.config);
       const errors = validateConfig(config);
       if (errors.length) throw new Error(`확인할 항목: ${errors.join(", ")}`);
-      const plan = await this.createRuntime({ id: randomUUID(), name: String(input.name || `${config.startDate} ${config.nights}박`).trim().slice(0, 80), kind: input.kind, intervalSeconds: Math.max(60, Math.min(3600, Math.trunc(Number(input.intervalSeconds) || 60))), enabled: false, config });
+      const plan = await this.createRuntime({ id: randomUUID(), name: String(input.name || `${config.startDate} ${config.nights}박`).trim().slice(0, 80), kind: input.kind, watchVersion: input.kind === "watch" ? 2 : undefined, intervalSeconds: Math.max(60, Math.min(3600, Math.trunc(Number(input.intervalSeconds) || 60))), enabled: false, config });
       this.plans.set(plan.id, plan);
       await this.persist();
       return plan.id;
@@ -202,22 +213,16 @@ export function matchWatchRooms(config, rooms) {
 export function watchConfiguration(config, rooms) {
   const available = new Set(rooms.filter(room => room.available === true && room.status === "available").map(room => room.name));
   const selected = list => (list || []).filter(room => room.enabled).map(room => room.name);
-  if (config.bookingMode === "profiles-parallel") {
-    const profiles = getProfiles(config), owners = new Map();
-    const assign = (index, seen) => {
-      for (const name of selected(profiles[index].roomPriority)) {
-        if (!available.has(name) || seen.has(name)) continue;
-        seen.add(name);
-        if (!owners.has(name) || assign(owners.get(name), seen)) { owners.set(name, index); return true; }
-      }
-      return false;
-    };
-    if (!profiles.every((_, index) => assign(index, new Set()))) return null;
-    return { ...config, profiles: profiles.map((profile, index) => {
-      const first = [...owners].find(([, owner]) => owner === index)[0];
-      return { ...profile, roomPriority: [...profile.roomPriority.filter(room => room.name === first), ...profile.roomPriority.filter(room => room.name !== first)] };
-    }) };
-  }
-  const names = selected(config.roomPriority);
-  return names.length > 0 && (config.bookingMode === "multiple" ? names.every(name => available.has(name)) : names.filter(name => available.has(name)).length >= getProfiles(config).length) ? config : null;
+  const names = new Set(selected(config.roomPriority));
+  if (![...names].some(name => available.has(name))) return null;
+  // Site order only: persisted checkbox order is not a user-defined preference.
+  return { ...config, bookingMode: "priority", roomPriority: rooms.filter(room => names.has(room.name)).map(room => ({ name: room.name, enabled: true })) };
+}
+
+export function normalizeWatchConfig(input, profileIndex = 0) {
+  const config = normalizeConfig(input);
+  const profiles = getProfiles(config);
+  if (!Number.isInteger(profileIndex) || profileIndex < 0 || profileIndex >= profiles.length) throw new Error("취소 자리 예약자 한 명을 선택해 주세요.");
+  const eligible = config.bookingMode === "profiles-parallel" ? [...new Set(profiles.flatMap(profile => (profile.roomPriority || []).filter(room => room.enabled).map(room => room.name)))] : config.roomPriority.filter(room => room.enabled).map(room => room.name);
+  return normalizeConfig({ ...config, bookingMode: "priority", profiles: [profiles[profileIndex]], multipleProfileIndex: 0, triggerAt: bookingOpenIso(config.startDate), roomPriority: eligible.map(name => ({ name, enabled: true })) });
 }

@@ -598,6 +598,7 @@ function renderHistory(entries) {
 
 function renderRooms() {
   if (roomDrag) return;
+  if (workspaceTab === "watch") { renderWatchRooms(); return; }
   const parallel = elements.bookingMode.value === "profiles-parallel";
   renderProfilePriorities();
   const multiple = elements.bookingMode.value === "multiple";

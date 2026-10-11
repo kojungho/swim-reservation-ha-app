@@ -32,7 +32,8 @@
       <h2>여러 일정 진행</h2>
       <p>현재 입력한 설정을 별도 일정으로 등록합니다. 등록 후 다른 날짜·모드로 변경해도 진행 중인 일정에는 영향을 주지 않습니다. 최대 20개 저장, 5개 동시 진행.</p>
       <div class="grid two"><label>일정 이름<input id="planName" placeholder="예: 12월 가족 캠핑"></label><label>취소 자리 조회 간격 (초)<input id="watchInterval" type="number" min="60" max="3600" value="60"></label></div>
-      <p id="watchHelp" hidden>선택한 날짜·박수의 예약 가능 상태를 조회합니다. 우선순위는 한 객실, 여러 객실 동시는 선택한 모든 객실, 예약자별 동시는 모든 사람의 순위 중 한 객실씩 가능할 때 시도합니다. 조회 사이에 마감될 수 있으며 불확실한 제출 결과는 자동 재시도하지 않습니다.</p>
+      <label id="watchProfileField" hidden>취소 자리를 예약할 예약자<select id="watchProfileSelect"></select></label>
+      <p id="watchHelp" hidden>예약 방식이나 객실 순위 없이 체크한 객실 중 날짜·박수 조건에 맞는 자리가 나오면 선택한 예약자 한 명으로 객실 하나를 즉시 예약합니다. 조회 사이에 마감될 수 있으며 불확실한 제출 결과는 자동 재시도하지 않습니다.</p>
       <button id="addPlanButton" class="secondary" type="button">현재 설정으로 일정 등록</button>
       <p id="planMessage" role="status"></p>
       <div id="planList" class="history-list"></div>
