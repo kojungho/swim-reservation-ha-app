@@ -80,12 +80,32 @@ button.info-button:focus-visible, .booking-help-dialog summary:focus-visible { o
 #monthlyStatus, .monthly-note { font-size: 13px; line-height: 1.6; }
 .monthly-legend { display: flex; flex-wrap: wrap; gap: 8px; }
 .monthly-content { max-height: 55vh; overflow: auto; margin-bottom: 14px; border: 1px solid var(--line); border-radius: 8px; }
-.monthly-table { border-collapse: separate; border-spacing: 0; font-size: 12px; white-space: nowrap; width: max-content; min-width: 100%; }
-.monthly-table caption { text-align: left; padding: 10px; }
-.monthly-table th, .monthly-table td { padding: 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: center; }
-.monthly-table thead th { position: sticky; top: 0; background: #f2f6f3; z-index: 2; }
-.monthly-table th:first-child { position: sticky; left: 0; background: #f2f6f3; text-align: left; z-index: 1; }
-.monthly-table thead th:first-child { z-index: 3; }
+.monthly-calendar { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.monthly-calendar caption { text-align: left; padding: 10px; }
+.monthly-calendar th { position: sticky; top: 0; z-index: 1; background: #f2f6f3; padding: 8px 0; }
+.monthly-calendar th:first-child { color: var(--red); }
+.monthly-calendar th:last-child { color: #2c65a1; }
+.monthly-calendar td { padding: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); vertical-align: top; }
+button.monthly-day { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 100%; min-height: 122px; padding: 8px 5px; background: white; border-radius: 0; color: var(--ink); text-align: left; }
+button.monthly-day.selected { background: #e8f4ed; box-shadow: inset 0 0 0 2px var(--green); }
+button.monthly-day:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
+.monthly-day-number { font-size: 15px; }
+.monthly-calendar td:first-child .monthly-day-number { color: var(--red); }
+.monthly-calendar td:last-child .monthly-day-number { color: #2c65a1; }
+.monthly-day-counts { display: flex; flex-wrap: wrap; gap: 3px; }
+.monthly-day-state { font-size: 11px; font-weight: 500; color: var(--muted); overflow-wrap: anywhere; }
+.monthly-day-state.checking { color: #215ea1; }
+.monthly-day-state.error { color: var(--red); }
+.monthly-day-details { font-size: 13px; line-height: 1.6; margin-bottom: 16px; }
+.monthly-room-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.monthly-room-details > div { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; }
+.monthly-cell.unavailable { color: #79511f; background: #f2e7d6; }
+@media (max-width: 680px) {
+  .monthly-dialog { padding: 12px; }
+  button.monthly-day { padding: 5px 2px; min-height: 140px; gap: 4px; }
+  .monthly-day-counts { flex-direction: column; }
+  .monthly-day-counts .monthly-cell { font-size: 10px; padding: 3px 1px; text-align: center; white-space: nowrap; }
+}
 .monthly-cell { display: inline-block; padding: 4px 6px; border-radius: 5px; font-size: 12px; font-weight: 750; }
 .monthly-cell.available { color: #155239; background: #e3f3e9; }
 .monthly-cell.booked { color: #92332b; background: #fbe7e5; }

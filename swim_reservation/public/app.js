@@ -7,7 +7,7 @@ const elements = Object.fromEntries([
   "siteMapUploadButton", "siteMapFile", "siteMapImage", "siteMapMessage",
   "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton", "startButton",
   "logList", "refreshLogsButton", "copyLogsButton", "saveLogsButton", "bookingHelpButton", "bookingHelpDialog", "bookingHelpCloseButton", "bookingHelpCurrent",
-  "monthlyButton", "monthlyDialog", "monthlyCloseButton", "monthlyPrevButton", "monthlyNextButton", "monthlyMonth", "monthlyQueryButton", "monthlyStatus", "monthlyContent", "monthlySourceLink"
+  "monthlyButton", "monthlyDialog", "monthlyCloseButton", "monthlyPrevButton", "monthlyNextButton", "monthlyMonth", "monthlyQueryButton", "monthlyStatus", "monthlyContent", "monthlySourceLink", "monthlyDayDetails"
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
@@ -28,6 +28,8 @@ let lastAutoLookupAttempt = 0;
 let currentLogText = "";
 let monthlyController = null;
 let monthlyRequest = 0;
+let monthlyResult = null;
+let selectedMonthlyDate = null;
 const availabilityByRoom = new Map();
 const STATE_LABELS = {
   idle: "설정 중", waiting: "예약 대기", running: "자동 실행 중",
@@ -96,7 +98,9 @@ function bindEvents() {
   elements.monthlyDialog.addEventListener("close", () => {
     monthlyController?.abort();
     monthlyRequest++;
-    elements.monthlyButton.focus({ preventScroll: true });
+    const target = selectedMonthlyDate ? elements.startDate : elements.monthlyButton;
+    target.focus({ preventScroll: true });
+    if (selectedMonthlyDate) target.scrollIntoView({ behavior: "smooth", block: "center" });
   });
   elements.bookingHelpButton.addEventListener("click", () => {
     elements.bookingHelpCurrent.textContent = `현재 선택: ${elements.bookingMode.selectedOptions[0]?.textContent || ""}`;
@@ -244,79 +248,141 @@ function changeMonthlyMonth(delta) {
 
 async function loadMonthlyAvailability() {
   const month = elements.monthlyMonth.value;
+  monthlyController?.abort();
+  const id = ++monthlyRequest;
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
     elements.monthlyStatus.textContent = "조회할 월을 선택해 주세요.";
+    elements.monthlyQueryButton.disabled = false;
     return;
   }
-  monthlyController?.abort();
   const controller = new AbortController();
   monthlyController = controller;
-  const id = ++monthlyRequest;
+  selectedMonthlyDate = null;
   elements.monthlyQueryButton.disabled = true;
-  elements.monthlyStatus.textContent = `${month} 전체 객실 현황을 조회하고 있습니다…`;
-  elements.monthlyContent.replaceChildren();
+  const [year, number] = month.split("-").map(Number);
+  const roomNames = rooms.map(room => room.name);
+  let result = { month, opensAt: bookingOpenIso(`${month}-01`), beforeOpen: isBeforeOpen(`${month}-01`), roomNames, capturedAt: Date.now(), progressText: "월별 페이지 조회 중…", days: Array.from({ length: new Date(Date.UTC(year, number, 0)).getUTCDate() }, (_, index) => ({ date: `${month}-${String(index + 1).padStart(2, "0")}`, queryState: "queued", rooms: roomNames.map(name => ({ name, status: "unknown" })) })) };
+  renderMonthlyAvailability(result);
   const sourceUrl = `https://newpension.logosweb.or.kr/reservation/reservation2.php?id=swim&year=${month.slice(0, 4)}&month=${Number(month.slice(5))}`;
   elements.monthlySourceLink.href = sourceUrl;
   try {
-    const result = await request(`monthly-availability?month=${encodeURIComponent(month)}`, { signal: controller.signal });
-    if (id !== monthlyRequest) return;
+    try {
+      const fetched = await request(`monthly-availability?month=${encodeURIComponent(month)}`, { signal: controller.signal });
+      if (id !== monthlyRequest) return;
+      if (fetched.month !== month) throw new Error("요청한 달과 다른 현황을 받았습니다.");
+      result = fetched;
+    } catch (error) {
+      if (controller.signal.aborted || id !== monthlyRequest) return;
+      if (error.code === "INSPECTION_BUSY") throw error;
+      result.message = `월별 페이지 조회 실패: ${error.message}. 개별 날짜 링크로 확인합니다.`;
+    }
+    const pending = result.days.filter(day => !day.rooms.length || day.rooms.some(room => room.status === "unknown"));
+    for (const day of result.days) day.queryState = pending.includes(day) ? "queued" : "done";
+    let completed = 0, failed = 0;
+    result.progressText = pending.length ? `개별 날짜 확인 0/${pending.length}일` : "전체 현황 확인 완료";
+    renderMonthlyAvailability(result);
+    for (const day of pending) {
+      if (controller.signal.aborted || id !== monthlyRequest || !elements.monthlyDialog.open) return;
+      day.queryState = "checking";
+      result.progressText = `개별 날짜 확인 ${completed}/${pending.length}일 · ${day.date} 조회 중`;
+      renderMonthlyAvailability(result);
+      try {
+        const found = await request(`calendar-day?date=${encodeURIComponent(day.date)}`, { signal: controller.signal });
+        if (controller.signal.aborted || id !== monthlyRequest) return;
+        if (found.date !== day.date) throw new Error("다른 날짜의 현황이 반환되어 반영하지 않았습니다.");
+        if (!found.rooms?.length) throw new Error("개별 날짜의 객실 현황이 없습니다.");
+        for (const room of found.rooms) {
+          const existing = day.rooms.find(item => item.name === room.name);
+          if (!existing) day.rooms.push({ ...room });
+          else if (existing.status === "unknown") existing.status = room.status;
+          if (!result.roomNames.includes(room.name)) result.roomNames.push(room.name);
+        }
+        day.queryState = day.rooms.some(room => room.status === "unknown") ? "partial" : "done";
+        day.sourceUrl = found.sourceUrl;
+        day.capturedAt = found.capturedAt;
+        if (day.queryState === "partial") day.error = "일부 객실은 개별 날짜 페이지에서도 확인할 수 없습니다.";
+      } catch (error) {
+        if (controller.signal.aborted || id !== monthlyRequest) return;
+        if (error.code === "INSPECTION_BUSY") throw error;
+        day.queryState = "error";
+        day.error = error.message;
+        failed++;
+      }
+      completed++;
+      result.progressText = `개별 날짜 확인 ${completed}/${pending.length}일${failed ? ` · 조회 실패 ${failed}일` : ""}`;
+      result.capturedAt = Date.now();
+      renderMonthlyAvailability(result);
+    }
+    result.progressText = `조회 완료${pending.length ? ` · 개별 링크 ${completed}일 확인${failed ? ` · 조회 실패 ${failed}일` : ""}` : ""}`;
+    result.message = "날짜별 현황은 조회 시점의 정보이며 연속 박수 예약이나 실제 예약 성공을 보장하지 않습니다.";
     renderMonthlyAvailability(result);
   } catch (error) {
     if (controller.signal.aborted || id !== monthlyRequest) return;
-    elements.monthlyStatus.textContent = `월별 조회 실패: ${error.message}`;
+    result.progressText = `조회 중단: ${error.message}`;
+    renderMonthlyAvailability(result);
   } finally {
     if (id === monthlyRequest) elements.monthlyQueryButton.disabled = false;
   }
 }
 
 function renderMonthlyAvailability(result) {
+  monthlyResult = result;
   const opened = result.beforeOpen ? "예약 오픈 전" : "예약 오픈 일시 경과";
   const opening = result.opensAt ? new Date(`${result.opensAt}+09:00`).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false }) : "미확인";
   const captured = new Date(result.capturedAt).toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour12: false });
-  elements.monthlyStatus.textContent = `${result.month} · ${opened} · 예약 오픈 ${opening} · 조회 ${captured}. ${result.message || ""}`;
-  const days = result.days || [], names = result.roomNames || [];
-  const labels = { available: "예약 가능", booked: "예약 완료", pending: "예약 대기", unknown: "현황 미제공" };
-  const short = { available: "가능", booked: "완료", pending: "대기", unknown: "미제공" };
+  elements.monthlyStatus.textContent = `${result.month} · ${opened} · 예약 오픈 ${opening} · ${result.progressText || ""} · 최근 확인 ${captured}. ${result.message || ""}`;
+  const days = result.days || [];
   const table = document.createElement("table");
-  table.className = "monthly-table";
+  table.className = "monthly-calendar";
   const caption = document.createElement("caption");
   caption.textContent = `${result.month} 전체 객실 날짜별 예약 현황${result.beforeOpen ? " (예약 오픈 전)" : ""}`;
   const head = document.createElement("thead");
   const header = document.createElement("tr");
-  const roomHeading = document.createElement("th");
-  roomHeading.scope = "col";
-  roomHeading.textContent = "객실 / 날짜";
-  header.append(roomHeading);
-  for (const day of days) {
+  for (const name of ["일", "월", "화", "수", "목", "금", "토"]) {
     const th = document.createElement("th");
     th.scope = "col";
-    th.textContent = `${Number(day.date.slice(-2))}일`;
-    th.title = day.date;
+    th.textContent = name;
     header.append(th);
   }
   head.append(header);
   const body = document.createElement("tbody");
-  for (const name of names) {
+  const [year, month] = result.month.split("-").map(Number);
+  const offset = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  const cells = [...Array(offset).fill(null), ...days];
+  while (cells.length % 7) cells.push(null);
+  for (let index = 0; index < cells.length; index += 7) {
     const row = document.createElement("tr");
-    const heading = document.createElement("th");
-    heading.scope = "row";
-    heading.textContent = name;
-    row.append(heading);
-    for (const day of days) {
-      const status = day.rooms.find(room => room.name === name)?.status || "unknown";
+    for (const day of cells.slice(index, index + 7)) {
       const td = document.createElement("td");
-      const badge = document.createElement("span");
-      badge.className = `monthly-cell ${labels[status] ? status : "unknown"}`;
-      badge.textContent = short[status] || short.unknown;
-      td.title = `${day.date} · ${name} · ${labels[status] || labels.unknown}${result.beforeOpen ? " (예약 오픈 전)" : ""}`;
-      td.setAttribute("aria-label", td.title);
-      td.append(badge);
+      if (day) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `monthly-day${day.date === selectedMonthlyDate ? " selected" : ""}`;
+        button.dataset.date = day.date;
+        button.setAttribute("aria-label", `${day.date} 선택 후 예약 매크로 화면으로 이동`);
+        const count = status => day.rooms.filter(room => room.status === status).length;
+        const badges = [["available", "가능"], ["booked", "완료"], ["pending", "대기"], ["unavailable", "불가"]].filter(([status]) => count(status)).map(([status, label]) => `<span class="monthly-cell ${status}">${label} ${count(status)}</span>`).join("");
+        const states = { queued: "대기 중", checking: "조회 중", error: "조회 실패", partial: "일부 확인 불가", done: "확인됨" };
+        button.innerHTML = `<span class="monthly-day-number">${Number(day.date.slice(-2))}</span><span class="monthly-day-counts">${badges || '<span class="monthly-cell unknown">미확인</span>'}</span><span class="monthly-day-state ${day.queryState || "done"}">${states[day.queryState] || "확인됨"}</span>`;
+        button.addEventListener("click", () => {
+          selectedMonthlyDate = day.date;
+          elements.startDate.value = day.date;
+          elements.startDate.dispatchEvent(new Event("change", { bubbles: true }));
+          elements.monthlyDialog.close();
+        });
+        td.append(button);
+      }
       row.append(td);
     }
     body.append(row);
   }
   table.append(caption, head, body);
   elements.monthlyContent.replaceChildren(table);
+  renderMonthlyDayDetails();
+}
+
+function renderMonthlyDayDetails() {
+  elements.monthlyDayDetails.textContent = "날짜를 누르면 숙박 시작 날짜에 반영하고 달력을 닫아 예약 매크로 화면으로 이동합니다. 클릭만으로 예약이 실행되지는 않습니다.";
 }
 
 function loadConfig(config) {

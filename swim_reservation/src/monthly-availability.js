@@ -1,4 +1,4 @@
-import { bookingOpenIso, triggerEpoch } from "./config.js";
+import { bookingOpenIso, triggerEpoch, reservationUrl } from "./config.js";
 
 export function monthlyUrl(month) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month)) || Number(month.slice(0, 4)) < 2000 || Number(month.slice(0, 4)) > 2100) throw new Error("조회할 월을 확인해 주세요.");
@@ -25,6 +25,25 @@ export async function inspectMonth(engine, { month, nowMs, knownRooms = [] }) {
   });
   return { month, opensAt, beforeOpen, roomNames, days, sourceUrl: url, capturedAt: Date.now(), provided: discovered.length > 0,
     message: discovered.length ? "월별 현황은 사이트의 날짜별 표시이며 선택한 박수의 예약 가능 여부를 보장하지 않습니다." : "사이트가 이 달의 객실 현황을 제공하지 않습니다. 예약 가능·완료로 판단할 수 없습니다." };
+}
+
+export function calendarDayUrl(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new Error("조회할 날짜를 확인해 주세요.");
+  monthlyUrl(date.slice(0, 7));
+  const [year, month, day] = date.split("-").map(Number);
+  if (new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) !== date) throw new Error("조회할 날짜를 확인해 주세요.");
+  return reservationUrl(date);
+}
+
+export async function inspectCalendarDay(engine, { calendarDate }) {
+  const sourceUrl = calendarDayUrl(calendarDate);
+  const response = await engine.page.goto(sourceUrl, { waitUntil: "domcontentloaded", timeout: 20_000 });
+  if (!response?.ok()) throw new Error(`개별 날짜 연결 실패 (응답 ${response?.status() || "미확인"}).`);
+  // Never use a redirect's room data as if it belonged to the requested date.
+  await engine.assertReservationDate({ startDate: calendarDate }, { required: true });
+  const rooms = await engine.readRooms(1);
+  if (!rooms.length) throw new Error("개별 날짜 페이지에도 정상적인 객실 현황이 없습니다.");
+  return { date: calendarDate, rooms: rooms.map(room => ({ name: room.name, status: room.status || (room.available ? "available" : "unknown") })), capturedAt: Date.now(), sourceUrl };
 }
 
 export function readMonthlyCalendar() {

@@ -12,7 +12,7 @@ import { SiteTimeSync } from "./site-time.js";
 import { InspectionService } from "./inspection-service.js";
 import { SiteMap } from "./site-map.js";
 import { lookupProfiles } from "./profile-lookup.js";
-import { inspectMonth, monthlyUrl } from "./monthly-availability.js";
+import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./monthly-availability.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -28,7 +28,7 @@ const inspections = new InspectionService(
   () => {
     const reader = new ReservationEngine({ store, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
     const inspectRooms = reader.inspect.bind(reader);
-    reader.inspect = config => config.month ? inspectMonth(reader, config) : inspectRooms(config);
+    reader.inspect = config => config.month ? inspectMonth(reader, config) : config.calendarDate ? inspectCalendarDay(reader, config) : inspectRooms(config);
     return reader;
   },
   () => !scheduler.running && !scheduler.preparing
@@ -177,6 +177,18 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/api/stop" && request.method === "POST") {
       await Promise.all([scheduler.stop(), inspections.cancelAll()]);
       return json(response, 200, { ok: true });
+    }
+    if (url.pathname === "/api/calendar-day" && request.method === "GET") {
+      if (scheduler.running || scheduler.preparing) return json(response, 409, { code: "INSPECTION_BUSY", error: "예약 사전 준비 또는 실행 중에는 날짜별 조회를 잠시 기다려 주세요." });
+      const calendarDate = url.searchParams.get("date") || "";
+      try { calendarDayUrl(calendarDate); } catch (error) { return json(response, 400, { error: error.message }); }
+      const controller = new AbortController();
+      const cancel = () => { if (!response.writableEnded) controller.abort(); };
+      response.once("close", cancel);
+      if (response.destroyed) controller.abort();
+      try {
+        return json(response, 200, await inspections.inspect({ calendarDate }, controller.signal));
+      } finally { response.off("close", cancel); }
     }
     if (url.pathname === "/api/monthly-availability" && request.method === "GET") {
       if (scheduler.running || scheduler.preparing) return json(response, 409, { code: "INSPECTION_BUSY", error: "예약 사전 준비 또는 실행 중에는 월별 조회를 잠시 기다려 주세요." });

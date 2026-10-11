@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { chromium } from "playwright-core";
-import { inspectMonth, monthlyUrl, readMonthlyCalendar } from "../src/monthly-availability.js";
+import { inspectMonth, monthlyUrl, readMonthlyCalendar, calendarDayUrl, inspectCalendarDay } from "../src/monthly-availability.js";
 
 const executablePath = [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].filter(Boolean).find(existsSync);
 test("월별 PHP의 중첩 font·아이콘을 날짜별 예약 가능·완료·대기로 분석하고 범례를 제외한다", { skip: !executablePath }, async t => {
@@ -17,6 +17,18 @@ test("월별 PHP의 중첩 font·아이콘을 날짜별 예약 가능·완료·�
 });
 
 const fake = parsed => ({ page: { goto: async () => ({ ok: () => true }), evaluate: async () => parsed } });
+test("개별 달력 조회는 유효한 날짜와 사이트 확인값을 검증하고 예약을 제출하지 않는다", async () => {
+  assert.match(calendarDayUrl("2026-12-04"), /adaystart=1796310000$/);
+  assert.throws(() => calendarDayUrl("2026-02-30"));
+  assert.throws(() => calendarDayUrl("2026-12-04&x=1"));
+  const calls = [];
+  const engine = { page: { goto: async url => { calls.push(url); return { ok: () => true }; } }, assertReservationDate: async (config, options) => { assert.equal(config.startDate, "2026-12-04"); assert.equal(options.required, true); }, readRooms: async nights => { assert.equal(nights, 1); return [{ name: "해_하늘존", status: "booked" }]; } };
+  assert.equal((await inspectCalendarDay(engine, { calendarDate: "2026-12-04" })).rooms[0].status, "booked");
+  assert.equal(calls.length, 1);
+  engine.assertReservationDate = async () => { throw new Error("다른 숙박 날짜"); };
+  engine.readRooms = async () => { throw new Error("읽으면 안 됨"); };
+  await assert.rejects(inspectCalendarDay(engine, { calendarDate: "2026-12-04" }), /다른 숙박 날짜/);
+});
 test("오픈 전이라도 제공된 상태는 보존하고 미제공 날짜를 예약 가능으로 추정하지 않는다", async () => {
   const result = await inspectMonth(fake({ month: "2027-01", days: [{ day: 1, rooms: [{ name: "해_하늘존", status: "available" }, { name: "달_하늘존", status: "booked" }] }] }), { month: "2027-01", nowMs: Date.parse("2026-10-11T00:00:00+09:00") });
   assert.equal(result.days.length, 31);
