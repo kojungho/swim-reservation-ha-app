@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { chromium } from "playwright-core";
-import { defaultConfig, normalizeConfig } from "../src/config.js";
+import { defaultConfig, normalizeConfig, getProfiles } from "../src/config.js";
 
 const executablePath = [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].filter(Boolean).find(existsSync);
 test("모바일에서 기존 2명을 불러와 5명 추가·저장·복원·중간 삭제", { skip: !executablePath }, async t => {
@@ -16,6 +16,7 @@ test("모바일에서 기존 2명을 불러와 5명 추가·저장·복원·중�
     if (pathname.startsWith("/api/")) {
       if (pathname === "/api/config" && req.method() === "PUT") config = normalizeConfig(req.postDataJSON());
       const data = pathname === "/api/config" ? (req.method() === "PUT" ? { config } : config)
+        : pathname === "/api/profiles" ? { profiles: getProfiles(config) }
         : pathname === "/api/status" ? { state: "idle", stage: "idle" }
         : { entries: [], rooms: [], synced: true, serverNowMs: Date.now(), lastSyncedAt: Date.now(), offsetMs: 0, rttMs: 1 };
       return route.fulfill({ json: data });
@@ -26,6 +27,7 @@ test("모바일에서 기존 2명을 불러와 5명 추가·저장·복원·중�
   await page.goto("https://app.test/");
   await page.locator(".workspace-tabs .active").waitFor();
   await page.locator('[data-workspace-tab="profiles-parallel"]').click();
+  await page.locator("#loadProfilesButton").click();
   await page.locator("#reserverName2").waitFor();
   assert.equal(await page.locator("#reserverName2").inputValue(), "기존두번째");
   for (let n = 3; n <= 5; n++) {
@@ -42,6 +44,7 @@ test("모바일에서 기존 2명을 불러와 5명 추가·저장·복원·중�
   await page.reload();
   await page.locator(".workspace-tabs .active").waitFor();
   await page.locator('[data-workspace-tab="profiles-parallel"]').click();
+  await page.locator("#loadProfilesButton").click();
   await page.locator("#reserverName5").waitFor();
   assert.equal(await page.locator("#reserverName5").inputValue(), "예약자5");
   page.on("dialog", d => d.accept());

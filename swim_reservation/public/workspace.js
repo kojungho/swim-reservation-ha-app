@@ -1,5 +1,7 @@
 let workspaceTab = "priority";
-const modeDrafts = new Map();
+let editorGeneration = 0;
+let planRegistrationPending = false;
+let defaultRoomOrder = [];
 let planEntries = [];
 let planRefreshPending = false;
 let lookupProfilesDraft = [];
@@ -7,6 +9,10 @@ let lookupProfilesInitialized = false;
 let lookupProfilesLoading = null;
 
 function initializeWorkspace() {
+  defaultRoomOrder = rooms.map(room => room.name);
+  document.addEventListener("input", event => {
+    if (event.target.closest("#planCard,#roomList,#profilePriorities") || event.target.closest("section") === elements.reserverName.closest("section") || event.target.closest("section") === elements.startDate.closest("section")) editorGeneration++;
+  });
   elements.monthlyDialog.classList.add("monthly-page");
   document.querySelector("main.shell").insertBefore(elements.monthlyDialog, document.querySelector("main.shell > aside"));
   const profilePage = elements.reserverName.closest("section");
@@ -48,17 +54,12 @@ function seoulCurrentMonth() {
 function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   const modes = ["priority", "multiple", "profiles-parallel"];
   if (![...modes, "watch", "people", "monthly"].includes(tab)) return;
-  if (modes.includes(workspaceTab) || workspaceTab === "watch") modeDrafts.set(workspaceTab, readConfig());
   const entering = workspaceTab !== tab;
   workspaceTab = tab;
-  if (modes.includes(tab) && !keepEditor) {
-    const current = readConfig();
-    loadConfig({ ...(modeDrafts.get(tab) || current), profiles: current.profiles, bookingMode: tab });
-    scheduleAvailabilityCheck();
-  }
+  if (entering && !keepEditor) resetPlanEditor(tab);
+  if (modes.includes(tab)) { elements.bookingMode.value = tab; renderRooms(); }
   if (tab === "watch") {
-    const current = readConfig();
-    loadConfig({ ...(!keepEditor ? modeDrafts.get("watch") || current : current), profiles: current.profiles, bookingMode: "priority" });
+    elements.bookingMode.value = "priority";
     refreshWatchProfileSelector();
     renderWatchRooms();
   }
@@ -168,18 +169,50 @@ function refreshLookupSiteSelector() {
 
 function planMessage(text) { document.getElementById("planMessage").textContent = text; }
 
+function resetPlanEditor(tab = workspaceTab) {
+  editorGeneration++;
+  roomDrag?.cancel?.();
+  clearTimeout(availabilityTimer);
+  availabilityController?.abort();
+  availabilityRequest++;
+  availabilityByRoom.clear();
+  const names = [...new Set([...defaultRoomOrder, ...rooms.map(room => room.name)])];
+  const mode = ["priority", "multiple", "profiles-parallel"].includes(tab) ? tab : elements.bookingMode.value;
+  loadConfig({ startDate: "", triggerAt: "", nights: 1, bookingMode: mode, profiles: [{}], multipleProfileIndex: 0, editorProfileIndex: 0, roomPriority: names.map(name => ({ name, enabled: false })) });
+  document.getElementById("planName").value = "";
+  document.getElementById("watchInterval").value = "60";
+  document.getElementById("watchProfileSelect").value = "0";
+  document.getElementById("roomDragStatus").textContent = "";
+  elements.inspectResult.hidden = true;
+  elements.inspectResult.replaceChildren();
+  if (tab === "watch") refreshWatchProfileSelector();
+  updateBookingProfileVisibility();
+}
+
 async function registerPlan(kind, start) {
-  let config = readConfig();
-  if (config.bookingMode !== "profiles-parallel" || kind === "watch") {
-    const index = kind === "watch" ? Number(document.getElementById("watchProfileSelect").value || 0) : config.multipleProfileIndex;
-    const selected = { ...config.profiles[index], roomPriority: [] };
-    config = { ...config, profiles: [selected], profile: selected, profile1: selected, profile2: {}, useSecondProfile: false, multipleProfileIndex: 0 };
-  }
-  const result = await request("plans", { method: "POST", body: JSON.stringify({ name: document.getElementById("planName").value, kind, watchProfileIndex: 0, intervalSeconds: document.getElementById("watchInterval").value, config }) });
-  if (!result.id) throw new Error("일정 등록 결과를 확인하지 못했습니다.");
-  if (start) await request(`plans/${result.id}/start`, { method: "POST" });
-  planMessage(start ? "독립 일정으로 실행했습니다. 다른 일정도 추가할 수 있습니다." : "일정을 등록했습니다. 목록에서 시작을 누르면 실행됩니다.");
-  await refreshPlans();
+  if (planRegistrationPending) throw new Error("일정을 등록 중입니다. 잠시 기다려 주세요.");
+  const generation = editorGeneration, tab = workspaceTab;
+  const button = document.getElementById("addPlanButton");
+  planRegistrationPending = true;
+  button.disabled = true;
+  try {
+    let config = readConfig();
+    if (config.bookingMode !== "profiles-parallel" || kind === "watch") {
+      const index = kind === "watch" ? Number(document.getElementById("watchProfileSelect").value || 0) : config.multipleProfileIndex;
+      const selected = { ...config.profiles[index], roomPriority: [] };
+      config = { ...config, profiles: [selected], profile: selected, profile1: selected, profile2: {}, useSecondProfile: false, multipleProfileIndex: 0 };
+    }
+    const result = await request("plans", { method: "POST", body: JSON.stringify({ name: document.getElementById("planName").value, kind, watchProfileIndex: 0, intervalSeconds: document.getElementById("watchInterval").value, config }) });
+    if (!result.id) throw new Error("일정 등록 결과를 확인하지 못했습니다.");
+    const cleared = generation === editorGeneration && tab === workspaceTab && !roomDrag;
+    if (cleared) resetPlanEditor();
+    if (start) {
+      try { await request(`plans/${result.id}/start`, { method: "POST" }); }
+      catch (error) { await refreshPlans(); throw new Error(`일정은 등록했지만 시작하지 못했습니다: ${error.message}. 목록에서 설정을 확인하세요.`); }
+    }
+    planMessage(`${start ? "독립 일정으로 실행했습니다." : "일정을 등록했습니다. 목록에서 시작을 누르면 실행됩니다."} ${cleared ? "입력란을 초기화했습니다." : "새로 편집한 입력 내용은 유지했습니다."}`);
+    await refreshPlans();
+  } finally { planRegistrationPending = false; button.disabled = false; }
 }
 
 async function refreshPlans() {

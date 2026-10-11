@@ -137,6 +137,7 @@ function bindEvents() {
   elements.addProfileButton.addEventListener("click", () => {
     if (extraProfiles.length >= 4) return;
     extraProfiles.push(extraProfiles.length === 0 ? { ...savedSecondProfile } : {});
+    editorGeneration++;
     renderExtraProfiles();
     renderRooms();
   });
@@ -388,6 +389,7 @@ function renderMonthlyDayDetails() {
 }
 
 function loadConfig(config) {
+  editorGeneration++;
   roomDrag?.cancel?.();
   elements.startDate.value = config.startDate || "";
   elements.triggerAt.value = (config.triggerAt || "").slice(0, 19);
@@ -457,6 +459,7 @@ function renderExtraProfiles() {
     panel.querySelector("button").addEventListener("click", () => {
       if (!window.confirm("예약자 " + (index + 2) + "를 목록에서 삭제할까요? 설정 저장 후 반영됩니다.")) return;
       extraProfiles.splice(index, 1);
+      editorGeneration++;
       savedSecondProfile = {};
       renderExtraProfiles();
       renderRooms();
@@ -523,6 +526,7 @@ function renderProfilePriorities() {
         const target = index + (event.key === "ArrowUp" ? -1 : 1);
         if (target < 0 || target >= priority.length) return;
         priority.splice(target, 0, ...priority.splice(index, 1));
+        editorGeneration++;
         renderProfilePriorities();
         elements.profilePriorities.querySelector(`[data-profile-index="${profileIndex}"]`).children[target].querySelector("button").focus();
       });
@@ -628,6 +632,7 @@ function moveRoom(index, delta) {
   const target = index + delta;
   if (target < 0 || target >= rooms.length) return;
   [rooms[index], rooms[target]] = [rooms[target], rooms[index]];
+  editorGeneration++;
   renderRooms();
   elements.roomList.children[target]?.querySelector(".room-drag-handle").focus({ preventScroll: true });
   document.getElementById("roomDragStatus").textContent = `${rooms[target].name}, ${target + 1}번째로 이동했습니다. 설정 저장을 눌러 주세요.`;
@@ -682,7 +687,7 @@ function startRoomDrag(event, row, index, list = elements.roomList, items = room
     window.removeEventListener("blur", cancel);
     if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
     const changed = commit && moved && target !== index;
-    if (changed) items.splice(target, 0, ...items.splice(index, 1));
+    if (changed) { items.splice(target, 0, ...items.splice(index, 1)); editorGeneration++; }
     roomDrag = null;
     const profileIndex = list.dataset.profileIndex;
     render();

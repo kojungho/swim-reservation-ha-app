@@ -92,7 +92,7 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
     await page.waitForTimeout(100);
     assert.equal(dayQueries.length, countAtClose);
     assert.equal(await page.locator("#monthlyDialog").isVisible(), false);
-    assert.equal(await page.locator("#startDate").inputValue(), "2026-12-20");
+    assert.equal(await page.locator("#startDate").inputValue(), "");
     assert.equal(await page.locator("#bookingMode").inputValue(), "priority");
     assert.deepEqual(mutations, []);
     assert.deepEqual(errors, []);
