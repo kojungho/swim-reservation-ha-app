@@ -53,7 +53,17 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
     assert.equal(await page.locator("#monthlyContent .booked").count(), 31);
     assert.equal(await page.locator("#monthlyContent .pending").count(), 31);
     assert.equal(await page.locator("#monthlyDialog").evaluate(el => el.scrollWidth <= el.clientWidth), true);
-    if (width === 390) await page.screenshot({ path: "/tmp/swim-profiles.6W9Acs/calendar-mobile.png" });
+    assert.deepEqual(await page.locator('[data-date="2026-12-01"] .monthly-room-name').allTextContents(), ["해", "달", "샘"]);
+    assert.deepEqual(await page.locator('[data-date="2026-12-01"] .monthly-room-mark').allTextContents(), ["가", "완", "대"]);
+    assert.match(await page.locator('[data-date="2026-12-01"] .monthly-room-row').last().getAttribute("title"), /샘_산맥존 · 예약 대기/);
+    await page.evaluate(() => {
+      const names = ["해", "달", "별", "빛", "강", "산", "들", "숲", "샘", "온", "숨", "꿈", "솔", "결"].map((name, index) => `${name}_${index < 8 ? "하늘존" : "산맥존"}`);
+      renderMonthlyAvailability({ ...monthlyResult, roomNames: names, days: monthlyResult.days.map(day => ({ ...day, rooms: names.map((name, index) => ({ name, status: ["available", "booked", "pending", "unavailable", "unknown"][index % 5] })) })) });
+    });
+    assert.equal(await page.locator('[data-date="2026-12-01"] .monthly-room-row').count(), 14);
+    assert.equal(await page.locator("#monthlyContent").evaluate(el => el.scrollWidth <= el.clientWidth), true);
+    assert.doesNotMatch(await page.locator("#monthlyContent").innerText(), /하늘존|산맥존|가능 \d|완료 \d/);
+    if (width === 390) await page.screenshot({ path: "/tmp/swim-profiles.6W9Acs/calendar-mobile-rooms.png" });
     assert.deepEqual(dayQueries, []);
     await page.locator('[data-date="2026-12-20"]').click();
     await page.waitForFunction(() => !document.querySelector("#monthlyDialog").open && document.activeElement.id === "startDate");

@@ -360,10 +360,15 @@ function renderMonthlyAvailability(result) {
         button.className = `monthly-day${day.date === selectedMonthlyDate ? " selected" : ""}`;
         button.dataset.date = day.date;
         button.setAttribute("aria-label", `${day.date} 선택 후 예약 매크로 화면으로 이동`);
-        const count = status => day.rooms.filter(room => room.status === status).length;
-        const badges = [["available", "가능"], ["booked", "완료"], ["pending", "대기"], ["unavailable", "불가"]].filter(([status]) => count(status)).map(([status, label]) => `<span class="monthly-cell ${status}">${label} ${count(status)}</span>`).join("");
+        const labels = { available: ["가", "예약 가능"], booked: ["완", "예약 완료"], pending: ["대", "예약 대기"], unavailable: ["불", "1박 불가"], unknown: ["?", "확인 불가"] };
+        const badges = day.rooms.map(room => {
+          const status = labels[room.status] ? room.status : "unknown";
+          const [mark, label] = labels[status];
+          const name = String(room.name).split("_")[0].trim() || room.name;
+          return `<span class="monthly-room-row" title="${escapeHtml(`${room.name} · ${label}`)}"><span class="monthly-room-mark ${status}" aria-label="${label}">${mark}</span><span class="monthly-room-name">${escapeHtml(name)}</span></span>`;
+        }).join("");
         const states = { queued: "대기 중", checking: "조회 중", error: "조회 실패", partial: "일부 확인 불가", done: "확인됨" };
-        button.innerHTML = `<span class="monthly-day-number">${Number(day.date.slice(-2))}</span><span class="monthly-day-counts">${badges || '<span class="monthly-cell unknown">미확인</span>'}</span><span class="monthly-day-state ${day.queryState || "done"}">${states[day.queryState] || "확인됨"}</span>`;
+        button.innerHTML = `<span class="monthly-day-number">${Number(day.date.slice(-2))}</span><span class="monthly-day-rooms">${badges || '<span class="monthly-cell unknown">미확인</span>'}</span><span class="monthly-day-state ${day.queryState || "done"}">${states[day.queryState] || "확인됨"}</span>`;
         button.addEventListener("click", () => {
           selectedMonthlyDate = day.date;
           elements.startDate.value = day.date;

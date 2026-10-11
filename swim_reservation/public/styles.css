@@ -92,7 +92,15 @@ button.monthly-day:focus-visible { outline: 2px solid var(--green); outline-offs
 .monthly-day-number { font-size: 15px; }
 .monthly-calendar td:first-child .monthly-day-number { color: var(--red); }
 .monthly-calendar td:last-child .monthly-day-number { color: #2c65a1; }
-.monthly-day-counts { display: flex; flex-wrap: wrap; gap: 3px; }
+.monthly-day-rooms { display: flex; flex-direction: column; gap: 3px; }
+.monthly-room-row { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 13px; line-height: 1.25; font-weight: 500; }
+.monthly-room-name { min-width: 0; overflow-wrap: anywhere; }
+.monthly-room-mark { display: inline-flex; flex: 0 0 18px; width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 2px; font-size: 12px; line-height: 1; font-weight: 800; color: white; }
+.monthly-room-mark.available { background: #18824c; }
+.monthly-room-mark.booked { background: #d44330; }
+.monthly-room-mark.pending { background: #2468b4; }
+.monthly-room-mark.unavailable { background: #89602e; }
+.monthly-room-mark.unknown { background: #707873; }
 .monthly-day-state { font-size: 11px; font-weight: 500; color: var(--muted); overflow-wrap: anywhere; }
 .monthly-day-state.checking { color: #215ea1; }
 .monthly-day-state.error { color: var(--red); }
@@ -103,8 +111,8 @@ button.monthly-day:focus-visible { outline: 2px solid var(--green); outline-offs
 @media (max-width: 680px) {
   .monthly-dialog { padding: 12px; }
   button.monthly-day { padding: 5px 2px; min-height: 140px; gap: 4px; }
-  .monthly-day-counts { flex-direction: column; }
-  .monthly-day-counts .monthly-cell { font-size: 10px; padding: 3px 1px; text-align: center; white-space: nowrap; }
+  .monthly-room-row { gap: 2px; font-size: 11px; }
+  .monthly-room-mark { flex-basis: 14px; width: 14px; height: 14px; font-size: 10px; }
 }
 .monthly-cell { display: inline-block; padding: 4px 6px; border-radius: 5px; font-size: 12px; font-weight: 750; }
 .monthly-cell.available { color: #155239; background: #e3f3e9; }
