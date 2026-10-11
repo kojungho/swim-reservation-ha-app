@@ -40,6 +40,9 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
       return route.fulfill({ contentType: file.endsWith("js") ? "text/javascript" : file.endsWith("css") ? "text/css" : "text/html", body: await readFile(new URL(`../public/${file}`, import.meta.url)) });
     });
     await page.goto("https://app.test/ingress/test/");
+    assert.equal(await page.locator("header .app-title-row #monthlyButton").count(), 1);
+    assert.equal(await page.locator("#monthlyButton").count(), 1);
+    assert.equal(await page.locator("header").evaluate(el => el.scrollWidth <= el.clientWidth), true);
     assert.deepEqual(queries, []);
     assert.deepEqual(dayQueries, []);
     await page.locator("#monthlyButton").click();
