@@ -45,21 +45,23 @@ test("모바일 예약자 별도 저장·복원, 5명 조회, 선택한 한 명 
   await page.goto("https://app.test/");
   await page.waitForFunction(() => document.querySelector("#reserverName").value === "저장된첫째");
   assert.equal(await page.locator("#profilePriorities").isVisible(), false);
+  await page.locator(".workspace-tabs .active").waitFor();
+  await page.locator('[data-workspace-tab="multiple"]').click();
+  await page.locator('[data-workspace-tab="people"]').click();
   for (let n = 2; n <= 5; n++) {
     await page.locator("#addProfileButton").click();
     await page.locator(`#reserverName${n}`).fill(`사람${n}`);
     await page.locator(`#depositorName${n}`).fill(`입금${n}`);
     await page.locator(`#phone${n}`).fill(`0101234567${n}`);
     await page.locator(`#birthDate${n}`).fill("19900101");
-    if (n === 2) await page.locator("#bookingMode").selectOption("multiple");
     assert.equal(await page.locator("#bookingMode").inputValue(), "multiple");
   }
-  await page.locator("#startDate").fill("");
+  await page.evaluate(() => document.querySelector("#startDate").value = "");
   await page.locator("#saveProfilesButton").click();
   await page.waitForFunction(() => document.body.innerText.includes("예약자 정보를 별도로 저장했습니다."));
   assert.equal(book.length, 5);
   assert.equal(config.profiles, undefined);
-  await page.locator("#bookingMode").selectOption("multiple");
+  await page.locator('[data-workspace-tab="multiple"]').click();
   assert.equal(await page.locator("#bookingMode").inputValue(), "multiple");
   assert.equal(await page.locator("#multipleProfileField").isVisible(), true);
   assert.equal(await page.locator("#multipleProfileSelect option").count(), 5);
@@ -70,7 +72,7 @@ test("모바일 예약자 별도 저장·복원, 5명 조회, 선택한 한 명 
   assert.equal(config.multipleProfileIndex, 3);
   assert.equal(config.profiles.length, 5);
   await page.reload();
-  await page.locator("#reserverName5").waitFor();
+  await page.locator("#reserverName5").waitFor({ state: "attached" });
   assert.equal(await page.locator("#bookingMode").inputValue(), "multiple");
   assert.equal(await page.locator("#multipleProfileSelect").inputValue(), "3");
   await page.locator("#bookingMode").selectOption("profiles-parallel");
@@ -82,11 +84,13 @@ test("모바일 예약자 별도 저장·복원, 5명 조회, 선택한 한 명 
   await second.getByRole("checkbox", { name: "예약자 2 달_하늘존 선택", exact: true }).check();
   await second.getByRole("button", { name: "예약자 2 달_하늘존 순서 이동", exact: true }).focus();
   await page.keyboard.press("ArrowUp");
+  await page.locator('[data-workspace-tab="people"]').click();
   await page.locator("#saveProfilesButton").click();
   await page.waitForFunction(() => document.body.innerText.includes("예약자 정보를 별도로 저장했습니다."));
   assert.equal(book[0].roomPriority.find(room => room.name === "해_하늘존").enabled, true);
   assert.equal(book[1].roomPriority[0].name, "달_하늘존");
   assert.equal(book[0].roomPriority[0].name, "해_하늘존");
+  await page.locator('[data-workspace-tab="profiles-parallel"]').click();
   await page.locator("#saveButton").click();
   await page.locator("#historyList .history-profile-priority").nth(4).waitFor();
   assert.equal(await page.locator("#historyList .history-profile-priority").count(), 5);
@@ -94,6 +98,7 @@ test("모바일 예약자 별도 저장·복원, 5명 조회, 선택한 한 명 
   assert.match(historyText, /예약자 1 · 저장된첫째\s+1순위 해_하늘존/);
   assert.match(historyText, /예약자 2 · 사람2\s+1순위 달_하늘존/);
   assert.equal(historyText.includes("표시하면 안 되는 공통 순위"), false);
+  await page.locator('[data-workspace-tab="people"]').click();
   await page.locator("#reservationLookupButton").click();
   await page.locator("#reservationList .reservation-row").nth(4).waitFor();
   assert.equal(lookupCount, 5);
@@ -102,7 +107,7 @@ test("모바일 예약자 별도 저장·복원, 5명 조회, 선택한 한 명 
   await page.waitForTimeout(100);
   assert.equal(siteProfile.reserverName, "사람3");
   await page.reload();
-  await page.locator("#reserverName5").waitFor();
+  await page.locator("#reserverName5").waitFor({ state: "attached" });
   assert.equal(await page.locator("#reserverName5").inputValue(), "사람5");
   await page.locator("#bookingMode").selectOption("profiles-parallel");
   assert.match(await page.locator('[data-profile-index="1"] .room-row').first().innerText(), /^1순위달_하늘존/);

@@ -13,6 +13,7 @@ import { InspectionService } from "./inspection-service.js";
 import { SiteMap } from "./site-map.js";
 import { lookupProfiles } from "./profile-lookup.js";
 import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./monthly-availability.js";
+import { PlanManager } from "./plan-manager.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -31,8 +32,14 @@ const inspections = new InspectionService(
     reader.inspect = config => config.month ? inspectMonth(reader, config) : config.calendarDate ? inspectCalendarDay(reader, config) : inspectRooms(config);
     return reader;
   },
-  () => !scheduler.running && !scheduler.preparing
+  () => !scheduler.running && !scheduler.preparing && !plans.busy
 );
+const plans = new PlanManager({ dataDir: DATA_DIR, timeSync,
+  engineFactory: planStore => new ReservationEngine({ store: planStore, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" }),
+  inspect: (config, signal) => inspections.inspect(config, signal),
+  canInspect: () => !scheduler.running && !scheduler.preparing,
+  log: (...args) => store.recordLog(...args)
+});
 const reservationManager = new ReservationManager({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
 
 await store.init();
@@ -43,10 +50,28 @@ await scheduler.restore().catch(async (error) => {
   console.error(`예약 대기 복원 실패: ${error.message}`);
   await store.updateStatus({ state: "failed", stage: "exception", message: error.message });
 });
+await plans.init();
 
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+    if (url.pathname === "/api/plans" && request.method === "GET") return json(response, 200, { entries: await plans.list() });
+    if (url.pathname === "/api/plans/stop-all" && request.method === "POST") {
+      for (const plan of plans.plans.values()) if (plan.enabled) await plans.stop(plan.id);
+      return json(response, 200, { ok: true });
+    }
+    if (url.pathname === "/api/plans" && request.method === "POST") {
+      try { return json(response, 201, { id: await plans.add(await readJsonBody(request)) }); }
+      catch (error) { return json(response, 400, { error: error.message }); }
+    }
+    const planMatch = /^\/api\/plans\/([a-f0-9-]{36})(?:\/(start|stop))?$/.exec(url.pathname);
+    if (planMatch) {
+      try {
+        if (request.method === "POST" && planMatch[2] === "start") { await plans.start(planMatch[1]); return json(response, 200, { ok: true }); }
+        if (request.method === "POST" && planMatch[2] === "stop") { await plans.stop(planMatch[1]); return json(response, 200, { ok: true }); }
+        if (request.method === "DELETE" && !planMatch[2]) { await plans.remove(planMatch[1]); return json(response, 200, { ok: true }); }
+      } catch (error) { return json(response, 409, { error: error.message }); }
+    }
     if (url.pathname === "/api/site-map" && request.method === "GET") {
       const body = await siteMap.read();
       response.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
@@ -69,7 +94,7 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, { profiles: await store.getSavedProfiles() });
     }
     if (url.pathname === "/api/profiles" && request.method === "PUT") {
-      if (scheduler.running || scheduler.armed) return json(response, 409, { error: "예약 대기 또는 실행 중에는 예약자 저장을 변경할 수 없습니다." });
+      if (scheduler.running || scheduler.preparing) return json(response, 409, { error: "예약 실행 또는 준비 중에는 예약자 저장을 변경할 수 없습니다." });
       const input = await readJsonBody(request);
       if (!Array.isArray(input.profiles) || input.profiles.length < 1 || input.profiles.length > 5) return json(response, 400, { error: "예약자는 1~5명까지 저장할 수 있습니다." });
       const profiles = input.profiles.map(normalizeProfile);
@@ -126,7 +151,7 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, { entries: await store.listHistory() });
     }
     if (url.pathname === "/api/reservations" && request.method === "GET") {
-      if (scheduler.running || scheduler.armed) return json(response, 409, { ok: false, error: "예약 대기 또는 실행 중에는 예약 내역 조회를 사용할 수 없습니다." });
+      if (scheduler.running || scheduler.preparing) return json(response, 409, { ok: false, error: "예약 실행 또는 준비 중에는 예약 내역 조회를 잠시 기다려 주세요." });
       const result = await lookupProfiles(await store.getSavedProfiles(), reservationManager);
       const { reservations, lookupErrors } = result;
       await store.recordLog(lookupErrors.length ? "error" : "info", "reservation-check", `예약확인 ${reservations.length}건, 조회 실패 ${lookupErrors.length}명.`, { lookupErrors });
@@ -249,6 +274,11 @@ server.listen(PORT, "0.0.0.0", () => {
 for (const signal of ["SIGTERM", "SIGINT"]) {
   process.on(signal, async () => {
     timeSync.stop();
+    scheduler.stopTimer();
+    scheduler.armed = false;
+    scheduler.cancelRequested = true;
+    scheduler.operation++;
+    await plans.close();
     await inspections.cancelAll();
     await engine.close();
     server.close(() => process.exit(0));
@@ -260,6 +290,7 @@ async function serveStatic(pathname, response) {
     "/": ["index.html", "text/html; charset=utf-8"],
     "/index.html": ["index.html", "text/html; charset=utf-8"],
     "/app.js": ["app.js", "text/javascript; charset=utf-8"],
+    "/workspace.js": ["workspace.js", "text/javascript; charset=utf-8"],
     "/styles.css": ["styles.css", "text/css; charset=utf-8"],
     "/site-map.png": ["site-map.png", "image/png"]
   };

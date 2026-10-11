@@ -11,6 +11,7 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
   t.after(() => browser.close());
   for (const width of [1280, 390]) {
     const page = await browser.newPage({ viewport: { width, height: 844 } });
+    await page.clock.setFixedTime(new Date("2026-12-01T09:00:00+09:00"));
     const queries = [], dayQueries = [], mutations = [], errors = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("https://app.test/**", async route => {

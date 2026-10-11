@@ -66,6 +66,7 @@ async function init() {
   const savedProfiles = await request("profiles").catch(() => null);
   if (savedProfiles?.profiles?.length) loadConfig({ ...config, profiles: savedProfiles.profiles });
   bindEvents();
+  initializeWorkspace();
   await refreshHistory();
   await refreshStatus();
   await refreshLogs();
@@ -81,15 +82,12 @@ async function init() {
 
 function bindEvents() {
   elements.monthlyButton.addEventListener("click", () => {
-    const date = elements.startDate.value;
-    elements.monthlyMonth.value = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 7) : new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" }).format(new Date());
-    elements.monthlyDialog.showModal();
-    void loadMonthlyAvailability();
+    switchWorkspaceTab("monthly");
   });
   elements.monthlyQueryButton.addEventListener("click", () => void loadMonthlyAvailability());
   elements.monthlyPrevButton.addEventListener("click", () => changeMonthlyMonth(-1));
   elements.monthlyNextButton.addEventListener("click", () => changeMonthlyMonth(1));
-  elements.monthlyCloseButton.addEventListener("click", () => elements.monthlyDialog.close());
+  elements.monthlyCloseButton.addEventListener("click", () => switchWorkspaceTab(elements.bookingMode.value, { keepEditor: true }));
   elements.monthlyDialog.addEventListener("click", event => {
     if (event.target !== elements.monthlyDialog) return;
     const rect = elements.monthlyDialog.getBoundingClientRect();
@@ -99,6 +97,7 @@ function bindEvents() {
     monthlyController?.abort();
     monthlyRequest++;
     const target = selectedMonthlyDate ? elements.startDate : elements.monthlyButton;
+    if (selectedMonthlyDate) switchWorkspaceTab(elements.bookingMode.value, { keepEditor: true });
     target.focus({ preventScroll: true });
     if (selectedMonthlyDate) target.scrollIntoView({ behavior: "smooth", block: "center" });
   });
@@ -123,6 +122,7 @@ function bindEvents() {
   elements.nights.addEventListener("change", () => scheduleAvailabilityCheck());
   elements.bookingMode.addEventListener("change", () => {
     renderRooms();
+    if (workspaceTab !== "watch") switchWorkspaceTab(elements.bookingMode.value, { keepEditor: true });
   });
   for (const id of ["reserverName", "phone"]) elements[id].addEventListener("input", refreshSiteProfileSelector);
   elements.saveProfilesButton.addEventListener("click", () => perform(async () => {
@@ -159,7 +159,7 @@ function bindEvents() {
       if (!approved) return;
     }
     await saveConfig();
-    await request("start", { method: "POST" });
+    await registerPlan("scheduled", true);
     await refreshStatus();
     scheduleAvailabilityCheck(0);
   }));
@@ -174,7 +174,7 @@ function bindEvents() {
     );
     if (!approved) return;
     await saveConfig();
-    await request("run-now", { method: "POST" });
+    await registerPlan("now", true);
     await refreshStatus();
   }));
   elements.stopButton.addEventListener("click", () => perform(async () => {
@@ -182,6 +182,8 @@ function bindEvents() {
     availabilityController?.abort();
     availabilityRequest += 1;
     await request("stop", { method: "POST" });
+    await request("plans/stop-all", { method: "POST" });
+    await refreshPlans();
     await refreshStatus();
   }));
   elements.inspectButton.addEventListener("click", () => perform(async () => {
@@ -845,6 +847,7 @@ function renderStatus(status) {
   currentStage = status.stage || "idle";
   elements.statusBadge.className = `badge ${state}`;
   elements.statusBadge.textContent = STATE_LABELS[state] || state;
+  renderPlanBadge();
   elements.statusText.textContent = status.message || "상태 정보가 없습니다.";
   const details = [];
   if (status.startDate) details.push(["숙박 시작 날짜", status.startDate]);
@@ -1076,6 +1079,7 @@ async function saveLogs() {
 }
 
 function showMessage(message, error = false, successLabel = "저장 완료") {
+  document.getElementById("workspaceMessage").textContent = message;
   elements.statusText.textContent = message;
   elements.statusBadge.textContent = error ? "확인 필요" : successLabel;
   elements.statusBadge.className = `badge ${error ? "failed" : "success"}`;

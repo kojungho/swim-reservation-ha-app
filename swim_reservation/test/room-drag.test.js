@@ -27,7 +27,8 @@ test("객실을 마우스·터치로 이동하고 취소·키보드 이동·저�
       return route.fulfill({ contentType: file.endsWith("js") ? "text/javascript" : file.endsWith("css") ? "text/css" : "text/html", body: await readFile(new URL(`../public/${file}`, import.meta.url)) });
     });
     await page.goto("https://app.test/");
-    await page.locator("#roomList").scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => document.querySelector("#planList").textContent.includes("등록된 일정이 없습니다."));
+    await page.locator("#roomList").evaluate(el => { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -180); });
     const labels = () => page.locator(".room-drag-handle").evaluateAll(xs => xs.map(x => x.getAttribute("aria-label").replace(" 순서 이동", "")));
     const handle = page.locator(".room-drag-handle").first();
     await handle.scrollIntoViewIfNeeded();
@@ -45,7 +46,7 @@ test("객실을 마우스·터치로 이동하고 취소·키보드 이동·저�
       await page.mouse.move(start.x, start.y); await page.mouse.down();
       await page.mouse.move(end.x, end.y, { steps: 10 }); await page.mouse.up();
     }
-    assert.deepEqual((await labels()).slice(0, 3), [original[1], original[2], original[0]]);
+    assert.deepEqual((await labels()).slice(0, 3), [original[1], original[2], original[0]], JSON.stringify({ mobile, a, b, start, end, after: await page.locator(".room-row").evaluateAll(rows => rows.slice(0, 4).map(row => ({ y: row.getBoundingClientRect().y, height: row.getBoundingClientRect().height }))) }));
     assert.equal(await page.locator('.room-toggle input:checked').count(), 3);
     await page.locator(".room-drag-handle").nth(2).focus();
     await page.keyboard.press("ArrowUp");

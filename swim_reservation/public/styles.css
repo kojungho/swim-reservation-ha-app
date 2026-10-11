@@ -16,6 +16,15 @@ header { display: flex; align-items: flex-start; justify-content: space-between;
 .app-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 10px; }
 .app-title-row h1 { margin: 0; }
 .app-title-row button { flex-shrink: 0; padding: 9px 12px; font-size: 13px; }
+.workspace-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
+.workspace-tabs button { background: #e5ece7; color: var(--green-dark); font-size: 13px; padding: 10px 12px; }
+.workspace-tabs button.active { background: var(--green); color: white; }
+[hidden] { display: none !important; }
+.plan-entry { padding: 14px; border: 1px solid var(--line); border-radius: 12px; margin-top: 10px; }
+.plan-entry p, #planCard > p { font-size: 13px; line-height: 1.5; }
+.plan-entry .section-actions { justify-content: flex-start; flex-wrap: wrap; gap: 6px; }
+.plan-entry .section-actions button { padding: 9px 12px; font-size: 12px; white-space: nowrap; }
+.monthly-dialog.monthly-page { position: static; width: 100%; max-height: none; margin: 18px 0; }
 .eyebrow { margin: 0 0 8px; color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: .14em; }
 h1 { margin: 0; font-size: clamp(30px, 6vw, 48px); letter-spacing: -.045em; }
 .lead { max-width: 680px; color: var(--muted); margin: 12px 0 0; line-height: 1.55; }

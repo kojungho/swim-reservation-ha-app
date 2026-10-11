@@ -24,6 +24,8 @@ test("모바일에서 기존 2명을 불러와 5명 추가·저장·복원·중�
     return route.fulfill({ contentType: file.endsWith("js") ? "text/javascript" : file.endsWith("css") ? "text/css" : "text/html", body: await readFile(new URL(`../public/${file}`, import.meta.url)) });
   });
   await page.goto("https://app.test/");
+  await page.locator(".workspace-tabs .active").waitFor();
+  await page.locator('[data-workspace-tab="people"]').click();
   await page.locator("#reserverName2").waitFor();
   assert.equal(await page.locator("#reserverName2").inputValue(), "기존두번째");
   for (let n = 3; n <= 5; n++) {
@@ -34,10 +36,13 @@ test("모바일에서 기존 2명을 불러와 5명 추가·저장·복원·중�
     await page.locator(`#birthDate${n}`).fill("19900101");
   }
   assert.equal(await page.locator("#addProfileButton").isDisabled(), true);
+  await page.locator('[data-workspace-tab="priority"]').click();
   await page.locator("#saveButton").click();
   await page.waitForFunction(() => document.body.innerText.includes("설정을 HA 미니 PC에 저장했습니다."));
   assert.equal(config.profiles.length, 5);
   await page.reload();
+  await page.locator(".workspace-tabs .active").waitFor();
+  await page.locator('[data-workspace-tab="people"]').click();
   await page.locator("#reserverName5").waitFor();
   assert.equal(await page.locator("#reserverName5").inputValue(), "예약자5");
   page.on("dialog", d => d.accept());
@@ -45,6 +50,7 @@ test("모바일에서 기존 2명을 불러와 5명 추가·저장·복원·중�
   assert.equal(await page.locator("#reserverName3").inputValue(), "예약자4");
   assert.equal(await page.locator("#reserverName4").inputValue(), "예약자5");
   assert.equal(await page.locator("#addProfileButton").isDisabled(), false);
+  await page.locator('[data-workspace-tab="priority"]').click();
   await page.locator("#saveButton").click();
   await page.waitForFunction(() => document.body.innerText.includes("설정을 HA 미니 PC에 저장했습니다."));
   assert.equal(config.profiles.length, 4);
