@@ -45,7 +45,7 @@ export function normalizeConfig(input = {}) {
     startDate: String(input.startDate || ""),
     triggerAt: String(input.triggerAt || ""),
     nights: Number(input.nights),
-    bookingMode: input.bookingMode === "multiple" ? "multiple" : "priority",
+    bookingMode: ["multiple", "profiles-parallel"].includes(input.bookingMode) ? input.bookingMode : "priority",
     roomPriority: ordered,
     profile: profile1,
     profile1,
@@ -67,12 +67,15 @@ export function validateConfig(config, { futureTrigger = false, nowMs = Date.now
     errors.push("숙박 시작 날짜");
   }
   if (!Number.isInteger(config.nights) || config.nights < 1 || config.nights > 6) errors.push("박수");
-  if (!config.roomPriority.some((room) => room.enabled)) errors.push("예약할 객실");
+  if (config.bookingMode !== "profiles-parallel" && !config.roomPriority.some((room) => room.enabled)) errors.push("예약할 객실");
   if (config.bookingMode === "multiple" && config.roomPriority.filter((room) => room.enabled).length > 5) errors.push("동시 예약 객실은 최대 5개");
   const profiles = getProfiles(config);
   if (profiles.length < 1 || profiles.length > 5) errors.push("예약자는 1~5명까지 등록 가능");
   profiles.forEach((profile, index) => validateProfile(profile, `예약자 ${index + 1}`, errors));
-  if (profiles.length > 1 && config.bookingMode !== "priority") errors.push("여러 예약자는 1개 예약 · 우선순위 방식에서만 지원");
+  if (profiles.length > 1 && config.bookingMode === "multiple") errors.push("여러 객실 동시 예약은 예약자 1명만 지원합니다. 예약자별 동시 예약을 선택해 주세요.");
+  if (config.bookingMode === "profiles-parallel") profiles.forEach((profile, index) => {
+    if (!profile.roomPriority?.some(room => room.enabled)) errors.push(`예약자 ${index + 1}의 예약할 객실`);
+  });
   const trigger = triggerEpoch(config.triggerAt);
   if (!Number.isFinite(trigger)) errors.push("예약 실행 시각");
   else if (futureTrigger && trigger <= nowMs) errors.push("현재 이후의 예약 실행 시각");
@@ -90,16 +93,19 @@ function emptyProfile() {
   return { reserverName: "", depositorName: "", phone: "", birthDate: "" };
 }
 
-function normalizeProfile(profile = {}) {
+export function normalizeProfile(profile = {}) {
   return {
     reserverName: String(profile?.reserverName || "").trim(),
     depositorName: String(profile?.depositorName || "").trim(),
     phone: String(profile?.phone || "").replace(/\D/g, ""),
-    birthDate: String(profile?.birthDate || "").replace(/\D/g, "").slice(0, 8)
+    birthDate: String(profile?.birthDate || "").replace(/\D/g, "").slice(0, 8),
+    roomPriority: [...new Map((Array.isArray(profile?.roomPriority) ? profile.roomPriority : [])
+      .map(room => ({ name: normalizeRoomName(room?.name), enabled: Boolean(room?.enabled) }))
+      .filter(room => room.name).map(room => [room.name, room])).values()]
   };
 }
 
-function validateProfile(profile, label, errors) {
+export function validateProfile(profile, label, errors) {
   if (!profile?.reserverName) errors.push(`${label} 예약자명`);
   if (!profile?.depositorName) errors.push(`${label} 입금자명`);
   if (!/^01\d{8,9}$/.test(profile?.phone || "")) errors.push(`${label} 휴대폰 번호`);

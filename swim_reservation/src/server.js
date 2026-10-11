@@ -2,7 +2,7 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { normalizeConfig, reservationUrl, triggerEpoch, validateConfig, getProfiles } from "./config.js";
+import { normalizeConfig, normalizeProfile, validateProfile, reservationUrl, triggerEpoch, validateConfig, getProfiles } from "./config.js";
 import { ReservationEngine } from "./reservation-engine.js";
 import { Scheduler } from "./scheduler.js";
 import { Store } from "./store.js";
@@ -11,6 +11,7 @@ import { ReservationManager } from "./reservation-manager.js";
 import { SiteTimeSync } from "./site-time.js";
 import { InspectionService } from "./inspection-service.js";
 import { SiteMap } from "./site-map.js";
+import { lookupProfiles } from "./profile-lookup.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -58,11 +59,25 @@ const server = http.createServer(async (request, response) => {
       const config = await store.getConfig();
       return json(response, 200, { ...config, reservationUrl: reservationUrl(config.startDate) });
     }
+    if (url.pathname === "/api/profiles" && request.method === "GET") {
+      return json(response, 200, { profiles: await store.getSavedProfiles() });
+    }
+    if (url.pathname === "/api/profiles" && request.method === "PUT") {
+      if (scheduler.running || scheduler.armed) return json(response, 409, { error: "예약 대기 또는 실행 중에는 예약자 저장을 변경할 수 없습니다." });
+      const input = await readJsonBody(request);
+      if (!Array.isArray(input.profiles) || input.profiles.length < 1 || input.profiles.length > 5) return json(response, 400, { error: "예약자는 1~5명까지 저장할 수 있습니다." });
+      const profiles = input.profiles.map(normalizeProfile);
+      const errors = [];
+      profiles.forEach((profile, index) => validateProfile(profile, `예약자 ${index + 1}`, errors));
+      if (errors.length) return json(response, 400, { error: `확인할 항목: ${errors.join(", ")}` });
+      return json(response, 200, { ok: true, profiles: await store.saveProfiles(profiles) });
+    }
     if (url.pathname === "/api/config" && request.method === "PUT") {
       const config = normalizeConfig(await readJsonBody(request));
       const errors = validateConfig(config);
       if (errors.length) return json(response, 400, { ok: false, error: `확인할 항목: ${errors.join(", ")}` });
       const saved = await store.saveConfig(config);
+      await store.saveProfiles(getProfiles(saved));
       return json(response, 200, { ok: true, config: { ...saved, reservationUrl: reservationUrl(saved.startDate) } });
     }
     if (url.pathname === "/api/status" && request.method === "GET") {
@@ -83,10 +98,13 @@ const server = http.createServer(async (request, response) => {
       return response.end(`${body}${body ? "\n" : ""}`);
     }
     if (url.pathname === "/api/reservation-check-url" && request.method === "GET") {
-      const config = await store.getConfig();
-      const requestedProfile = getProfiles(config)[Number(url.searchParams.get("profile") || 1) - 1];
+      const requestedProfile = (await store.getSavedProfiles())[Number(url.searchParams.get("profile") || 1) - 1];
       if (!requestedProfile) return json(response, 400, { error: "예약자를 확인해 주세요." });
       return json(response, 200, { ok: true, url: reservationCheckUrl(requestedProfile) });
+    }
+    if (url.pathname === "/api/reservation-check-url" && request.method === "POST") {
+      const input = await readJsonBody(request);
+      return json(response, 200, { ok: true, url: reservationCheckUrl(normalizeProfile(input.profile)) });
     }
     if (url.pathname === "/api/site-time" && request.method === "GET") {
       return json(response, 200, timeSync.status());
@@ -103,24 +121,18 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/api/reservations" && request.method === "GET") {
       if (scheduler.running || scheduler.armed) return json(response, 409, { ok: false, error: "예약 대기 또는 실행 중에는 예약 내역 조회를 사용할 수 없습니다." });
-      const config = await store.getConfig();
-      const profiles = getProfiles(config).map((profile, index) => ({ index, label: `예약자 ${index + 1}`, profile }));
-      const reservations = [];
-      for (const entry of profiles) {
-        const found = await reservationManager.list(entry.profile);
-        reservations.push(...found.map((item) => ({ ...item, profileIndex: entry.index, profileLabel: entry.label })));
-      }
-      await store.recordLog("info", "reservation-check", `예약확인 결과 ${reservations.length}건을 찾았습니다.`);
-      return json(response, 200, { ok: true, reservations });
+      const result = await lookupProfiles(await store.getSavedProfiles(), reservationManager);
+      const { reservations, lookupErrors } = result;
+      await store.recordLog(lookupErrors.length ? "error" : "info", "reservation-check", `예약확인 ${reservations.length}건, 조회 실패 ${lookupErrors.length}명.`, { lookupErrors });
+      return json(response, 200, result);
     }
     const cancelMatch = /^\/api\/reservations\/(\d+)\/cancel$/.exec(url.pathname);
     if (cancelMatch && request.method === "POST") {
       if (scheduler.running || scheduler.armed) return json(response, 409, { ok: false, error: "예약 대기 또는 실행 중에는 예약 취소를 사용할 수 없습니다." });
       const input = await readJsonBody(request);
       if (input.confirmed !== true) return json(response, 400, { ok: false, error: "예약 취소 최종 확인이 필요합니다." });
-      const config = await store.getConfig();
       const profileIndex = input.profileIndex ?? 0;
-      const profile = Number.isInteger(profileIndex) && getProfiles(config)[profileIndex];
+      const profile = Number.isInteger(profileIndex) && (await store.getSavedProfiles())[profileIndex];
       if (!profile) return json(response, 400, { error: "예약자를 확인해 주세요." });
       const result = await reservationManager.cancel(profile, cancelMatch[1]);
       return json(response, 200, {

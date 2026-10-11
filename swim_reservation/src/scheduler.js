@@ -179,6 +179,7 @@ export class Scheduler {
       await this.engine.run(config, options);
     } finally {
       this.running = false;
+      if (this.cancelRequested) await this.store.updateStatus({ state: "stopped", stage: "stopped", message: "예약 실행을 중지했습니다." });
     }
   }
 
@@ -197,5 +198,6 @@ function preparationLeadMs(config) {
   if (config.bookingMode === "multiple") return MIN_PREWARM_MS;
   const rooms = config.roomPriority.filter((room) => room.enabled).length;
   const profiles = getProfiles(config).length;
-  return Math.min(MAX_PREWARM_MS, Math.max(MIN_PREWARM_MS, rooms * profiles * PREWARM_PER_SESSION_MS + MIN_PREWARM_MS));
+  const sessions = config.bookingMode === "profiles-parallel" ? getProfiles(config).reduce((sum, profile) => sum + (profile.roomPriority || []).filter(room => room.enabled).length, 0) : rooms * profiles;
+  return Math.min(MAX_PREWARM_MS, Math.max(MIN_PREWARM_MS, sessions * PREWARM_PER_SESSION_MS + MIN_PREWARM_MS));
 }

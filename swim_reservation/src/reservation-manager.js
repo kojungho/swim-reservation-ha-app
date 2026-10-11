@@ -1,5 +1,6 @@
 import { chromium } from "playwright-core";
 import { reservationCancelUrl, reservationCheckUrl } from "./reservation-check.js";
+import { chromiumUserAgent } from "./reservation-engine.js";
 
 const NAVIGATION_TIMEOUT = 20_000;
 
@@ -28,7 +29,10 @@ export class ReservationManager {
   }
 
   async load(page, profile) {
-    await page.goto(reservationCheckUrl(profile), { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT });
+    const response = await page.goto(reservationCheckUrl(profile), { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT });
+    if (response && !response.ok()) throw new Error(`예약확인 페이지 연결 실패 (응답 ${response.status()}). 0건으로 판단하지 않습니다.`);
+    const recognized = await page.evaluate(() => Boolean(document.querySelector("table")) && /예약/.test(document.body?.innerText || ""));
+    if (!recognized) throw new Error("정상적인 예약확인 페이지를 찾지 못했습니다. 조회 실패를 0건으로 판단하지 않습니다.");
     return page.evaluate(readReservationsFromPage);
   }
 
@@ -39,7 +43,7 @@ export class ReservationManager {
       args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--lang=ko-KR"]
     });
     try {
-      const context = await browser.newContext({ locale: "ko-KR", timezoneId: "Asia/Seoul" });
+      const context = await browser.newContext({ locale: "ko-KR", timezoneId: "Asia/Seoul", userAgent: chromiumUserAgent(browser) });
       const page = await context.newPage();
       page.setDefaultTimeout(10_000);
       return await action(page);

@@ -1,11 +1,12 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { defaultConfig, normalizeConfig, getProfiles } from "./config.js";
+import { defaultConfig, normalizeConfig, getProfiles, normalizeProfile } from "./config.js";
 
 export class Store {
   constructor(dataDir) {
     this.dataDir = dataDir;
     this.configPath = path.join(dataDir, "reservation-config.json");
+    this.profilesPath = path.join(dataDir, "reservation-profiles.json");
     this.statusPath = path.join(dataDir, "reservation-status.json");
     this.historyPath = path.join(dataDir, "reservation-history.json");
     this.logPath = path.join(dataDir, "reservation-log.json");
@@ -25,6 +26,17 @@ export class Store {
     const normalized = normalizeConfig(config);
     await atomicWrite(this.configPath, normalized);
     if (recordHistory) await this.saveHistory(normalized);
+    return normalized;
+  }
+
+  async getSavedProfiles() {
+    const saved = await readJson(this.profilesPath, null);
+    return (saved || getProfiles(await this.getConfig())).slice(0, 5).map(normalizeProfile);
+  }
+
+  async saveProfiles(profiles) {
+    const normalized = profiles.map(normalizeProfile);
+    await atomicWrite(this.profilesPath, normalized);
     return normalized;
   }
 

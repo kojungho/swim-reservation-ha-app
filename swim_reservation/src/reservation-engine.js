@@ -82,6 +82,7 @@ export class ReservationEngine {
 
   async run(config, options = {}) {
     if (config.bookingMode === "multiple") return this.runMultiple(config, options);
+    if (config.bookingMode === "profiles-parallel") return this.runProfilesParallel(config, options);
     if (options.prepared && this.prioritySessions.length) return this.runPreparedProfiles(config);
     if (getProfiles(config).length > 1) return this.runProfilesSequential(config);
     return this.runSingle(config, { ...options, prepared: Boolean(options.prepared && this.page) });
@@ -380,13 +381,14 @@ export class ReservationEngine {
     await this.close();
     const availability = await this.inspect({ ...config, bookingMode: "priority" });
     const availableNames = new Set(availability.filter((room) => room.available).map((room) => room.name));
-    const selectedNames = config.roomPriority.filter((room) => room.enabled).map((room) => room.name);
+    const selectedNames = config.bookingMode === "profiles-parallel" ? [...new Set(getProfiles(config).flatMap(profile => profile.roomPriority.filter(room => room.enabled).map(room => room.name)))] : config.roomPriority.filter((room) => room.enabled).map((room) => room.name);
     const profiles = activeProfiles(config);
     const prepared = [];
     const preparationErrors = [];
 
     for (const profileEntry of profiles) {
-      for (const room of selectedNames) {
+      const candidates = config.bookingMode === "profiles-parallel" ? profileEntry.profile.roomPriority.filter(room => room.enabled).map(room => room.name) : selectedNames;
+      for (const room of candidates) {
         if (!availableNames.has(room)) continue;
         const session = this.createPrioritySession(config, room, profileEntry);
         try {
@@ -398,7 +400,7 @@ export class ReservationEngine {
           await session.engine.close().catch(() => {});
         }
       }
-      if (profileEntry.index === 0 && !prepared.some((session) => session.profileIndex === 0)) {
+      if (config.bookingMode !== "profiles-parallel" && profileEntry.index === 0 && !prepared.some((session) => session.profileIndex === 0)) {
         this.prioritySessions = [];
         await this.store.updateStatus({
           state: "waiting",
@@ -415,7 +417,7 @@ export class ReservationEngine {
     const profileStatuses = profiles.map((entry) => ({
       index: entry.index,
       label: entry.label,
-      state: entry.index === 0 ? "준비 완료" : "앞 예약자 완료 대기 중",
+      state: config.bookingMode === "profiles-parallel" ? (prepared.some(session => session.profileIndex === entry.index) ? "동시 제출 대기" : "예약 오픈 시 처음부터 진행") : entry.index === 0 ? "준비 완료" : "앞 예약자 완료 대기 중",
       preparedRooms: prepared.filter((session) => session.profileIndex === entry.index).map((session) => session.room)
     }));
     await this.store.updateStatus({
@@ -489,6 +491,58 @@ export class ReservationEngine {
         succeededRooms: completed.map((item) => item.room),
         message: profiles.length > 1 ? `예약자 ${profiles.length}명의 순차 예약을 모두 완료했습니다.` : "사이트에서 예약 완료 화면을 확인했습니다."
       });
+      return completed;
+    } finally {
+      await this.close();
+    }
+  }
+
+  async runProfilesParallel(config, { prepared = false } = {}) {
+    if (!prepared) await this.close();
+    const profiles = activeProfiles(config);
+    const profileStatuses = profiles.map(entry => ({ index: entry.index, label: entry.label, state: "예약 진행 중" }));
+    // Status writes share a file; serialize them, while reservation sessions remain independent.
+    let writes = Promise.resolve();
+    const update = () => {
+      const snapshot = structuredClone(profileStatuses);
+      writes = writes.then(() => this.store.updateStatus({ state: "running", stage: "profiles-parallel-running", profileStatuses: snapshot, message: "예약자별 우선순위로 동시에 예약을 진행합니다." }));
+      return writes;
+    };
+    await update();
+    try {
+      const results = await Promise.allSettled(profiles.map(async entry => {
+        let sessions = this.prioritySessions.filter(session => session.profileIndex === entry.index).sort((a, b) => a.rank - b.rank);
+        if (!sessions.length) {
+          const session = this.createPrioritySession(config, null, entry);
+          this.prioritySessions.push(session);
+          sessions = [session];
+        }
+        try {
+          for (const session of sessions) {
+            profileStatuses[entry.index] = { ...profileStatuses[entry.index], room: session.room, message: session.room ? `${session.rank}순위 시도` : "최신 객실 목록부터 진행" };
+            await update();
+            try {
+              const result = await session.engine.runSingle(session.config, { prepared: Boolean(prepared && session.room), allowFallback: !session.room });
+              profileStatuses[entry.index] = { ...profileStatuses[entry.index], state: "예약 완료", room: result?.room || session.room || session.status.selectedRoom, message: `${session.rank}순위 성공` };
+              await update();
+              return { profileIndex: entry.index, room: profileStatuses[entry.index].room };
+            } catch (error) {
+              if (!["ROOM_UNAVAILABLE", "NO_AVAILABLE_ROOM"].includes(error.code)) throw error;
+            }
+          }
+          const error = new Error("모든 우선순위 객실이 예약 불가입니다.");
+          error.code = "NO_AVAILABLE_ROOM";
+          throw error;
+        } catch (error) {
+          profileStatuses[entry.index] = { ...profileStatuses[entry.index], state: ["ROOM_UNAVAILABLE", "NO_AVAILABLE_ROOM"].includes(error.code) ? "예약 실패" : "결과 확인 필요", message: userErrorMessage(error) };
+          await update();
+          throw error;
+        }
+      }));
+      await writes;
+      const completed = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
+      const failedCount = results.length - completed.length;
+      await this.store.updateStatus({ state: failedCount ? "failed" : "success", stage: failedCount ? "profiles-parallel-partial" : "profiles-parallel-complete", profileStatuses, succeededRooms: completed.map(item => item.room), failedRooms: profileStatuses.filter(item => item.state !== "예약 완료").map(item => item.room).filter(Boolean), message: `예약자 동시 예약: 완료 ${completed.length}명, 실패 또는 확인 필요 ${failedCount}명. 결과가 불확실한 예약자는 다른 객실에 재제출하지 않습니다.` });
       return completed;
     } finally {
       await this.close();
@@ -587,16 +641,18 @@ export class ReservationEngine {
 
   createPrioritySession(config, room, profileEntry) {
     const status = {};
-    const enabledRooms = config.roomPriority.filter((item) => item.enabled);
+    const roomPriority = config.bookingMode === "profiles-parallel" ? profileEntry.profile.roomPriority : config.roomPriority;
+    const enabledRooms = roomPriority.filter((item) => item.enabled);
     const rank = room ? enabledRooms.findIndex((item) => item.name === room) + 1 : 1;
     const scopedStore = { updateStatus: async (patch) => Object.assign(status, patch) };
     const childConfig = {
       ...config,
+      bookingMode: "priority",
       useSecondProfile: false,
       profiles: [{ ...profileEntry.profile }],
       profile: { ...profileEntry.profile },
       profile1: { ...profileEntry.profile },
-      roomPriority: room ? config.roomPriority.map((item) => ({ ...item, enabled: item.name === room })) : config.roomPriority.map((item) => ({ ...item }))
+      roomPriority: room ? roomPriority.map((item) => ({ ...item, enabled: item.name === room })) : roomPriority.map((item) => ({ ...item }))
     };
     return {
       room,

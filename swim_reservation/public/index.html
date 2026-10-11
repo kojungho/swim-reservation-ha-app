@@ -27,7 +27,7 @@
           <select id="nights"><option value="1">1박</option><option value="2">2박</option><option value="3">3박</option><option value="4">4박</option><option value="5">5박</option><option value="6">6박</option></select>
         </label>
         <label>예약 방식
-          <select id="bookingMode"><option value="priority">1개 예약 · 우선순위 방식</option><option value="multiple">여러 객실 동시 예약</option></select>
+          <select id="bookingMode"><option value="priority">1개 예약 · 우선순위 방식</option><option value="multiple">여러 객실 동시 예약</option><option value="profiles-parallel">예약자별 동시 예약 · 우선순위</option></select>
         </label>
         <div class="generated"><span>생성된 날짜 숫자</span><strong id="epochValue">—</strong></div>
         <div class="generated"><span>예약 가능 시작 일시</span><strong id="openAtValue">—</strong></div>
@@ -57,8 +57,10 @@
         <label>생년월일<input id="birthDate" inputmode="numeric" autocomplete="off" placeholder="YYYYMMDD" maxlength="8"></label>
       </div>
       <div id="extraProfiles"></div>
+      <div id="profilePriorities" hidden></div>
       <button id="addProfileButton" class="secondary" type="button">+ 예약자 추가</button>
-      <p>최대 5명까지 등록할 수 있습니다. 앞 예약자의 완료를 확인한 뒤 다음 예약자를 진행하며, 실패하거나 결과가 불확실하면 중단합니다.</p>
+      <div class="section-actions"><button id="saveProfilesButton" class="secondary" type="button">예약자 정보 저장</button><button id="loadProfilesButton" class="secondary" type="button">저장된 예약자 불러오기</button></div>
+      <p id="profileModeHelp">최대 5명까지 등록할 수 있습니다. 예약자 정보는 날짜·객실을 선택하지 않아도 별도로 저장할 수 있습니다.</p>
     </section>
 
     <section class="card status-card">
@@ -81,6 +83,7 @@
         <pre id="diagnosticsPreview"></pre>
       </div>
       <div class="actions">
+        <label>사이트 이동할 예약자<select id="siteProfileSelect"><option value="1">예약자 1</option></select></label>
         <button id="reservationSiteButton" class="secondary">예약확인 사이트 이동</button>
         <button id="reservationLookupButton" class="secondary">예약확인</button>
         <button id="inspectButton" class="secondary">페이지 연결 확인</button>
