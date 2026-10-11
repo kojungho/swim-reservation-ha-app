@@ -26,6 +26,15 @@ test("PC·휴대폰 도움말은 선택한 모드를 펼치고 예약 설정을 
       return route.fulfill({ contentType: file.endsWith("js") ? "text/javascript" : file.endsWith("css") ? "text/css" : "text/html", body: await readFile(new URL(`../public/${file}`, import.meta.url)) });
     });
     await page.goto("https://app.test/");
+    const layout = await page.evaluate(() => {
+      const nights = document.querySelector("#nights").getBoundingClientRect();
+      const mode = document.querySelector("#bookingMode").getBoundingClientRect();
+      const icon = document.querySelector("#bookingHelpButton").getBoundingClientRect();
+      return { nightsTop: nights.top, modeTop: mode.top, iconWidth: icon.width, iconHeight: icon.height };
+    });
+    if (width === 1280) assert.ok(Math.abs(layout.nightsTop - layout.modeTop) < 1, "박수와 예약 방식의 선택란 상단 정렬");
+    assert.equal(layout.iconWidth, 20);
+    assert.equal(layout.iconHeight, 20);
     for (const mode of ["priority", "multiple", "profiles-parallel"]) {
       await page.locator("#bookingMode").selectOption(mode);
       await page.getByRole("button", { name: "예약 모드별 사용 방법", exact: true }).click();
