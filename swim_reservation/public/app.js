@@ -127,12 +127,12 @@ function bindEvents() {
   for (const id of ["reserverName", "phone"]) elements[id].addEventListener("input", refreshSiteProfileSelector);
   elements.saveProfilesButton.addEventListener("click", () => perform(async () => {
     await saveProfiles();
-    showMessage("예약자 정보를 별도로 저장했습니다. 예약확인은 저장된 모든 사람을 조회합니다.");
+    showMessage("예약용 정보를 저장했습니다. 예약 조회용 정보는 변경되지 않습니다.");
   }));
   elements.loadProfilesButton.addEventListener("click", () => perform(async () => {
     const result = await request("profiles");
     loadConfig({ ...readConfig(), profiles: result.profiles });
-    showMessage("저장된 예약자 정보를 불러왔습니다.");
+    showMessage("저장된 예약용 정보를 불러왔습니다.");
   }));
   elements.addProfileButton.addEventListener("click", () => {
     if (extraProfiles.length >= 4) return;
@@ -154,10 +154,6 @@ function bindEvents() {
       );
       if (!approved) return;
     }
-    if (elements.bookingMode.value === "priority" && extraProfiles.length > 0) {
-      const approved = window.confirm(`예약자 ${extraProfiles.length + 1}명을 순서대로 실행합니다. 앞 예약자가 실패하거나 결과가 불확실하면 이후 예약자는 실행하지 않습니다. 계속할까요?`);
-      if (!approved) return;
-    }
     await saveConfig();
     await registerPlan("scheduled", true);
     await refreshStatus();
@@ -168,7 +164,7 @@ function bindEvents() {
     const selectedRooms = elements.bookingMode.value === "profiles-parallel" ? readConfig().profiles.map((profile, index) => `예약자 ${index + 1}: ${(profile.roomPriority || []).filter(room => room.enabled).map(room => room.name).join(" → ") || "선택 없음"}`) : rooms.filter((room) => room.enabled).map((room) => room.name);
     const multiple = elements.bookingMode.value === "multiple";
     const modeText = elements.bookingMode.value === "profiles-parallel" ? `예약자 ${extraProfiles.length + 1}명 동시 예약 · 각자 우선순위` : multiple ? `여러 객실 동시 예약 (${selectedRooms.length}개) · ${elements.multipleProfileSelect.selectedOptions[0]?.textContent}`
-      : extraProfiles.length > 0 ? `1개 예약 · 예약자 ${extraProfiles.length + 1}명 순차 방식` : "1개 예약 · 우선순위 방식";
+      : `1개 예약 · ${elements.multipleProfileSelect.selectedOptions[0]?.textContent || "선택한 한 명"} · 우선순위 방식`;
     const approved = window.confirm(
       `${date}부터 ${elements.nights.value}박 예약을 지금 즉시 실행합니다.\n\n예약 방식: ${modeText}\n예약 대상: ${selectedRooms.join(", ") || "선택 없음"}\n\n환불 규정 동의와 최종 예약하기까지 자동 진행됩니다. 실행할까요?`
     );
@@ -187,12 +183,11 @@ function bindEvents() {
     await refreshStatus();
   }));
   elements.inspectButton.addEventListener("click", () => perform(async () => {
-    await saveConfig();
     showMessage("미니 PC에서 예약 페이지에 연결하고 있습니다.");
     await refreshAvailability();
     await refreshStatus();
   }));
-  elements.reservationLookupButton.addEventListener("click", () => perform(async () => { await saveProfiles(); await loadReservations(); }));
+  elements.reservationLookupButton.addEventListener("click", () => perform(() => loadReservations()));
   elements.refreshLogsButton.addEventListener("click", () => perform(() => refreshLogs()));
   elements.copyLogsButton.addEventListener("click", () => perform(() => copyLogs()));
   elements.saveLogsButton.addEventListener("click", () => perform(() => saveLogs()));
@@ -398,7 +393,7 @@ function loadConfig(config) {
   elements.triggerAt.value = (config.triggerAt || "").slice(0, 19);
   elements.nights.value = String(config.nights || 1);
   elements.bookingMode.value = ["multiple", "profiles-parallel"].includes(config.bookingMode) ? config.bookingMode : "priority";
-  const profiles = config.profiles || [config.profile1 || config.profile || {}, ...(config.useSecondProfile ? [config.profile2 || {}] : [])];
+  const profiles = config.editorProfiles || config.profiles || [config.profile1 || config.profile || {}, ...(config.useSecondProfile ? [config.profile2 || {}] : [])];
   const profile1 = profiles[0] || {};
   firstProfilePriority = profile1.roomPriority || [];
   savedSecondProfile = config.profile2 || {};
@@ -408,9 +403,10 @@ function loadConfig(config) {
   elements.birthDate.value = profile1.birthDate || "";
   extraProfiles = profiles.slice(1, 5).map(profile => ({ ...profile }));
   renderExtraProfiles();
-  elements.multipleProfileSelect.value = String(config.multipleProfileIndex ?? 0);
+  elements.multipleProfileSelect.value = String(config.editorProfileIndex ?? config.multipleProfileIndex ?? 0);
   rooms = Array.isArray(config.roomPriority) ? config.roomPriority : [];
   renderRooms();
+  updateBookingProfileVisibility();
   updateGeneratedValues();
 }
 
@@ -428,6 +424,7 @@ function readConfig() {
     nights: Number(elements.nights.value),
     bookingMode: elements.bookingMode.value,
     multipleProfileIndex: Number(elements.multipleProfileSelect.value || 0),
+    editorProfileIndex: Number(elements.multipleProfileSelect.value || 0),
     roomPriority: rooms,
     profile: profile1,
     profile1,
@@ -472,15 +469,7 @@ function renderExtraProfiles() {
 }
 
 function refreshSiteProfileSelector() {
-  const selected = elements.siteProfileSelect.value;
   const multipleSelected = elements.multipleProfileSelect.value;
-  elements.siteProfileSelect.replaceChildren(...readConfig().profiles.map((profile, index) => {
-    const option = document.createElement("option");
-    option.value = String(index + 1);
-    option.textContent = `예약자 ${index + 1}${profile.reserverName ? ` · ${profile.reserverName}` : ""}`;
-    return option;
-  }));
-  elements.siteProfileSelect.value = selected && Number(selected) <= extraProfiles.length + 1 ? selected : "1";
   elements.multipleProfileSelect.replaceChildren(...readConfig().profiles.map((profile, index) => {
     const option = document.createElement("option");
     option.value = String(index);
@@ -488,18 +477,21 @@ function refreshSiteProfileSelector() {
     return option;
   }));
   elements.multipleProfileSelect.value = Number(multipleSelected) <= extraProfiles.length ? multipleSelected || "0" : "0";
+  if (workspaceTab === "watch") refreshWatchProfileSelector();
+  updateBookingProfileVisibility();
 }
 
 async function saveProfiles() {
-  await request("profiles", { method: "PUT", body: JSON.stringify({ profiles: readConfig().profiles }) });
+  const selectedIndex = workspaceTab === "watch" ? Number(document.getElementById("watchProfileSelect").value || 0) : Number(elements.multipleProfileSelect.value || 0);
+  await request("profiles", { method: "PUT", body: JSON.stringify({ profiles: readConfig().profiles, selectedIndex }) });
 }
 
 function renderProfilePriorities() {
   const parallel = elements.bookingMode.value === "profiles-parallel";
   const multiple = elements.bookingMode.value === "multiple";
-  elements.multipleProfileField.hidden = !multiple;
+  elements.multipleProfileField.hidden = parallel || workspaceTab === "watch";
   elements.profilePriorities.hidden = !parallel;
-  elements.profileModeHelp.textContent = parallel ? "최대 5명 · 사람마다 우선순위 객실 하나를 동시에 예약합니다. 같은 객실을 지정하면 서로 경쟁할 수 있습니다. 불확실한 결과에서는 해당 예약자의 다음 순위를 중단합니다." : multiple ? "등록된 예약자는 유지됩니다. 위에서 선택한 한 명의 정보로 체크한 객실을 모두 예약하며, 다른 예약자는 이 모드에서 실행하지 않습니다." : "최대 5명 · 일반 우선순위 방식은 앞 예약자의 완료를 확인한 뒤 다음 사람을 진행합니다. 예약자 정보는 날짜·객실과 별도로 저장할 수 있습니다.";
+  updateBookingProfileVisibility();
   elements.profilePriorities.replaceChildren();
   if (!parallel) return;
   const profiles = readConfig().profiles;
@@ -604,8 +596,8 @@ function renderRooms() {
   const multiple = elements.bookingMode.value === "multiple";
   elements.roomSectionTitle.textContent = parallel ? "예약자별 객실 우선순위" : multiple ? "동시 예약할 객실" : "객실 우선순위";
   elements.roomList.hidden = parallel;
-  document.getElementById("roomDragHelp").hidden = parallel;
-  elements.roomSectionHelp.textContent = parallel ? "아래 예약자 정보 영역에서 각 사람의 객실을 체크하고 손잡이로 순위를 정하세요. 공통 객실 순위는 이 모드에서 사용하지 않습니다." : multiple
+  document.getElementById("roomDragHelp").hidden = parallel || multiple;
+  elements.roomSectionHelp.textContent = parallel ? "위에서 입력한 각 예약자의 객실을 체크하고 손잡이로 순위를 정하세요. 한 사람당 객실 하나를 동시에 예약합니다." : multiple
     ? "체크한 객실(최대 5개)을 각각 별도 예약으로 준비하고 같은 시각에 최종 제출합니다."
     : "체크된 객실 중 위에 있는 객실부터 하나가 성공할 때까지 시도합니다.";
   elements.roomList.replaceChildren();
@@ -618,12 +610,12 @@ function renderRooms() {
     const availabilityLabel = AVAILABILITY_LABELS[availability] || AVAILABILITY_LABELS.unknown;
     row.innerHTML = `
       <label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} aria-label="${escapeHtml(room.name)} 선택"></label>
-      <div class="room-name"><span class="room-rank">${room.enabled ? (multiple ? "예약" : `${rank}순위`) : "—"}</span>${escapeHtml(room.name)}${room.newlyDetected ? '<span class="room-detected">신규 자동 추가</span>' : ""}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
-      <button class="room-drag-handle" type="button" aria-label="${escapeHtml(room.name)} 순서 이동" title="누른 채 드래그하여 이동 · 키보드 위아래 방향키" aria-describedby="roomDragHelp">⠿</button>`;
+      <div class="room-name">${multiple ? "" : `<span class="room-rank">${room.enabled ? `${rank}순위` : "—"}</span>`}${escapeHtml(room.name)}${room.newlyDetected ? '<span class="room-detected">신규 자동 추가</span>' : ""}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
+      ${multiple ? "" : `<button class="room-drag-handle" type="button" aria-label="${escapeHtml(room.name)} 순서 이동" title="누른 채 드래그하여 이동 · 키보드 위아래 방향키" aria-describedby="roomDragHelp">⠿</button>`}`;
     row.querySelector("input").addEventListener("change", (event) => { room.enabled = event.target.checked; renderRooms(); });
     const handle = row.querySelector(".room-drag-handle");
-    handle.addEventListener("pointerdown", event => startRoomDrag(event, row, index));
-    handle.addEventListener("keydown", event => {
+    handle?.addEventListener("pointerdown", event => startRoomDrag(event, row, index));
+    handle?.addEventListener("keydown", event => {
       if (!["ArrowUp", "ArrowDown"].includes(event.key) || roomDrag) return;
       event.preventDefault();
       moveRoom(index, event.key === "ArrowUp" ? -1 : 1);
@@ -757,7 +749,7 @@ async function openReservationSite() {
   const popup = window.open("about:blank", "_blank");
   if (popup) popup.opener = null;
   try {
-    const profile = readConfig().profiles[Number(elements.siteProfileSelect.value) - 1];
+    const profile = lookupProfilesDraft[Number(elements.siteProfileSelect.value) - 1];
     const result = await request("reservation-check-url", { method: "POST", body: JSON.stringify({ profile }) });
     if (popup) popup.location.replace(result.url);
     else window.location.href = result.url;
@@ -827,6 +819,9 @@ async function maybeAutoLookupReservations(status) {
 async function loadReservations() {
   const result = await request("reservations");
   renderReservations(result.reservations || []);
+  if (result.lookupStatuses?.length === 0 && !result.reservations?.length && !result.lookupErrors?.length) {
+    elements.reservationList.textContent = "저장된 조회 대상이 없습니다. 예약자명과 휴대폰 번호를 조회용으로 저장하세요.";
+  }
   if (result.lookupErrors?.length) {
     const warning = document.createElement("p");
     warning.className = "error";
@@ -850,6 +845,8 @@ function renderStatus(status) {
   elements.statusBadge.textContent = STATE_LABELS[state] || state;
   renderPlanBadge();
   elements.statusText.textContent = status.message || "상태 정보가 없습니다.";
+  elements.statusText.hidden = state === "idle";
+  elements.statusDetails.hidden = state === "idle";
   const details = [];
   if (status.startDate) details.push(["숙박 시작 날짜", status.startDate]);
   if (status.prepareAt) details.push(["브라우저 준비 시각", new Date(status.prepareAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })]);

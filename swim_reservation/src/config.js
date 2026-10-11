@@ -48,6 +48,7 @@ export function normalizeConfig(input = {}) {
     nights: Number(input.nights),
     bookingMode: ["multiple", "profiles-parallel"].includes(input.bookingMode) ? input.bookingMode : "priority",
     multipleProfileIndex: Number(input.multipleProfileIndex ?? 0),
+    editorProfileIndex: Math.max(0, Math.min(4, Math.trunc(Number(input.editorProfileIndex ?? input.multipleProfileIndex ?? 0) || 0))),
     roomPriority: ordered,
     profile: profile1,
     profile1,

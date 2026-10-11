@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { PlanManager, matchWatchRooms, watchConfiguration, normalizeWatchConfig } from "../src/plan-manager.js";
+import { PlanManager, matchWatchRooms, watchConfiguration, normalizeWatchConfig, singleBookingConfig } from "../src/plan-manager.js";
 import { defaultConfig } from "../src/config.js";
 
 const profile = { reserverName: "테스트", depositorName: "테스트", phone: "01012345678", birthDate: "19900101" };
@@ -186,4 +186,18 @@ test("기존 모드형 취소 감시는 업데이트 후 자동으로 행동을 
   assert.equal((await migrated.store.getStatus()).state, "stopped");
   assert.match((await migrated.store.getStatus()).message, /확인한 후 시작/);
   assert.equal(calls.length, 0);
+});
+test("예약자별 동시 이외의 일정에는 선택한 한 명만 포함하고 일반 우선순위·복수 객실 모두 한 명을 실행한다", async t => {
+  const { manager } = await fixture(t);
+  const profiles = [{ ...profile, reserverName: "첫째" }, { ...profile, reserverName: "둘째" }];
+  for (const mode of ["priority", "multiple"]) {
+    const input = { ...config(mode), profiles, multipleProfileIndex: 1 };
+    assert.equal(singleBookingConfig(input).profiles[0].reserverName, "둘째");
+    const id = await manager.add({ kind: "scheduled", config: input });
+    assert.equal(manager.get(id).config.profiles.length, 1);
+    assert.equal(manager.get(id).config.profiles[0].reserverName, "둘째");
+    assert.equal(manager.get(id).config.multipleProfileIndex, 0);
+  }
+  const parallel = singleBookingConfig({ ...config("profiles-parallel"), profiles: profiles.map(person => ({ ...person, roomPriority: config().roomPriority })) });
+  assert.equal(parallel.profiles.length, 2);
 });

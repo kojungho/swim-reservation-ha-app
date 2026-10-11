@@ -2,15 +2,37 @@ let workspaceTab = "priority";
 const modeDrafts = new Map();
 let planEntries = [];
 let planRefreshPending = false;
+let lookupProfilesDraft = [];
+let lookupProfilesInitialized = false;
+let lookupProfilesLoading = null;
 
 function initializeWorkspace() {
   elements.monthlyDialog.classList.add("monthly-page");
   document.querySelector("main.shell").insertBefore(elements.monthlyDialog, document.querySelector("main.shell > aside"));
   const profilePage = elements.reserverName.closest("section");
+  const roomPage = elements.roomList.closest("section");
+  roomPage.before(profilePage);
+  profilePage.querySelector("h3").before(elements.multipleProfileField, document.getElementById("watchProfileField"));
+  elements.startDate.closest("section").querySelector(".section-title").append(elements.bookingHelpButton);
   const actions = document.createElement("div");
   actions.className = "actions";
   actions.append(elements.siteProfileSelect.closest("label"), elements.reservationSiteButton, elements.reservationLookupButton);
-  profilePage.append(actions, elements.reservationList);
+  document.getElementById("lookupCard").append(actions, elements.reservationList);
+  elements.multipleProfileSelect.addEventListener("change", updateBookingProfileVisibility);
+  document.getElementById("watchProfileSelect").addEventListener("change", updateBookingProfileVisibility);
+  document.getElementById("addLookupProfileButton").addEventListener("click", () => {
+    if (lookupProfilesDraft.length < 5) { lookupProfilesDraft.push({ reserverName: "", phone: "" }); renderLookupProfiles(); }
+  });
+  document.getElementById("saveLookupProfilesButton").addEventListener("click", () => perform(async () => {
+    const profiles = lookupProfilesDraft.filter(profile => profile.reserverName.trim() || profile.phone.trim());
+    const result = await request("lookup-profiles", { method: "PUT", body: JSON.stringify({ profiles }) });
+    lookupProfilesDraft = result.profiles || [];
+    lookupProfilesInitialized = true;
+    renderLookupProfiles();
+    document.getElementById("lookupMessage").textContent = "조회용 정보만 저장했습니다. 예약용 정보와 진행 중인 일정은 바뀌지 않습니다.";
+    await loadReservations();
+  }));
+  document.getElementById("loadLookupProfilesButton").addEventListener("click", () => perform(async () => { await loadLookupProfiles(); await loadReservations(); }));
   document.querySelectorAll("[data-workspace-tab]").forEach(button => button.addEventListener("click", () => switchWorkspaceTab(button.dataset.workspaceTab)));
   document.getElementById("addPlanButton").addEventListener("click", () => registerPlan(workspaceTab === "watch" ? "watch" : "scheduled", false).catch(error => planMessage(error.message)));
   workspaceTab = elements.bookingMode.value;
@@ -48,15 +70,20 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   const booking = modes.includes(tab) || tab === "watch";
   const profilePage = elements.reserverName.closest("section");
   for (const section of document.querySelectorAll("main.shell > section.card")) section.hidden = !booking;
-  profilePage.hidden = tab !== "people";
+  profilePage.hidden = !booking;
+  document.getElementById("lookupCard").hidden = tab !== "people";
   document.getElementById("planCard").hidden = !booking;
   document.getElementById("watchHelp").hidden = tab !== "watch";
   document.getElementById("watchInterval").closest("label").hidden = tab !== "watch";
   document.getElementById("watchProfileField").hidden = tab !== "watch";
   if (tab === "watch") elements.historyList.closest("section").hidden = true;
-  elements.bookingMode.closest(".booking-mode-field").hidden = tab === "watch";
+  elements.bookingMode.closest(".booking-mode-field").hidden = true;
+  elements.bookingHelpButton.hidden = tab === "watch";
   elements.triggerAt.closest("label").hidden = tab === "watch";
+  document.getElementById("reservationConnectionDetails").hidden = tab === "watch";
+  elements.siteClock.closest(".site-time-panel").hidden = tab === "watch";
   elements.startDate.closest("section").querySelector("h2").textContent = tab === "watch" ? "숙박 조건" : "예약 날짜와 시각";
+  elements.startDate.closest("section").querySelector(".section-title p").textContent = tab === "watch" ? "감시할 숙박 시작 날짜와 박수를 지정하세요. 조건에 맞는 자리를 발견하면 바로 예약을 시도합니다." : "숙박 날짜·박수와 최종 예약을 제출할 시각을 지정하세요. 예약 모드는 상단 탭에서 선택합니다.";
   document.getElementById("addPlanButton").textContent = tab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 예약 일정 등록";
   elements.startButton.hidden = tab === "watch";
   elements.runNowButton.hidden = tab === "watch";
@@ -68,17 +95,87 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
       void loadMonthlyAvailability();
     }
   } else if (elements.monthlyDialog.open) elements.monthlyDialog.close();
-  if (tab === "people" && entering) void loadReservations().catch(error => {
+  updateBookingProfileVisibility();
+  document.querySelectorAll("main.shell > section.card:not([hidden]) .section-title > span").forEach((span, index) => { span.textContent = String(index + 1); });
+  if (tab === "people" && entering) void (async () => {
+    if (!lookupProfilesInitialized) await loadLookupProfiles();
+    else refreshLookupSiteSelector();
+    await loadReservations();
+  })().catch(error => {
     elements.reservationList.hidden = false;
     elements.reservationList.textContent = `예약조회 실패: ${error.message}`;
   });
 }
 
+function updateBookingProfileVisibility() {
+  const one = workspaceTab !== "profiles-parallel";
+  const index = workspaceTab === "watch" ? Number(document.getElementById("watchProfileSelect").value || 0) : Number(elements.multipleProfileSelect.value || 0);
+  document.getElementById("firstBookingProfileTitle").hidden = one && index !== 0;
+  document.getElementById("firstBookingProfileFields").hidden = one && index !== 0;
+  [...elements.extraProfiles.children].forEach((panel, extraIndex) => { panel.hidden = one && index !== extraIndex + 1; panel.querySelector("button").hidden = one; });
+  elements.addProfileButton.hidden = one;
+  elements.profileModeHelp.textContent = workspaceTab === "watch" ? "감시할 예약자 한 명의 정보를 사용합니다. 체크한 객실 중 조건에 맞는 하나만 예약하며 순위는 지정하지 않습니다." : workspaceTab === "multiple" ? "선택한 한 명의 정보로 체크한 모든 객실을 각각 예약합니다. 객실 선호 순위는 지정하지 않습니다." : workspaceTab === "profiles-parallel" ? "최대 5명까지 정보를 입력한 뒤 아래에서 각자의 객실 우선순위를 정하세요. 한 사람당 객실 하나를 동시에 예약합니다." : "선택한 한 명의 정보로 우선순위 중 예약 가능한 객실 하나를 예약합니다. 여러 사람을 실행하려면 예약자별 동시 탭을 사용하세요.";
+}
+
+async function loadLookupProfiles() {
+  if (lookupProfilesLoading) return lookupProfilesLoading;
+  lookupProfilesLoading = (async () => {
+    const result = await request("lookup-profiles");
+    lookupProfilesDraft = result.profiles || [];
+    lookupProfilesInitialized = true;
+    renderLookupProfiles();
+  })();
+  try { await lookupProfilesLoading; } finally { lookupProfilesLoading = null; }
+}
+
+function renderLookupProfiles() {
+  if (!lookupProfilesDraft.length) lookupProfilesDraft = [{ reserverName: "", phone: "" }];
+  const list = document.getElementById("lookupProfileList");
+  list.replaceChildren();
+  lookupProfilesDraft.forEach((profile, index) => {
+    const panel = document.createElement("div");
+    panel.className = "second-profile-panel";
+    const title = document.createElement("h3");
+    title.textContent = `조회 대상 ${index + 1}`;
+    const grid = document.createElement("div"); grid.className = "grid two";
+    for (const [key, label] of [["reserverName", "예약자명"], ["phone", "휴대폰 번호"]]) {
+      const field = document.createElement("label"); field.textContent = label;
+      const input = document.createElement("input");
+      input.id = `lookup${key}${index + 1}`;
+      input.autocomplete = "off";
+      if (key === "phone") input.inputMode = "numeric";
+      input.value = profile[key] || "";
+      input.addEventListener("input", () => { profile[key] = input.value; refreshLookupSiteSelector(); });
+      field.append(input); grid.append(field);
+    }
+    const remove = document.createElement("button"); remove.type = "button"; remove.className = "secondary"; remove.textContent = "조회 대상 삭제";
+    remove.addEventListener("click", () => { lookupProfilesDraft.splice(index, 1); renderLookupProfiles(); document.getElementById("lookupMessage").textContent = "조회 정보 저장을 눌러 삭제 내용을 반영하세요. 실제 예약은 취소되지 않습니다."; });
+    panel.append(title, grid, remove); list.append(panel);
+  });
+  document.getElementById("addLookupProfileButton").disabled = lookupProfilesDraft.length >= 5;
+  refreshLookupSiteSelector();
+}
+
+function refreshLookupSiteSelector() {
+  const select = elements.siteProfileSelect, previous = select.value;
+  select.replaceChildren(...lookupProfilesDraft.map((profile, index) => {
+    const option = document.createElement("option"); option.value = String(index + 1);
+    option.textContent = `조회 대상 ${index + 1}${profile.reserverName ? ` · ${profile.reserverName}` : ""}`;
+    return option;
+  }));
+  select.value = Number(previous) <= lookupProfilesDraft.length && previous ? previous : "1";
+}
+
 function planMessage(text) { document.getElementById("planMessage").textContent = text; }
 
 async function registerPlan(kind, start) {
-  const config = readConfig();
-  const result = await request("plans", { method: "POST", body: JSON.stringify({ name: document.getElementById("planName").value, kind, watchProfileIndex: Number(document.getElementById("watchProfileSelect").value || 0), intervalSeconds: document.getElementById("watchInterval").value, config }) });
+  let config = readConfig();
+  if (config.bookingMode !== "profiles-parallel" || kind === "watch") {
+    const index = kind === "watch" ? Number(document.getElementById("watchProfileSelect").value || 0) : config.multipleProfileIndex;
+    const selected = { ...config.profiles[index], roomPriority: [] };
+    config = { ...config, profiles: [selected], profile: selected, profile1: selected, profile2: {}, useSecondProfile: false, multipleProfileIndex: 0 };
+  }
+  const result = await request("plans", { method: "POST", body: JSON.stringify({ name: document.getElementById("planName").value, kind, watchProfileIndex: 0, intervalSeconds: document.getElementById("watchInterval").value, config }) });
   if (!result.id) throw new Error("일정 등록 결과를 확인하지 못했습니다.");
   if (start) await request(`plans/${result.id}/start`, { method: "POST" });
   planMessage(start ? "독립 일정으로 실행했습니다. 다른 일정도 추가할 수 있습니다." : "일정을 등록했습니다. 목록에서 시작을 누르면 실행됩니다.");

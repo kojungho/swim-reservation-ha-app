@@ -26,6 +26,7 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
       let result;
       if (endpoint === "/api/config") result = config;
       else if (endpoint === "/api/profiles") result = { profiles: [profile] };
+      else if (endpoint === "/api/lookup-profiles") result = { profiles: [{ reserverName: profile.reserverName, phone: profile.phone }] };
       else if (endpoint === "/api/plans" && req.method() === "POST") {
         const input = req.postDataJSON();
         const id = `00000000-0000-0000-0000-${String(plans.length + 1).padStart(12, "0")}`;
@@ -46,10 +47,14 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
     });
     await page.goto("https://app.test/");
     await page.locator(".workspace-tabs .active").waitFor();
+    assert.equal(await page.locator("#addProfileButton").isVisible(), false);
+    assert.equal(await page.locator("#firstBookingProfileFields").isVisible(), true);
     await page.locator("#planName").fill("첫 일정");
     await page.locator("#addPlanButton").click();
     await page.locator("#planList .plan-entry").waitFor();
     await page.locator('[data-workspace-tab="multiple"]').click();
+    assert.equal(await page.locator("#addProfileButton").isVisible(), false);
+    assert.equal(await page.locator("#roomList .room-drag-handle").count(), 0);
     await page.locator("#startDate").fill("2026-12-21");
     await page.locator("#planName").fill("두번째 일정");
     await page.locator("#addPlanButton").click();
@@ -80,8 +85,19 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
     await page.locator('[data-workspace-tab="people"]').click();
     await page.waitForFunction(() => !document.querySelector("#reservationList").hidden);
     assert.equal(lookups, 1);
-    assert.equal(await page.locator("#saveProfilesButton").isVisible(), true);
+    assert.equal(await page.locator("#saveLookupProfilesButton").isVisible(), true);
+    assert.equal(await page.locator("#saveProfilesButton").isVisible(), false);
     assert.equal(await page.locator("#startDate").isVisible(), false);
+    assert.equal(await page.locator("#lookupProfileList input").count(), 2);
+    assert.doesNotMatch(await page.locator("#lookupCard").innerText(), /입금자명 입력|생년월일 입력/);
+    await page.locator('[data-workspace-tab="profiles-parallel"]').click();
+    assert.equal(await page.locator("#addProfileButton").isVisible(), true);
+    assert.equal(await page.locator("#bookingMode").isVisible(), false);
+    assert.equal(await page.evaluate(() => {
+      const profile = document.querySelector("#reserverName").closest("section");
+      const rooms = document.querySelector("#profilePriorities").closest("section");
+      return Boolean(profile.compareDocumentPosition(rooms) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }), true);
     await page.locator('[data-workspace-tab="monthly"]').click();
     await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
     assert.deepEqual(months, ["2026-10"]);

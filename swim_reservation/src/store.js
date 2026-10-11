@@ -1,12 +1,15 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { defaultConfig, normalizeConfig, getProfiles, normalizeProfile } from "./config.js";
+import { normalizeLookupProfiles } from "./lookup-profiles.js";
 
 export class Store {
   constructor(dataDir) {
     this.dataDir = dataDir;
     this.configPath = path.join(dataDir, "reservation-config.json");
     this.profilesPath = path.join(dataDir, "reservation-profiles.json");
+    this.lookupProfilesPath = path.join(dataDir, "reservation-lookup-profiles.json");
+    this.lookupQueue = Promise.resolve();
     this.statusPath = path.join(dataDir, "reservation-status.json");
     this.historyPath = path.join(dataDir, "reservation-history.json");
     this.logPath = path.join(dataDir, "reservation-log.json");
@@ -38,6 +41,29 @@ export class Store {
     const normalized = profiles.map(normalizeProfile);
     await atomicWrite(this.profilesPath, normalized);
     return normalized;
+  }
+
+  lookupOperation(action) {
+    const result = this.lookupQueue.then(action);
+    this.lookupQueue = result.catch(() => {});
+    return result;
+  }
+
+  async getLookupProfiles() {
+    return this.lookupOperation(async () => {
+      const saved = await readJson(this.lookupProfilesPath, null);
+      if (saved !== null) return normalizeLookupProfiles(saved);
+      // One-time migration only. Later booking saves never overwrite lookup identities.
+      const seed = (await this.getSavedProfiles()).filter(profile => profile.reserverName && /^01\d{8,9}$/.test(profile.phone));
+      const profiles = normalizeLookupProfiles(seed);
+      await atomicWrite(this.lookupProfilesPath, profiles);
+      return profiles;
+    });
+  }
+
+  async saveLookupProfiles(profiles) {
+    const normalized = normalizeLookupProfiles(profiles);
+    return this.lookupOperation(async () => { await atomicWrite(this.lookupProfilesPath, normalized); return normalized; });
   }
 
   async mergeDiscoveredRooms(names) {

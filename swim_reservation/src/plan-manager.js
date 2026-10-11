@@ -44,17 +44,20 @@ export class PlanManager {
     for (const row of rows) {
       if (!/^[a-f0-9-]{36}$/.test(row.id)) throw new Error("일정 저장 파일의 식별값을 확인해 주세요.");
       const legacyWatch = row.kind === "watch" && row.watchVersion !== 2;
+      const legacySingle = row.kind !== "watch" && row.config.bookingMode === "priority" && getProfiles(row.config).length > 1;
       if (legacyWatch) {
         row.config = normalizeWatchConfig(row.config, row.config.bookingMode === "multiple" ? row.config.multipleProfileIndex || 0 : 0);
         row.watchVersion = 2;
         row.enabled = false;
       }
+      if (legacySingle) { row.config = singleBookingConfig(row.config); row.enabled = false; }
+      if (row.kind !== "watch" && row.config.bookingMode === "multiple") row.config = singleBookingConfig(row.config);
       const plan = await this.createRuntime(row);
       this.plans.set(plan.id, plan);
-      if (legacyWatch) {
+      if (legacyWatch || legacySingle) {
         const old = await plan.store.getStatus();
         if (old.state === "running") await plan.store.updateStatus({ state: "failed", stage: "review-required", message: "기존 감시 실행 결과를 예약확인에서 확인하세요. 자동 재제출하지 않습니다." });
-        else if (!["success", "failed"].includes(old.state)) await plan.store.updateStatus({ state: "stopped", stage: "stopped", message: "취소 자리 감시가 순위 없는 한 객실 예약으로 변경되었습니다. 예약자와 체크한 객실을 확인한 후 시작하세요." });
+        else if (!["success", "failed"].includes(old.state)) await plan.store.updateStatus({ state: "stopped", stage: "stopped", message: legacySingle ? "1개 예약 모드가 한 명의 예약으로 변경되었습니다. 예약자를 확인한 후 시작하세요." : "취소 자리 감시가 순위 없는 한 객실 예약으로 변경되었습니다. 예약자와 체크한 객실을 확인한 후 시작하세요." });
       }
       if (!plan.enabled) continue;
       const status = await plan.store.getStatus();
@@ -77,7 +80,7 @@ export class PlanManager {
     return this.locked(async () => {
       if (this.plans.size >= 20) throw new Error("저장 일정은 최대 20개입니다. 사용하지 않는 일정을 삭제해 주세요.");
       if (!["scheduled", "watch", "now"].includes(input.kind)) throw new Error("일정 종류를 확인해 주세요.");
-      const config = input.kind === "watch" ? normalizeWatchConfig(input.config, Number(input.watchProfileIndex ?? 0)) : normalizeConfig(input.config);
+      const config = input.kind === "watch" ? normalizeWatchConfig(input.config, Number(input.watchProfileIndex ?? 0)) : singleBookingConfig(input.config);
       const errors = validateConfig(config);
       if (errors.length) throw new Error(`확인할 항목: ${errors.join(", ")}`);
       const plan = await this.createRuntime({ id: randomUUID(), name: String(input.name || `${config.startDate} ${config.nights}박`).trim().slice(0, 80), kind: input.kind, watchVersion: input.kind === "watch" ? 2 : undefined, intervalSeconds: Math.max(60, Math.min(3600, Math.trunc(Number(input.intervalSeconds) || 60))), enabled: false, config });
@@ -225,4 +228,12 @@ export function normalizeWatchConfig(input, profileIndex = 0) {
   if (!Number.isInteger(profileIndex) || profileIndex < 0 || profileIndex >= profiles.length) throw new Error("취소 자리 예약자 한 명을 선택해 주세요.");
   const eligible = config.bookingMode === "profiles-parallel" ? [...new Set(profiles.flatMap(profile => (profile.roomPriority || []).filter(room => room.enabled).map(room => room.name)))] : config.roomPriority.filter(room => room.enabled).map(room => room.name);
   return normalizeConfig({ ...config, bookingMode: "priority", profiles: [profiles[profileIndex]], multipleProfileIndex: 0, triggerAt: bookingOpenIso(config.startDate), roomPriority: eligible.map(name => ({ name, enabled: true })) });
+}
+
+export function singleBookingConfig(input) {
+  const config = normalizeConfig(input);
+  if (config.bookingMode === "profiles-parallel") return config;
+  const profile = getProfiles(config)[config.multipleProfileIndex || 0];
+  if (!profile) throw new Error("예약에 사용할 한 명을 선택해 주세요.");
+  return normalizeConfig({ ...config, profiles: [profile], multipleProfileIndex: 0 });
 }
