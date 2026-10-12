@@ -41,7 +41,7 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
       } else if (endpoint === "/api/reservations") { lookups++; result = { reservations: [], lookupErrors: [] }; }
       else if (endpoint === "/api/monthly-availability") {
         const month = url.searchParams.get("month"); months.push(month);
-        result = { month, roomNames: ["해_하늘존"], opensAt: "2026-08-01T00:00:00", beforeOpen: false, capturedAt: Date.now(), days: [{ date: `${month}-01`, rooms: [{ name: "해_하늘존", status: "available" }] }] };
+        result = { month, roomNames: ["해_하늘존"], opensAt: "2026-08-01T00:00:00", beforeOpen: false, capturedAt: Date.now(), days: [{ date: `${month}-12`, rooms: [{ name: "해_하늘존", status: "available" }] }] };
       } else result = { entries: [], rooms: [], state: "idle", stage: "idle", synced: true, serverNowMs: Date.now(), lastSyncedAt: Date.now() };
       return route.fulfill({ json: result });
     });
@@ -102,9 +102,9 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
     await page.locator('[data-workspace-tab="monthly"]').click();
     await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
     assert.deepEqual(months, ["2026-10"]);
-    await page.locator('[data-date="2026-10-01"]').click();
+    await page.locator('[data-date="2026-10-12"]').click();
     await page.waitForFunction(() => document.activeElement.id === "startDate");
-    assert.equal(await page.locator("#startDate").inputValue(), "2026-10-01");
+    assert.equal(await page.locator("#startDate").inputValue(), "2026-10-12");
     assert.equal(await page.locator(".workspace-tabs").evaluate(el => el.scrollWidth <= el.clientWidth), true);
     if (width === 390) await page.screenshot({ path: "/tmp/swim-profiles.6W9Acs/workspace-mobile.png", fullPage: true });
     assert.equal(commands.filter(command => command.endsWith("/start")).length, 2);

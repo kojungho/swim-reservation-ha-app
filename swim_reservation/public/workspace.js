@@ -59,6 +59,10 @@ function seoulCurrentMonth() {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" }).format(new Date());
 }
 
+function seoulToday() {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
 function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   const modes = ["priority", "multiple", "profiles-parallel"];
   if (![...modes, "watch", "people", "monthly", "book", "logs"].includes(tab)) return;

@@ -10,9 +10,10 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
   const browser = await chromium.launch({ executablePath, headless: true });
   t.after(() => browser.close());
   for (const width of [1280, 390]) {
-    const page = await browser.newPage({ viewport: { width, height: 844 } });
+    const page = await browser.newPage({ viewport: { width, height: 844 }, timezoneId: "UTC" });
     await page.clock.setFixedTime(new Date("2026-12-01T09:00:00+09:00"));
     const queries = [], dayQueries = [], mutations = [], errors = [];
+    let missingCurrentMonth = false;
     page.on("pageerror", error => errors.push(error.message));
     await page.route("https://app.test/**", async route => {
       const request = route.request(), url = new URL(request.url());
@@ -24,7 +25,7 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
           const month = url.searchParams.get("month");
           queries.push(month);
           if (month === "2027-02") return route.fulfill({ status: 503, json: { error: "사이트 연결 실패" } });
-          const provided = month === "2026-12";
+          const provided = month === "2026-12" && !missingCurrentMonth;
           const [year, number] = month.split("-").map(Number);
           data = { month, opensAt: provided ? "2026-10-01T00:00:00" : "2026-11-01T00:00:00", beforeOpen: !provided, provided, capturedAt: Date.now(), roomNames: ["해_하늘존", "달_하늘존", "샘_산맥존"], message: provided ? "사이트 날짜별 표시" : "사이트가 이 달의 현황을 제공하지 않습니다.", days: Array.from({ length: new Date(Date.UTC(year, number, 0)).getUTCDate() }, (_, index) => ({ date: `${month}-${String(index + 1).padStart(2, "0")}`, rooms: ["해_하늘존", "달_하늘존", "샘_산맥존"].map((name, room) => ({ name, status: provided ? ["available", "booked", "pending"][room] : "unknown" })) })) };
         } else if (pathname === "/api/calendar-day") {
@@ -99,6 +100,29 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
     assert.deepEqual(mutations, []);
     assert.deepEqual(errors, []);
     assert.deepEqual(queries, ["2026-12", "2026-12", "2027-01", "2027-02", "2027-01"]);
+    // The computer is in UTC, but 15:00 UTC is the next calendar day in Korea.
+    await page.clock.setFixedTime(new Date("2026-12-14T15:00:00Z"));
+    missingCurrentMonth = true;
+    const beforeCurrent = dayQueries.length;
+    await page.locator('[data-workspace-tab="monthly"]').click();
+    await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
+    assert.equal(await page.locator("#monthlyContent .monthly-day.past").count(), 14);
+    assert.equal(await page.locator('[data-date="2026-12-14"]').isDisabled(), true);
+    assert.equal(await page.locator('[data-date="2026-12-15"]').isEnabled(), true);
+    assert.deepEqual(dayQueries.slice(beforeCurrent), Array.from({ length: 17 }, (_, index) => `2026-12-${index + 15}`));
+    assert.equal(await page.locator('[data-date="2026-12-14"] .monthly-room-row').count(), 0);
+    const beforePastMonth = queries.length, beforePastDays = dayQueries.length;
+    await page.locator("#monthlyPrevButton").click();
+    await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("지난 날짜는 조회하지"));
+    assert.equal(await page.locator("#monthlyContent .monthly-day.past").count(), 30);
+    assert.equal(queries.length, beforePastMonth);
+    assert.equal(dayQueries.length, beforePastDays);
+    assert.equal(await page.locator("#monthlyQueryButton").isEnabled(), true);
+    await page.locator("#monthlyNextButton").click();
+    await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
+    await page.locator('[data-date="2026-12-15"]').click();
+    assert.equal(await page.locator("#startDate").inputValue(), "2026-12-15");
+    assert.deepEqual(errors, []);
     await page.close();
   }
 });
