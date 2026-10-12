@@ -5,7 +5,7 @@ const elements = Object.fromEntries([
   "historyList", "statusBadge", "statusText", "statusDetails", "profileStatusList", "inspectResult", "siteClock", "siteTimeMeta", "siteTimeSyncButton",
   "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
   "siteMapUploadButton", "siteMapFile", "siteMapImage", "siteMapMessage",
-  "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton", "startButton",
+  "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton",
   "logList", "refreshLogsButton", "copyLogsButton", "saveLogsButton", "bookingHelpButton", "bookingHelpDialog", "bookingHelpCloseButton", "bookingHelpCurrent",
   "monthlyButton", "monthlyDialog", "monthlyCloseButton", "monthlyPrevButton", "monthlyNextButton", "monthlyMonth", "monthlyQueryButton", "monthlyStatus", "monthlyContent", "monthlySourceLink", "monthlyDayDetails"
 ].map((id) => [id, document.getElementById(id)]));
@@ -117,8 +117,11 @@ function bindEvents() {
   elements.startDate.addEventListener("change", () => {
     updateGeneratedValues();
     elements.triggerAt.value = bookingOpenIso(elements.startDate.value);
+    updateImmediateBookingVisibility();
     scheduleAvailabilityCheck();
   });
+  elements.triggerAt.addEventListener("input", updateImmediateBookingVisibility);
+  elements.triggerAt.addEventListener("change", updateImmediateBookingVisibility);
   elements.nights.addEventListener("change", () => scheduleAvailabilityCheck());
   elements.bookingMode.addEventListener("change", () => {
     renderRooms();
@@ -146,21 +149,9 @@ function bindEvents() {
     await saveConfig();
     showMessage("설정을 HA 미니 PC에 저장했습니다.");
   }));
-  elements.startButton.addEventListener("click", () => perform(async () => {
-    if (elements.bookingMode.value === "profiles-parallel" && !window.confirm("예약자별로 지정한 우선순위를 사용해 한 사람당 객실 하나를 동시에 예약합니다. 같은 객실을 지정하면 서로 경쟁할 수 있습니다. 결과가 불확실하면 해당 예약자의 다음 순위는 제출하지 않습니다. 계속할까요?")) return;
-    if (elements.bookingMode.value === "multiple") {
-      const selectedRooms = rooms.filter((room) => room.enabled).map((room) => room.name);
-      const approved = window.confirm(
-        `여러 객실 동시 예약을 대기시킵니다.\n\n예약자: ${elements.multipleProfileSelect.selectedOptions[0]?.textContent}\n숙박: ${elements.startDate.value}부터 ${elements.nights.value}박\n실제 예약 객실 ${selectedRooms.length}개: ${selectedRooms.join(", ") || "선택 없음"}\n\n선택한 한 명의 정보로 각 객실이 별도 예약으로 최종 제출됩니다. 계속할까요?`
-      );
-      if (!approved) return;
-    }
-    await saveConfig();
-    await registerPlan("scheduled", true);
-    await refreshStatus();
-    scheduleAvailabilityCheck(0);
-  }));
   elements.runNowButton.addEventListener("click", () => perform(async () => {
+    await refreshSiteTime(true);
+    if (!updateImmediateBookingVisibility()) throw new Error("미래 시각 예약과 취소 자리 감시는 여러 일정 진행에서 등록한 뒤 시작하세요. 서버 시간도 확인해 주세요.");
     const date = elements.startDate.value;
     const selectedRooms = elements.bookingMode.value === "profiles-parallel" ? readConfig().profiles.map((profile, index) => `예약자 ${index + 1}: ${(profile.roomPriority || []).filter(room => room.enabled).map(room => room.name).join(" → ") || "선택 없음"}`) : rooms.filter((room) => room.enabled).map((room) => room.name);
     const multiple = elements.bookingMode.value === "multiple";
@@ -710,6 +701,7 @@ function startRoomDrag(event, row, index, list = elements.roomList, items = room
 }
 
 function updateGeneratedValues() {
+  updateImmediateBookingVisibility();
   const date = elements.startDate.value;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     elements.epochValue.textContent = "—";
@@ -785,7 +777,18 @@ function currentSiteTime() {
   return siteTimeBase ? siteTimeBase.serverNowMs + performance.now() - siteTimeBase.receivedAt : NaN;
 }
 
+function updateImmediateBookingVisibility() {
+  const now = currentSiteTime();
+  const trigger = Date.parse(`${elements.triggerAt.value}+09:00`);
+  const opening = Date.parse(`${bookingOpenIso(elements.startDate.value)}+09:00`);
+  const allowed = ["priority", "multiple", "profiles-parallel"].includes(workspaceTab) &&
+    Number.isFinite(now) && Number.isFinite(trigger) && Number.isFinite(opening) && trigger <= now && opening <= now;
+  elements.runNowButton.hidden = !allowed;
+  return allowed;
+}
+
 function renderSiteClock() {
+  updateImmediateBookingVisibility();
   const now = currentSiteTime();
   if (!Number.isFinite(now)) return;
   elements.siteClock.textContent = new Intl.DateTimeFormat("ko-KR", {
@@ -1022,7 +1025,7 @@ async function perform(action) {
 }
 
 function setButtonsDisabled(disabled) {
-  for (const button of [elements.saveProfilesButton, elements.loadProfilesButton, elements.inspectButton, elements.reservationSiteButton, elements.reservationLookupButton, elements.siteTimeSyncButton, elements.saveButton, elements.stopButton, elements.runNowButton, elements.startButton, elements.refreshLogsButton, elements.copyLogsButton, elements.saveLogsButton]) button.disabled = disabled;
+  for (const button of [elements.saveProfilesButton, elements.loadProfilesButton, elements.inspectButton, elements.reservationSiteButton, elements.reservationLookupButton, elements.siteTimeSyncButton, elements.saveButton, elements.stopButton, elements.runNowButton, elements.refreshLogsButton, elements.copyLogsButton, elements.saveLogsButton]) button.disabled = disabled;
   for (const button of elements.reservationList.querySelectorAll("button")) button.disabled = disabled;
 }
 

@@ -18,6 +18,7 @@ function initializeWorkspace() {
   const profilePage = elements.reserverName.closest("section");
   const roomPage = elements.roomList.closest("section");
   roomPage.before(profilePage);
+  elements.runNowButton.closest("section").after(document.getElementById("planCard"));
   profilePage.querySelector("h3").before(elements.multipleProfileField, document.getElementById("watchProfileField"));
   elements.startDate.closest("section").querySelector(".section-title").append(elements.bookingHelpButton);
   const actions = document.createElement("div");
@@ -86,8 +87,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   elements.startDate.closest("section").querySelector("h2").textContent = tab === "watch" ? "숙박 조건" : "예약 날짜와 시각";
   elements.startDate.closest("section").querySelector(".section-title p").textContent = tab === "watch" ? "감시할 숙박 시작 날짜와 박수를 지정하세요. 조건에 맞는 자리를 발견하면 바로 예약을 시도합니다." : "숙박 날짜·박수와 최종 예약을 제출할 시각을 지정하세요. 예약 모드는 상단 탭에서 선택합니다.";
   document.getElementById("addPlanButton").textContent = tab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 예약 일정 등록";
-  elements.startButton.hidden = tab === "watch";
-  elements.runNowButton.hidden = tab === "watch";
+  updateImmediateBookingVisibility();
   if (tab === "monthly") {
     if (!elements.monthlyDialog.open) {
       selectedMonthlyDate = null;
