@@ -12,6 +12,22 @@ import { lookupProfiles } from "../src/profile-lookup.js";
 const profiles = Array.from({ length: 5 }, (_, index) => ({ reserverName: `예약자${index + 1}`, depositorName: `입금자${index + 1}`, phone: `0101234567${index}`, birthDate: "19900101", roomPriority: [{ name: `객실${index}-1`, enabled: true }, { name: `객실${index}-2`, enabled: true }] }));
 const sample = () => normalizeConfig({ startDate: "2026-12-04", nights: 1, triggerAt: "2026-10-01T00:00:00", bookingMode: "profiles-parallel", profiles });
 
+test("예약자 목록은 기존 정보만 한 번 이전하며 빈 기본 입력·설정 변경·전체 삭제로 다시 채워지지 않는다", async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), "swim-book-migration-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const store = new Store(dir); await store.init();
+  await store.saveConfig(sample());
+  assert.deepEqual(await store.getSavedProfiles(), profiles.map(normalizeProfile));
+  await store.saveConfig({ ...sample(), profiles: [profiles[1]] });
+  assert.deepEqual(await store.getSavedProfiles(), profiles.map(normalizeProfile));
+  await Promise.all([store.saveProfiles([profiles[0]]), store.saveProfiles([])]);
+  assert.deepEqual(await new Store(dir).getSavedProfiles(), []);
+  const empty = new Store(path.join(dir, "empty")); await empty.init();
+  assert.deepEqual(await empty.getSavedProfiles(), []);
+  await empty.saveConfig(sample());
+  assert.deepEqual(await empty.getSavedProfiles(), []);
+});
+
 test("예약자별 동시 모드는 공통 객실 대신 각자의 우선순위를 검증한다", () => {
   const config = sample();
   assert.deepEqual(validateConfig(config), []);

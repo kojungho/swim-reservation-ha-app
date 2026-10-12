@@ -12,7 +12,7 @@
     <header>
       <div>
         <p class="eyebrow">HOME ASSISTANT APP</p>
-        <div class="app-title-row"><h1>쉼오지 예약 도우미</h1><button id="monthlyButton" class="secondary" type="button" aria-haspopup="dialog" aria-controls="monthlyDialog">월별 예약 현황</button></div>
+        <div class="app-title-row"><h1>쉼오지 예약 도우미</h1></div>
         <p class="lead">예약은 HA 미니 PC가 실행하고, 이 화면은 휴대폰과 컴퓨터 어디서든 사용할 수 있습니다.</p>
       </div>
       <div id="statusBadge" class="badge idle">불러오는 중</div>
@@ -23,10 +23,27 @@
       <button type="button" data-workspace-tab="multiple">여러 객실 동시</button>
       <button type="button" data-workspace-tab="profiles-parallel">예약자별 동시</button>
       <button type="button" data-workspace-tab="watch">취소 자리 감시</button>
+      <button type="button" data-workspace-tab="book">예약자 정보</button>
       <button type="button" data-workspace-tab="people">예약 조회</button>
       <button type="button" data-workspace-tab="monthly">월별 예약 현황</button>
+      <button type="button" data-workspace-tab="logs">실행 로그</button>
     </nav>
     <p id="workspaceMessage" role="status"></p>
+
+    <section id="bookingBookCard" class="card" hidden>
+      <h2>예약자 정보</h2>
+      <p>실제 예약에 사용할 정보를 최대 5명까지 저장합니다. 각 예약 모드의 선택 목록에 자동 반영되며, 선택하기 전에는 입력란을 채우지 않습니다. 예약 조회용 저장과는 별개입니다.</p>
+      <div id="bookingBookList"></div>
+      <h3>새 예약자 추가</h3>
+      <div class="grid two">
+        <label>예약자명<input id="bookReserverName" autocomplete="off"></label>
+        <label>입금자명<input id="bookDepositorName" autocomplete="off"></label>
+        <label>휴대폰 번호<input id="bookPhone" inputmode="numeric" autocomplete="off"></label>
+        <label>생년월일<input id="bookBirthDate" inputmode="numeric" maxlength="8" placeholder="YYYYMMDD" autocomplete="off"></label>
+      </div>
+      <button id="bookAddButton" type="button" class="secondary">예약자 저장</button>
+      <p id="bookingBookMessage" role="status"></p>
+    </section>
 
     <section id="lookupCard" class="card" hidden>
       <h2>예약 조회</h2>
@@ -70,16 +87,19 @@
 
     <section class="card">
       <div class="section-title section-title-actions"><span>2</span><div><h2 id="roomSectionTitle">객실 우선순위</h2><p id="roomSectionHelp">체크된 객실 중 위에 있는 객실부터 하나가 성공할 때까지 시도합니다.</p></div><button id="siteMapButton" class="secondary">사이트 위치 안내</button></div>
+      <div class="section-actions room-actions"><button id="inspectButton" class="secondary" type="button">새로 고침</button><button id="watchSelectAll" class="secondary" type="button" hidden>전체 선택</button><button id="watchDeselectAll" class="secondary" type="button" hidden>전체 해제</button></div>
+      <div id="inspectResult" class="inspect-result" hidden></div>
       <div id="roomList" class="room-list"></div>
       <label id="multipleProfileField" hidden>예약에 사용할 한 명<select id="multipleProfileSelect"><option value="0">예약자 1</option></select></label>
       <div id="profilePriorities" hidden></div>
-      <p id="roomDragHelp" class="room-drag-help">오른쪽 ⠿ 손잡이를 누른 채 원하는 위치로 옮기세요. 순서를 바꾼 뒤 설정 저장을 눌러 주세요.</p>
+      <p id="roomDragHelp" class="room-drag-help">오른쪽 두 줄 손잡이를 누른 채 원하는 위치로 옮기세요. 순서를 바꾼 뒤 설정 저장을 눌러 주세요.</p>
       <p id="roomDragStatus" class="room-drag-help" role="status" aria-live="polite"></p>
     </section>
 
     <section class="card">
       <div class="section-title"><span>3</span><div><h2>예약에 사용할 정보</h2><p>이 탭에서 사용할 예약자 정보를 입력하세요. 일정 등록 시 해당 정보가 함께 저장되며 예약 조회용 저장 정보와는 별개입니다.</p></div></div>
       <h3 id="firstBookingProfileTitle">예약자 1</h3>
+      <label>저장된 예약자 선택<select id="bookingProfileSelect1"></select></label>
       <div id="firstBookingProfileFields" class="grid two">
         <label>예약자명<input id="reserverName" autocomplete="off"></label>
         <label>입금자명<input id="depositorName" autocomplete="off"></label>
@@ -88,7 +108,7 @@
       </div>
       <div id="extraProfiles"></div>
       <button id="addProfileButton" class="secondary" type="button">+ 예약자 추가</button>
-      <div class="section-actions"><button id="saveProfilesButton" class="secondary" type="button">예약용 정보 저장</button><button id="loadProfilesButton" class="secondary" type="button">저장된 예약용 정보 불러오기</button></div>
+      <div class="section-actions"><button id="saveProfilesButton" class="secondary" type="button" disabled>예약자 저장</button></div>
       <p id="profileModeHelp">예약에 사용할 사람은 최대 5명까지 저장할 수 있습니다. 조회용 정보는 예약 조회 탭에서 별도로 저장하세요.</p>
     </section>
 
@@ -99,10 +119,9 @@
     </section>
 
     <section class="card status-card">
-      <div class="section-title"><span>5</span><div><h2>예약 실행·연결 확인</h2><p id="statusText">미래 시각 예약과 취소 자리 감시는 아래 여러 일정 진행에서 등록한 뒤 시작하세요.</p></div></div>
+      <div class="section-title"><span>5</span><div><h2>예약 실행</h2><p id="statusText">미래 시각 예약과 취소 자리 감시는 아래 여러 일정 진행에서 등록한 뒤 시작하세요.</p></div></div>
       <dl id="statusDetails"></dl>
       <div id="profileStatusList" class="profile-status-list" hidden></div>
-      <div id="inspectResult" class="inspect-result" hidden></div>
       <div id="reservationList" class="reservation-list" hidden></div>
       <div id="diagnosticsPanel" class="diagnostics-panel" hidden>
         <div class="diagnostics-heading">
@@ -115,13 +134,12 @@
         <label>사이트에서 조회할 대상<select id="siteProfileSelect"><option value="1">조회 대상 1</option></select></label>
         <button id="reservationSiteButton" class="secondary">선택한 대상의 예약 조회 사이트 열기</button>
         <button id="reservationLookupButton" class="secondary">저장된 대상 예약 조회</button>
-        <button id="inspectButton" class="secondary">객실 가능 여부 새로고침</button>
         <button id="stopButton" class="danger">모든 일정 중지</button>
         <button id="runNowButton" class="now" hidden>지금 바로 예약</button>
       </div>
     </section>
 
-    <section class="card status-card">
+    <section id="logCard" class="card status-card" hidden>
       <div class="section-title"><span>6</span><div><h2>실행 로그</h2><p>최근 실행 과정과 오류를 HA App 데이터 영역에 저장합니다.</p></div></div>
       <div id="logList" class="log-list"><p>로그를 불러오는 중입니다.</p></div>
       <div class="section-actions log-actions">
@@ -151,7 +169,7 @@
     <details data-booking-help="priority">
       <summary>1개 예약 · 우선순위 방식</summary>
       <p>선택한 예약자 한 명으로 우선순위 중 객실 하나를 예약합니다.</p>
-      <ol><li>날짜·박수·실행 시각과 예약자 한 명의 정보를 입력합니다.</li><li>객실을 체크하고 ⠿ 손잡이를 끌어 원하는 순서로 정합니다.</li><li>미래 시각 예약은 아래 여러 일정 진행에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘지금 바로 예약’을 사용할 수 있습니다.</li></ol>
+      <ol><li>날짜·박수·실행 시각과 예약자 한 명의 정보를 선택하거나 입력합니다.</li><li>객실을 체크하고 두 줄 손잡이를 끌어 원하는 순서로 정합니다.</li><li>미래 시각 예약은 아래 여러 일정 진행에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘지금 바로 예약’을 사용할 수 있습니다.</li></ol>
       <p class="booking-help-warning">객실이 확실히 마감된 경우에만 다음 순위를 시도합니다. 제출 결과가 불확실하면 중복 방지를 위해 중단합니다.</p>
     </details>
     <details data-booking-help="multiple">
@@ -163,10 +181,10 @@
     <details data-booking-help="profiles-parallel">
       <summary>예약자별 동시 예약 · 우선순위</summary>
       <p>최대 5명의 예약자를 동시에 진행하고, 각 사람의 우선순위에 따라 객실 하나씩 예약합니다.</p>
-      <ol><li>예약자 정보를 입력하고 필요한 사람을 추가합니다.</li><li>각 예약자의 객실 우선순위에서 후보를 체크하고 ⠿ 손잡이로 순서를 정합니다. 개인별 순위는 이 모드에서만 사용합니다.</li><li>날짜·박수·실행 시각을 확인하고 여러 일정 진행에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘지금 바로 예약’을 사용할 수 있습니다.</li></ol>
+      <ol><li>저장된 예약자를 선택하거나 직접 입력하고 필요한 사람만 추가합니다. 신규 예약자는 ‘예약자 저장’으로 목록에 추가할 수 있습니다.</li><li>각 예약자의 객실 우선순위에서 후보를 체크하고 두 줄 손잡이로 순서를 정합니다. 개인별 순위는 이 모드에서만 사용합니다.</li><li>날짜·박수·실행 시각을 확인하고 여러 일정 진행에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘지금 바로 예약’을 사용할 수 있습니다.</li></ol>
       <p class="booking-help-warning">같은 객실을 여러 사람의 1순위로 선택하면 서로 경쟁할 수 있습니다. 확실한 마감만 다음 순위로 넘어가며, 결과가 불확실하면 그 사람의 추가 제출을 중단합니다.</p>
     </details>
-    <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>미래 시각 예약과 취소 자리 감시는 여러 일정 진행에서 등록한 뒤 목록의 시작을 누릅니다. 예약 대기는 사이트가 허용하는 경우 정보 입력까지 미리 준비하고, 서버 시간에 맞춰 지정 시각에 최종 제출합니다. 오픈 전 다음 단계 접근이 제한되면 지정 시각에 처음부터 진행합니다. ‘지금 바로 예약’은 실행 시각이 미래이거나 서버 시간이 미확인인 경우 표시하지 않으며 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약용 정보 저장’은 실제 예약에 사용할 정보를 저장합니다. ‘예약 조회’ 탭의 저장 정보는 이름·휴대폰 번호만 별도 보관하며 예약 실행에 사용하지 않습니다. 등록된 일정의 설정은 이후 편집과 관계없이 유지됩니다.</p></div>
+    <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>미래 시각 예약과 취소 자리 감시는 여러 일정 진행에서 등록한 뒤 목록의 시작을 누릅니다. 예약 대기는 사이트가 허용하는 경우 정보 입력까지 미리 준비하고, 서버 시간에 맞춰 지정 시각에 최종 제출합니다. 오픈 전 다음 단계 접근이 제한되면 지정 시각에 처음부터 진행합니다. ‘지금 바로 예약’은 실행 시각이 미래이거나 서버 시간이 미확인인 경우 표시하지 않으며 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약자 정보’ 탭은 실제 예약에 사용할 사람들을 관리합니다. 각 모드에 선택 목록은 자동 표시되지만 사람을 선택하기 전에는 입력란을 채우지 않습니다. 일정 등록 후에는 선택과 입력을 초기화합니다. ‘예약 조회’ 탭의 저장 정보는 이름·휴대폰 번호만 별도 보관하며 예약 실행에 사용하지 않습니다. 등록된 일정의 설정은 이후 편집과 관계없이 유지됩니다.</p></div>
   </dialog>
   <dialog id="monthlyDialog" class="monthly-dialog" aria-labelledby="monthlyTitle">
     <div class="booking-help-heading"><h2 id="monthlyTitle">월별 전체 예약 현황</h2><button id="monthlyCloseButton" class="secondary" type="button" aria-label="월별 현황 닫기">닫기</button></div>
@@ -179,6 +197,7 @@
     <a id="monthlySourceLink" class="button secondary" href="https://newpension.logosweb.or.kr/reservation/reservation2.php?id=swim" target="_blank" rel="noopener noreferrer">원본 월별 현황 사이트</a>
   </dialog>
   <script src="workspace.js"></script>
+  <script src="booking-book.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

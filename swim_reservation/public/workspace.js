@@ -19,6 +19,8 @@ function initializeWorkspace() {
   const roomPage = elements.roomList.closest("section");
   roomPage.before(profilePage);
   elements.runNowButton.closest("section").after(document.getElementById("planCard"));
+  const logCard = document.getElementById("logCard");
+  logCard.querySelector(".section-title").after(elements.statusDetails, elements.profileStatusList, elements.diagnosticsPanel);
   profilePage.querySelector("h3").before(elements.multipleProfileField, document.getElementById("watchProfileField"));
   elements.startDate.closest("section").querySelector(".section-title").append(elements.bookingHelpButton);
   const actions = document.createElement("div");
@@ -42,6 +44,12 @@ function initializeWorkspace() {
   document.getElementById("loadLookupProfilesButton").addEventListener("click", () => perform(async () => { await loadLookupProfiles(); await loadReservations(); }));
   document.querySelectorAll("[data-workspace-tab]").forEach(button => button.addEventListener("click", () => switchWorkspaceTab(button.dataset.workspaceTab)));
   document.getElementById("addPlanButton").addEventListener("click", () => registerPlan(workspaceTab === "watch" ? "watch" : "scheduled", false).catch(error => planMessage(error.message)));
+  for (const [id, enabled] of [["watchSelectAll", true], ["watchDeselectAll", false]]) document.getElementById(id).addEventListener("click", () => {
+    if (workspaceTab !== "watch") return;
+    rooms.forEach(room => { room.enabled = enabled; });
+    editorGeneration++;
+    renderWatchRooms();
+  });
   workspaceTab = elements.bookingMode.value;
   switchWorkspaceTab(workspaceTab, { keepEditor: true });
   void refreshPlans();
@@ -54,7 +62,7 @@ function seoulCurrentMonth() {
 
 function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   const modes = ["priority", "multiple", "profiles-parallel"];
-  if (![...modes, "watch", "people", "monthly"].includes(tab)) return;
+  if (![...modes, "watch", "people", "monthly", "book", "logs"].includes(tab)) return;
   const entering = workspaceTab !== tab;
   workspaceTab = tab;
   if (entering && !keepEditor) resetPlanEditor(tab);
@@ -74,10 +82,15 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   for (const section of document.querySelectorAll("main.shell > section.card")) section.hidden = !booking;
   profilePage.hidden = !booking;
   document.getElementById("lookupCard").hidden = tab !== "people";
+  document.getElementById("bookingBookCard").hidden = tab !== "book";
+  document.getElementById("logCard").hidden = tab !== "logs";
+  if (tab === "logs" && entering) void refreshLogs().catch(error => showMessage(`로그 조회 실패: ${error.message}`, true));
   document.getElementById("planCard").hidden = !booking;
   document.getElementById("watchHelp").hidden = tab !== "watch";
   document.getElementById("watchInterval").closest("label").hidden = tab !== "watch";
-  document.getElementById("watchProfileField").hidden = tab !== "watch";
+  document.getElementById("watchProfileField").hidden = true;
+  document.getElementById("watchSelectAll").hidden = tab !== "watch";
+  document.getElementById("watchDeselectAll").hidden = tab !== "watch";
   if (tab === "watch") elements.historyList.closest("section").hidden = true;
   elements.bookingMode.closest(".booking-mode-field").hidden = true;
   elements.bookingHelpButton.hidden = tab === "watch";
@@ -110,12 +123,13 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
 
 function updateBookingProfileVisibility() {
   const one = workspaceTab !== "profiles-parallel";
-  const index = workspaceTab === "watch" ? Number(document.getElementById("watchProfileSelect").value || 0) : Number(elements.multipleProfileSelect.value || 0);
+  const index = 0;
+  elements.multipleProfileField.hidden = true;
   document.getElementById("firstBookingProfileTitle").hidden = one && index !== 0;
   document.getElementById("firstBookingProfileFields").hidden = one && index !== 0;
   [...elements.extraProfiles.children].forEach((panel, extraIndex) => { panel.hidden = one && index !== extraIndex + 1; panel.querySelector("button").hidden = one; });
   elements.addProfileButton.hidden = one;
-  elements.profileModeHelp.textContent = workspaceTab === "watch" ? "감시할 예약자 한 명의 정보를 사용합니다. 체크한 객실 중 조건에 맞는 하나만 예약하며 순위는 지정하지 않습니다." : workspaceTab === "multiple" ? "선택한 한 명의 정보로 체크한 모든 객실을 각각 예약합니다. 객실 선호 순위는 지정하지 않습니다." : workspaceTab === "profiles-parallel" ? "최대 5명까지 정보를 입력한 뒤 아래에서 각자의 객실 우선순위를 정하세요. 한 사람당 객실 하나를 동시에 예약합니다." : "선택한 한 명의 정보로 우선순위 중 예약 가능한 객실 하나를 예약합니다. 여러 사람을 실행하려면 예약자별 동시 탭을 사용하세요.";
+  elements.profileModeHelp.textContent = workspaceTab === "profiles-parallel" ? "저장된 예약자를 사람별로 선택하거나 직접 입력하세요. 필요한 사람만 추가하며 최대 5명까지 각자의 객실 하나를 동시에 예약합니다. 새 사람은 예약자 저장으로 목록에 추가할 수 있습니다." : "저장된 예약자를 한 명 선택하거나 직접 입력하세요. 새 사람은 예약자 저장으로 목록에 추가할 수 있습니다. 목록은 자동으로 표시되지만 선택 전에는 정보를 입력하지 않습니다.";
 }
 
 async function loadLookupProfiles() {
@@ -236,10 +250,16 @@ async function refreshPlans() {
       info.textContent = `${entry.kind === "watch" ? `취소 자리 감시 (${entry.intervalSeconds}초) · 조건 일치 시 객실 하나 예약` : `${entry.kind === "now" ? "즉시 예약" : `예약 대기 ${entry.config.triggerAt.replace("T", " ")}`} · ${modes[entry.config.bookingMode]}`} · ${entry.enabled ? "진행 중" : "중지/종료"}`;
       const status = document.createElement("p");
       status.textContent = `${entry.status.message || "설정 완료"}${entry.status.lastCheckedAt ? ` · 마지막 확인 ${new Date(entry.status.lastCheckedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}` : ""}`;
-      const targets = document.createElement("p");
+      const targets = document.createElement("div");
+      targets.className = "plan-profile-targets";
       const profiles = entry.config.profiles || [entry.config.profile1 || entry.config.profile || {}];
-      const names = entry.kind === "watch" ? entry.config.roomPriority.filter(room => room.enabled).map(room => room.name).join(", ") : entry.config.bookingMode === "profiles-parallel" ? profiles.map((profile, index) => `${profile.reserverName || `예약자 ${index + 1}`}: ${(profile.roomPriority || []).filter(room => room.enabled).map(room => room.name).join(" → ")}`).join(" / ") : entry.config.roomPriority.filter(room => room.enabled).map(room => room.name).join(" → ");
-      targets.textContent = `객실 조건: ${names} · 예약자 ${profiles.map(profile => profile.reserverName || "미입력").join(", ")}`;
+      profiles.forEach((profile, index) => {
+        const line = document.createElement("p");
+        const candidates = entry.config.bookingMode === "profiles-parallel" && entry.kind !== "watch" ? profile.roomPriority || [] : entry.config.roomPriority;
+        const names = candidates.filter(room => room.enabled).map(room => String(room.name).split("_")[0].trim()).join(entry.kind === "watch" || entry.config.bookingMode === "multiple" ? ", " : " → ");
+        line.textContent = `${profile.reserverName || `예약자 ${index + 1}`} : ${names || "선택된 객실 없음"}`;
+        targets.append(line);
+      });
       detail.append(title, info, targets, status);
       const controls = document.createElement("div");
       controls.className = "section-actions";
@@ -253,15 +273,8 @@ async function refreshPlans() {
           button.disabled = true;
           try {
             if (action === "load") {
-              let watchIndex = 0;
-              if (entry.kind === "watch") {
-                const current = readConfig().profiles, saved = entry.config.profiles[0];
-                watchIndex = current.findIndex(profile => profile.reserverName === saved.reserverName && profile.phone === saved.phone && profile.birthDate === saved.birthDate);
-                loadConfig({ ...entry.config, profiles: watchIndex >= 0 ? current : [saved, ...current].slice(0, 5) });
-                if (watchIndex < 0) watchIndex = 0;
-              } else loadConfig(entry.config);
+              loadConfig(entry.config);
               switchWorkspaceTab(entry.kind === "watch" ? "watch" : entry.config.bookingMode, { keepEditor: true });
-              if (entry.kind === "watch") document.getElementById("watchProfileSelect").value = String(watchIndex);
               document.getElementById("planName").value = entry.name;
               scheduleAvailabilityCheck();
             } else {

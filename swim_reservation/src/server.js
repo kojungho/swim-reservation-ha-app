@@ -93,11 +93,7 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/api/config" && request.method === "GET") {
       const config = await store.getConfig();
-      const editorProfiles = await store.getSavedProfiles();
-      const selected = getProfiles(config)[config.multipleProfileIndex || 0];
-      const index = editorProfiles.findIndex(profile => profile.reserverName === selected?.reserverName && profile.phone === selected?.phone);
-      const editorProfileIndex = Number.isInteger(config.editorProfileIndex) && config.editorProfileIndex < editorProfiles.length ? config.editorProfileIndex : Math.max(0, index);
-      return json(response, 200, { ...config, editorProfiles, editorProfileIndex, reservationUrl: reservationUrl(config.startDate) });
+      return json(response, 200, { ...config, reservationUrl: reservationUrl(config.startDate) });
     }
     if (url.pathname === "/api/profiles" && request.method === "GET") {
       return json(response, 200, { profiles: await store.getSavedProfiles() });
@@ -110,7 +106,7 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/api/profiles" && request.method === "PUT") {
       if (scheduler.running || scheduler.preparing) return json(response, 409, { error: "예약 실행 또는 준비 중에는 예약자 저장을 변경할 수 없습니다." });
       const input = await readJsonBody(request);
-      if (!Array.isArray(input.profiles) || input.profiles.length < 1 || input.profiles.length > 5) return json(response, 400, { error: "예약자는 1~5명까지 저장할 수 있습니다." });
+      if (!Array.isArray(input.profiles) || input.profiles.length > 5) return json(response, 400, { error: "예약자는 최대 5명까지 저장할 수 있습니다." });
       const profiles = input.profiles.map(normalizeProfile);
       const errors = [];
       profiles.forEach((profile, index) => validateProfile(profile, `예약자 ${index + 1}`, errors));
@@ -126,7 +122,6 @@ const server = http.createServer(async (request, response) => {
       const errors = validateConfig(config);
       if (errors.length) return json(response, 400, { ok: false, error: `확인할 항목: ${errors.join(", ")}` });
       const saved = await store.saveConfig(config);
-      await store.saveProfiles(getProfiles(input));
       return json(response, 200, { ok: true, config: { ...saved, editorProfiles: getProfiles(input), editorProfileIndex: input.multipleProfileIndex || 0, reservationUrl: reservationUrl(saved.startDate) } });
     }
     if (url.pathname === "/api/status" && request.method === "GET") {

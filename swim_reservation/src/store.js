@@ -10,6 +10,7 @@ export class Store {
     this.profilesPath = path.join(dataDir, "reservation-profiles.json");
     this.lookupProfilesPath = path.join(dataDir, "reservation-lookup-profiles.json");
     this.lookupQueue = Promise.resolve();
+    this.profilesQueue = Promise.resolve();
     this.statusPath = path.join(dataDir, "reservation-status.json");
     this.historyPath = path.join(dataDir, "reservation-history.json");
     this.logPath = path.join(dataDir, "reservation-log.json");
@@ -33,14 +34,28 @@ export class Store {
   }
 
   async getSavedProfiles() {
-    const saved = await readJson(this.profilesPath, null);
-    return (saved || getProfiles(await this.getConfig())).slice(0, 5).map(normalizeProfile);
+    return this.profileOperation(async () => {
+      const saved = await readJson(this.profilesPath, null);
+      const profiles = (saved ?? getProfiles(await this.getConfig())).slice(0, 5).map(normalizeProfile)
+        .filter(profile => [profile.reserverName, profile.depositorName, profile.phone, profile.birthDate].some(Boolean));
+      // Migrate legacy settings once, including a truly empty new-install book.
+      if (saved === null) await atomicWrite(this.profilesPath, profiles);
+      return profiles;
+    });
   }
 
   async saveProfiles(profiles) {
-    const normalized = profiles.map(normalizeProfile);
-    await atomicWrite(this.profilesPath, normalized);
-    return normalized;
+    return this.profileOperation(async () => {
+      const normalized = profiles.map(normalizeProfile);
+      await atomicWrite(this.profilesPath, normalized);
+      return normalized;
+    });
+  }
+
+  profileOperation(action) {
+    const result = this.profilesQueue.then(action);
+    this.profilesQueue = result.catch(() => {});
+    return result;
   }
 
   lookupOperation(action) {

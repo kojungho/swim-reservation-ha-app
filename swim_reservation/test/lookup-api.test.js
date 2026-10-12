@@ -59,4 +59,11 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
   assert.deepEqual((await api("lookup-profiles")).profiles, []);
   assert.equal((await api("config")).editorProfileIndex, 1);
   assert.equal((await api("plans")).entries[0].enabled, false);
+  await api("profiles", "PUT", { profiles: [] });
+  await api("config", "PUT", { ...config, profiles: [{ ...profiles[0], reserverName: "일정만 저장한 사람" }], multipleProfileIndex: 0 });
+  assert.deepEqual((await api("profiles")).profiles, []);
+  assert.equal((await api("plans")).entries[0].config.profiles[0].reserverName, "둘째");
+  await stop(); api = await boot();
+  assert.deepEqual((await api("profiles")).profiles, []);
+  assert.deepEqual((await api("lookup-profiles")).profiles, []);
 });

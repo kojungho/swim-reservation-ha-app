@@ -98,7 +98,7 @@ test("PC·폰의 일정 입력은 등록 성공·탭 이동 시 초기화하고 
     await page.locator("#watchInterval").fill("120");
     await page.locator('[data-workspace-tab="priority"]').click();
     assert.equal(await page.locator("#watchInterval").inputValue(), "60");
-    await page.locator("#loadProfilesButton").click();
+    await page.locator("#bookingProfileSelect1").selectOption("0");
     await page.waitForFunction(() => document.querySelector("#reserverName").value === "저장된예약자");
     assert.equal(await page.locator("#depositorName").inputValue(), "저장된입금자");
 

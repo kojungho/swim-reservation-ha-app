@@ -88,7 +88,7 @@ test("PC·폰에서 일정 목록을 실행 영역 아래에 두고 미래 예�
     assert.equal(await page.locator("#runNowButton").isVisible(), false);
     await page.locator("#startDate").fill("2026-12-20");
     await page.locator("#triggerAt").fill("2026-10-12T09:00");
-    await page.locator("#loadProfilesButton").click();
+    await page.locator("#bookingProfileSelect1").selectOption("0");
     await page.waitForFunction(() => document.querySelector("#reserverName").value === "테스트예약자");
     await page.locator("#roomList input[type=checkbox]").first().check();
     await page.locator("#runNowButton").click();
