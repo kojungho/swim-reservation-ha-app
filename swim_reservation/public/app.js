@@ -2,7 +2,7 @@ const API = (path) => new URL(`api/${path}`, document.baseURI).href;
 const elements = Object.fromEntries([
   "startDate", "triggerAt", "nights", "bookingMode", "epochValue", "openAtValue", "reservationUrl", "roomList", "roomSectionTitle", "roomSectionHelp", "reserverName",
   "depositorName", "phone", "birthDate", "extraProfiles", "addProfileButton", "saveProfilesButton", "siteProfileSelect", "profilePriorities", "profileModeHelp", "multipleProfileField", "multipleProfileSelect",
-  "historyList", "statusBadge", "statusText", "statusDetails", "profileStatusList", "inspectResult", "siteClock", "siteTimeMeta", "siteTimeSyncButton",
+  "historyList", "statusBadge", "statusText", "statusDetails", "profileStatusList", "siteClock", "siteTimeMeta", "siteTimeSyncButton",
   "diagnosticsPanel", "diagnosticsPreview", "copyDiagnosticsButton", "siteMapButton", "siteMapDialog", "siteMapCloseButton",
   "siteMapUploadButton", "siteMapFile", "siteMapImage", "siteMapMessage",
   "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton",
@@ -931,16 +931,6 @@ function renderInspection(result, { beforeOpen = false, addedRooms = [] } = {}) 
   }));
   for (const room of displayed) availabilityByRoom.set(room.name, room.displayStatus);
   renderRooms();
-  elements.inspectResult.hidden = false;
-  const opening = beforeOpen ? `<small>예약 가능 시작: ${escapeHtml(formatOpeningTime(elements.startDate.value))}</small><br>` : "";
-  const addedNotice = addedRooms.length ? `<small>신규 객실 자동 추가: ${escapeHtml(addedRooms.join(" · "))}</small><br>` : "";
-  elements.inspectResult.innerHTML = `<strong>객실 확인 결과</strong><br>${addedNotice}${opening}${displayed.map((room) => {
-    const status = room.displayStatus;
-    const label = ["available-before-open", "unavailable-before-open", "before-open", "before-open-no-data", "booked"].includes(status)
-      ? AVAILABILITY_LABELS[status]
-      : room.available ? `${elements.nights.value}박 가능` : `${elements.nights.value}박 불가`;
-    return `<span class="${escapeHtml(status)}">${escapeHtml(room.name)}: ${label}</span>`;
-  }).join(" · ")}`;
 }
 
 function renderReservations(reservations) {

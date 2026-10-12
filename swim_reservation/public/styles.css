@@ -174,13 +174,6 @@ button.now { background: #d67a24; color: white; }
 button.now:hover { background: #b86116; }
 dl { display: grid; grid-template-columns: 130px 1fr; gap: 8px 14px; margin: 0; font-size: 14px; }
 dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
-.inspect-result { margin-top: 18px; padding: 14px; background: #f4f7f5; border-radius: 12px; font-size: 13px; line-height: 1.7; }
-.inspect-result .available { color: #12603d; font-weight: 750; }
-.inspect-result .unavailable { color: #9a4b44; }
-.inspect-result .before-open { color: #815c00; font-weight: 700; }
-.inspect-result .available-before-open { color: #815c00; font-weight: 700; }
-.inspect-result .unavailable-before-open { color: #97372f; font-weight: 700; }
-.inspect-result .before-open-no-data { color: #59665f; }
 .profile-status-list { display: grid; gap: 7px; margin-top: 14px; }
 .profile-status-list[hidden] { display: none; }
 .profile-status-row { display: grid; grid-template-columns: 90px 1fr; gap: 10px; padding: 10px 12px; border-radius: 10px; background: #f3f6f4; font-size: 13px; }

@@ -18,9 +18,19 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     assert.equal(await page.locator("#logCard").isVisible(), false);
     assert.equal(await page.locator("#inspectButton").innerText(), "새로 고침");
     assert.equal(await page.evaluate(() => document.querySelector("#inspectButton").closest("section").contains(document.querySelector("#roomList"))), true);
-    assert.equal(await page.evaluate(() => document.querySelector("#runNowButton").closest("section").contains(document.querySelector("#inspectResult"))), false);
+    assert.equal(await page.locator("#inspectResult").count(), 0);
     assert.equal(await page.locator("#roomList .drag-bars").count(), await page.locator("#roomList .room-row").count());
     assert.ok(await page.locator("#roomList .room-row").first().evaluate(row => row.getBoundingClientRect().height) <= 50);
+    for (const tab of ["priority", "multiple", "profiles-parallel", "watch"]) {
+      await page.locator('[data-workspace-tab="' + tab + '"]').click();
+      await page.evaluate(() => renderInspection([{ name: "해_하늘존", available: true, status: "available" }, { name: "달_하늘존", available: false, status: "booked" }]));
+      const list = tab === "profiles-parallel" ? page.locator("#profilePriorities") : page.locator("#roomList");
+      assert.ok(await list.locator(".availability.available").count() > 0);
+      assert.ok(await list.locator(".availability.booked").count() > 0);
+      assert.equal(await page.locator("#inspectResult").count(), 0);
+      assert.doesNotMatch(await page.locator("body").innerText(), /객실 확인 결과/);
+    }
+    await page.locator('[data-workspace-tab="priority"]').click();
     await page.locator("#bookingProfileSelect1").selectOption("0");
     await page.locator("#roomList input[type=checkbox]").first().check();
     await page.locator("#planName").fill("보존할 일정");

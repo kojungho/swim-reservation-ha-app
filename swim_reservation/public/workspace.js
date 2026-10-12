@@ -208,8 +208,6 @@ function resetPlanEditor(tab = workspaceTab) {
   updateWatchDeadlineHint();
   document.getElementById("watchProfileSelect").value = "0";
   document.getElementById("roomDragStatus").textContent = "";
-  elements.inspectResult.hidden = true;
-  elements.inspectResult.replaceChildren();
   if (tab === "watch") refreshWatchProfileSelector();
   updateBookingProfileVisibility();
 }
