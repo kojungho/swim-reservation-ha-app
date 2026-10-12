@@ -49,7 +49,7 @@ const STAGE_LABELS = {
   "profiles-preparation-deferred": "예약 오픈 시 새로 진행 대기",
   "profile-failed": "예약자 예약 실패", "profile-uncertain": "예약 결과 확인 필요", "profiles-complete": "예약자 순차 예약 완료",
   "profiles-parallel-running": "예약자 동시 예약 진행", "profiles-parallel-complete": "예약자 동시 예약 완료", "profiles-parallel-partial": "예약자 동시 예약 일부 확인 필요",
-  exception: "실행 예외", missed: "실행 시각 경과", stopped: "실행 중지", inspected: "객실 확인 완료"
+  exception: "실행 예외", missed: "실행 시각 경과", stopped: "실행 중지", inspected: "객실 확인 완료", expired: "감시 종료"
 };
 const AVAILABILITY_LABELS = {
   available: "예약 가능", booked: "예약 완료", unavailable: "해당 박수 불가",
@@ -709,6 +709,7 @@ function startRoomDrag(event, row, index, list = elements.roomList, items = room
 
 function updateGeneratedValues() {
   updateImmediateBookingVisibility();
+  updateWatchDeadlineHint();
   const date = elements.startDate.value;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     elements.epochValue.textContent = "—";

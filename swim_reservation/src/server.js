@@ -72,7 +72,7 @@ const server = http.createServer(async (request, response) => {
     const planMatch = /^\/api\/plans\/([a-f0-9-]{36})(?:\/(start|stop))?$/.exec(url.pathname);
     if (planMatch) {
       try {
-        if (request.method === "POST" && planMatch[2] === "start") { await plans.start(planMatch[1]); return json(response, 200, { ok: true }); }
+        if (request.method === "POST" && planMatch[2] === "start") { await plans.start(planMatch[1]); return json(response, 200, { ok: true, status: await plans.get(planMatch[1]).store.getStatus() }); }
         if (request.method === "POST" && planMatch[2] === "stop") { await plans.stop(planMatch[1]); return json(response, 200, { ok: true }); }
         if (request.method === "DELETE" && !planMatch[2]) { await plans.remove(planMatch[1]); return json(response, 200, { ok: true }); }
       } catch (error) { return json(response, 409, { error: error.message }); }

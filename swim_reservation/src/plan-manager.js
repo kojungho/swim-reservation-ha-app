@@ -20,11 +20,12 @@ export class PlanManager {
     return result;
   }
   async persist() {
-    const rows = [...this.plans.values()].map(({ id, name, kind, intervalSeconds, enabled, config, watchVersion }) => ({ id, name, kind, intervalSeconds, enabled, config, watchVersion }));
+    const rows = [...this.plans.values()].map(({ id, name, kind, intervalSeconds, enabled, config, watchVersion, watchEndsAt }) => ({ id, name, kind, intervalSeconds, enabled, config, watchVersion, watchEndsAt }));
     await writeFile(`${this.file}.tmp`, JSON.stringify(rows), { mode: 0o600 });
     await rename(`${this.file}.tmp`, this.file);
   }
   async createRuntime(row) {
+    if (row.kind === "watch") row.watchEndsAt = normalizeWatchEndsAt(row.watchEndsAt);
     const store = new Store(path.join(this.dataDir, "plans", row.id));
     await store.init();
     const recordLog = store.recordLog.bind(store);
@@ -74,7 +75,7 @@ export class PlanManager {
     await this.persist();
   }
   async list() {
-    return Promise.all([...this.plans.values()].map(async plan => ({ id: plan.id, name: plan.name, kind: plan.kind, intervalSeconds: plan.intervalSeconds, enabled: plan.enabled, config: plan.config, status: await plan.store.getStatus() })));
+    return Promise.all([...this.plans.values()].map(async plan => ({ id: plan.id, name: plan.name, kind: plan.kind, intervalSeconds: plan.intervalSeconds, watchEndsAt: plan.watchEndsAt || "", watchDeadlineAt: plan.kind === "watch" ? watchDeadlineAt(plan) : null, enabled: plan.enabled, config: plan.config, status: await plan.store.getStatus() })));
   }
   async add(input) {
     return this.locked(async () => {
@@ -83,7 +84,7 @@ export class PlanManager {
       const config = input.kind === "watch" ? normalizeWatchConfig(input.config, Number(input.watchProfileIndex ?? 0)) : singleBookingConfig(input.config);
       const errors = validateConfig(config);
       if (errors.length) throw new Error(`확인할 항목: ${errors.join(", ")}`);
-      const plan = await this.createRuntime({ id: randomUUID(), name: String(input.name || `${config.startDate} ${config.nights}박`).trim().slice(0, 80), kind: input.kind, watchVersion: input.kind === "watch" ? 2 : undefined, intervalSeconds: Math.max(60, Math.min(3600, Math.trunc(Number(input.intervalSeconds) || 60))), enabled: false, config });
+      const plan = await this.createRuntime({ id: randomUUID(), name: String(input.name || `${config.startDate} ${config.nights}박`).trim().slice(0, 80), kind: input.kind, watchVersion: input.kind === "watch" ? 2 : undefined, watchEndsAt: input.kind === "watch" ? normalizeWatchEndsAt(input.watchEndsAt) : undefined, intervalSeconds: Math.max(60, Math.min(3600, Math.trunc(Number(input.intervalSeconds) || 60))), enabled: false, config });
       this.plans.set(plan.id, plan);
       await this.persist();
       return plan.id;
@@ -103,8 +104,13 @@ export class PlanManager {
       const status = await plan.store.getStatus();
       if (generation !== plan.generation) return;
       if (["success", "running", "failed"].includes(status.state)) throw new Error("완료 또는 결과 확인이 필요한 일정입니다. 예약확인 후 새 일정으로 등록해 주세요.");
-      await this.timeSync.ensureSynced();
+      const now = await this.timeSync.ensureSynced();
       if (generation !== plan.generation) return;
+      if (plan.kind === "watch" && now >= triggerEpoch(watchDeadlineAt(plan))) {
+        await plan.store.updateStatus({ state: "stopped", stage: "expired", message: watchExpiryMessage(plan) });
+        await this.persist();
+        return;
+      }
       if (plan.kind === "scheduled") await plan.scheduler.arm(plan.config);
       else if (plan.kind === "now") await plan.scheduler.runNow(plan.config);
       else await plan.store.updateStatus({ state: "waiting", stage: "watching", message: "설정 날짜·박수·객실에 맞는 취소 자리를 감시합니다." });
@@ -146,6 +152,10 @@ export class PlanManager {
   schedule(plan, delay = plan.intervalSeconds * 1000) {
     clearTimeout(plan.timer);
     if (!plan.enabled || this.closed) return;
+    if (plan.kind === "watch") {
+      const remaining = triggerEpoch(watchDeadlineAt(plan)) - this.timeSync.now();
+      if (Number.isFinite(remaining)) delay = Math.min(delay, remaining > 0 ? remaining : plan.failures ? delay : 1000);
+    }
     plan.timer = setTimeout(() => this.poll(plan).catch(error => this.log("error", "plan-watch", error.message)), delay);
     plan.timer.unref?.();
   }
@@ -156,13 +166,11 @@ export class PlanManager {
     try {
       if (plan.scheduler.running || plan.scheduler.preparing) return;
       const status = await plan.store.getStatus();
-      if (["success", "failed"].includes(status.state)) { plan.enabled = false; await this.locked(() => this.persist()); return; }
+      if (["success", "failed"].includes(status.state) || status.stage === "expired") { plan.enabled = false; await this.locked(() => this.persist()); return; }
       if (plan.kind !== "watch") return;
       const now = await this.timeSync.ensureSynced();
-      if (plan.config.startDate < new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(now))) {
-        plan.enabled = false;
-        await plan.store.updateStatus({ state: "stopped", stage: "expired", message: "숙박 시작 날짜가 지나 감시를 종료했습니다." });
-        await this.locked(() => this.persist());
+      if (now >= triggerEpoch(watchDeadlineAt(plan))) {
+        await this.expireWatch(plan);
         return;
       }
       const opensAt = bookingOpenIso(plan.config.startDate);
@@ -174,6 +182,7 @@ export class PlanManager {
       plan.controller = new AbortController();
       const rooms = await this.inspect(plan.config, plan.controller.signal);
       if (!plan.enabled || generation !== plan.generation || this.closed) return;
+      if (this.timeSync.now() >= triggerEpoch(watchDeadlineAt(plan))) { await this.expireWatch(plan); return; }
       plan.failures = 0;
       const matchedConfig = watchConfiguration(plan.config, rooms);
       const matches = Boolean(matchedConfig);
@@ -181,11 +190,20 @@ export class PlanManager {
       if (matches) {
         if (!plan.enabled || generation !== plan.generation || this.closed) return;
         // The engine rechecks date and availability immediately before final submission.
-        await plan.scheduler.runNow({ ...matchedConfig, triggerAt: opensAt });
+        await plan.scheduler.runNow({ ...matchedConfig, triggerAt: opensAt }, { beforeSubmit: () => {
+          const remaining = triggerEpoch(watchDeadlineAt(plan)) - this.timeSync.now();
+          if (remaining <= 0) {
+            const error = new Error(watchExpiryMessage(plan));
+            error.code = "WATCH_DEADLINE";
+            throw error;
+          }
+          return remaining;
+        } });
         await this.log("info", "watch-found", `${plan.name}: 취소 자리 조건 일치, 예약 시도`);
       }
     } catch (error) {
       if (!plan.enabled || generation !== plan.generation || this.closed) return;
+      if (error.code === "WATCH_DEADLINE") { await this.expireWatch(plan); return; }
       plan.failures++;
       if (plan.scheduler.running) return;
       const status = await plan.store.getStatus();
@@ -196,6 +214,11 @@ export class PlanManager {
       plan.controller = null;
       this.schedule(plan, plan.scheduler.running || plan.kind !== "watch" ? 1000 : plan.intervalSeconds * 1000 * Math.min(8, 2 ** plan.failures));
     }
+  }
+  async expireWatch(plan) {
+    plan.enabled = false;
+    await plan.store.updateStatus({ state: "stopped", stage: "expired", message: watchExpiryMessage(plan) });
+    await this.locked(() => this.persist());
   }
   async close() {
     this.closed = true;
@@ -236,4 +259,17 @@ export function singleBookingConfig(input) {
   const profile = getProfiles(config)[config.multipleProfileIndex || 0];
   if (!profile) throw new Error("예약에 사용할 한 명을 선택해 주세요.");
   return normalizeConfig({ ...config, profiles: [profile], multipleProfileIndex: 0 });
+}
+
+export function normalizeWatchEndsAt(value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(value)) throw new Error("감시 마감 날짜·시각을 확인하세요.");
+  const canonical = value.length === 16 ? `${value}:00` : value;
+  const epoch = triggerEpoch(canonical);
+  if (!Number.isFinite(epoch) || new Date(epoch + 9 * 3600_000).toISOString().slice(0, 19) !== canonical) throw new Error("감시 마감 날짜·시각을 확인하세요.");
+  return canonical;
+}
+export function watchDeadlineAt(plan) { return plan.watchEndsAt || `${plan.config.startDate}T00:00:00`; }
+function watchExpiryMessage(plan) {
+  return plan.watchEndsAt ? `지정한 감시 마감 시각이 되어 감시를 종료했습니다: ${plan.watchEndsAt.replace("T", " ")}` : "숙박 시작일 00시가 되어 감시를 종료했습니다. 기본 설정에서는 당일 예약하지 않습니다.";
 }

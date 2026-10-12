@@ -88,7 +88,7 @@ export class ReservationEngine {
     return this.runSingle(config, { ...options, prepared: Boolean(options.prepared && this.page) });
   }
 
-  async runSingle(config, { prepared = false, allowFallback = true } = {}) {
+  async runSingle(config, { prepared = false, allowFallback = true, beforeSubmit } = {}) {
     try {
       await this.ensurePage();
       const attemptedRooms = new Set();
@@ -97,7 +97,8 @@ export class ReservationEngine {
         if (await this.detectPage() !== "personal") throw new Error("미리 준비한 예약자 정보 페이지가 유지되지 않았습니다.");
         await this.fillPersonalInfo(config);
         await this.store.updateStatus({ stage: "final-submit", message: "지정 시각에 최종 예약하기를 전송합니다." });
-        await this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true);
+        if (beforeSubmit) await beforeSubmit();
+        await this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit);
       } else {
         await this.startRoomAttempt(config, attemptedRooms);
       }
@@ -129,7 +130,8 @@ export class ReservationEngine {
         if (result === "personal") {
           await this.fillPersonalInfo(config);
           await this.store.updateStatus({ stage: "final-submit", message: "예약자 정보를 입력하고 최종 예약을 전송합니다." });
-          await this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true);
+          if (beforeSubmit) await beforeSubmit();
+          await this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit);
           continue;
         }
         if (result === "terms") {
@@ -142,6 +144,10 @@ export class ReservationEngine {
       }
       throw new Error("객실 재시도를 포함한 예약 단계가 예상보다 많아 자동 실행을 중지했습니다.");
     } catch (error) {
+      if (error.code === "WATCH_DEADLINE") {
+        await this.store.updateStatus({ state: "stopped", stage: "expired", message: error.message });
+        throw error;
+      }
       const diagnostics = error.diagnostics || await this.collectDiagnostics();
       await this.store.updateStatus({
         state: "failed",
@@ -331,7 +337,7 @@ export class ReservationEngine {
     }
   }
 
-  async clickAction(words, allowSubmitFallback) {
+  async clickAction(words, allowSubmitFallback, beforeSubmit) {
     const currentUrl = this.page.url();
     const action = this.page.locator('button, input[type="button"], input[type="submit"], input[type="image"], img[onclick], a[onclick]');
     const count = await action.count();
@@ -346,9 +352,10 @@ export class ReservationEngine {
       if (await submits.count()) chosen = submits.last();
     }
     if (!chosen) throw new Error(`다음 버튼을 찾지 못했습니다: ${words.join("/")}`);
+    const remaining = beforeSubmit ? await beforeSubmit() : null;
     await Promise.all([
       this.page.waitForURL((url) => url.href !== currentUrl, { timeout: NAVIGATION_TIMEOUT }),
-      chosen.click()
+      chosen.click(remaining === null ? undefined : { timeout: Math.max(1, Math.min(NAVIGATION_TIMEOUT, remaining)), noWaitAfter: true })
     ]);
   }
 

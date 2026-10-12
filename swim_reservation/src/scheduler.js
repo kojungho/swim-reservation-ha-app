@@ -93,11 +93,12 @@ export class Scheduler {
     return this.store.updateStatus({ state: "stopped", stage: "stopped", message: "예약 실행을 중지했습니다." });
   }
 
-  async runNow(config) {
+  async runNow(config, options = {}) {
     if (this.running) throw new Error("이미 예약 엔진이 실행 중입니다.");
     const operation = ++this.operation;
     await this.timeSync.ensureSynced();
     if (operation !== this.operation) return;
+    if (options.beforeSubmit) await options.beforeSubmit();
     const opensAt = triggerEpoch(config.triggerAt);
     if (Number.isFinite(opensAt) && opensAt > this.timeSync.now()) {
       throw new Error(`아직 예약 오픈 전입니다. ${config.triggerAt} 이후 예약하거나 예약 대기를 시작하세요.`);
@@ -124,7 +125,7 @@ export class Scheduler {
       startedAt: this.timeSync.now()
     });
     if (operation !== this.operation) return;
-    this.execute(config, { prepared: false }).catch((error) => this.fail(error));
+    this.execute(config, { ...options, prepared: false }).catch((error) => this.fail(error));
   }
 
   scheduleTick() {
@@ -176,6 +177,10 @@ export class Scheduler {
     }
     const current = await this.store.getStatus();
     if (current.state === "failed") return;
+    if (error.code === "WATCH_DEADLINE") {
+      await this.store.updateStatus({ state: "stopped", stage: "expired", message: error.message });
+      return;
+    }
     await this.store.updateStatus({
       state: "failed",
       stage: "exception",

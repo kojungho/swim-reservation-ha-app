@@ -41,7 +41,7 @@ test("PC·폰의 일정 입력은 등록 성공·탭 이동 시 초기화하고 
       return route.fulfill({ json: result });
     });
     const cleared = async () => {
-      for (const id of ["planName", "startDate", "triggerAt", "reserverName", "depositorName", "phone", "birthDate"]) assert.equal(await page.locator(`#${id}`).inputValue(), "", id);
+      for (const id of ["planName", "startDate", "triggerAt", "reserverName", "depositorName", "phone", "birthDate", "watchEndsAt"]) assert.equal(await page.locator(`#${id}`).inputValue(), "", id);
       assert.equal(await page.locator("#nights").inputValue(), "1");
       assert.equal(await page.locator("#roomList input:checked").count(), 0);
       assert.equal(await page.locator("#multipleProfileSelect option").count(), 1);

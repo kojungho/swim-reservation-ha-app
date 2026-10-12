@@ -85,6 +85,10 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
   assert.equal((await api("config")).profiles[0].reserverName, "둘째");
   assert.deepEqual(Object.keys((await api("lookup-profiles")).profiles[0]).sort(), ["phone", "reserverName"]);
   await api("plans", "POST", { kind: "scheduled", config });
+  await api("plans", "POST", { kind: "watch", config, watchEndsAt: "2030-12-20T18:00" });
+  assert.equal((await api("plans")).entries[1].watchDeadlineAt, "2030-12-20T18:00:00");
+  const invalidDeadline = await fetch(new URL("api/plans", api.baseUrl), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "watch", config, watchEndsAt: "2030-02-30T18:00" }) });
+  assert.equal(invalidDeadline.status, 400);
   assert.equal((await api("plans")).entries[0].config.profiles.length, 1);
   assert.equal((await api("status")).state, "idle");
   await api("lookup-profiles", "PUT", { profiles: [] });
@@ -92,6 +96,7 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
   assert.deepEqual((await api("lookup-profiles")).profiles, []);
   assert.equal((await api("config")).editorProfileIndex, 1);
   assert.equal((await api("plans")).entries[0].enabled, false);
+  assert.equal((await api("plans")).entries[1].watchEndsAt, "2030-12-20T18:00:00");
   await api("profiles", "PUT", { profiles: [] });
   await api("config", "PUT", { ...config, profiles: [{ ...profiles[0], reserverName: "일정만 저장한 사람" }], multipleProfileIndex: 0 });
   assert.deepEqual((await api("profiles")).profiles, []);
