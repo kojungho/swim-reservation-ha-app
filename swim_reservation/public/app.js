@@ -99,8 +99,9 @@ function bindEvents() {
     if (selectedMonthlyDate) target.scrollIntoView({ behavior: "smooth", block: "center" });
   });
   elements.bookingHelpButton.addEventListener("click", () => {
-    elements.bookingHelpCurrent.textContent = `현재 선택: ${elements.bookingMode.selectedOptions[0]?.textContent || ""}`;
-    for (const section of elements.bookingHelpDialog.querySelectorAll("[data-booking-help]")) section.open = section.dataset.bookingHelp === elements.bookingMode.value;
+    const helpMode = workspaceTab === "watch" ? "watch" : elements.bookingMode.value;
+    elements.bookingHelpCurrent.textContent = `예약 방식: ${helpMode === "watch" ? "취소 자리 감시" : elements.bookingMode.selectedOptions[0]?.textContent || ""}`;
+    for (const section of elements.bookingHelpDialog.querySelectorAll("[data-booking-help]")) section.open = section.dataset.bookingHelp === helpMode;
     elements.bookingHelpDialog.showModal();
     elements.bookingHelpDialog.scrollTop = 0;
   });

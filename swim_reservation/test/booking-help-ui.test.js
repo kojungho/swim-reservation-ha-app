@@ -27,15 +27,17 @@ test("PC·휴대폰 도움말은 선택한 모드를 펼치고 예약 설정을 
     });
     await page.goto("https://app.test/");
     const layout = await page.evaluate(() => {
-      const nights = document.querySelector("#nights").getBoundingClientRect();
-      const mode = document.querySelector("#bookingMode").getBoundingClientRect();
+      const title = document.querySelector("header h1").getBoundingClientRect();
       const icon = document.querySelector("#bookingHelpButton").getBoundingClientRect();
-      return { nightsTop: nights.top, modeTop: mode.top, iconWidth: icon.width, iconHeight: icon.height };
+      return { centered: Math.abs(title.top + title.height / 2 - icon.top - icon.height / 2) < 1, iconWidth: icon.width, iconHeight: icon.height, beside: icon.left >= title.right };
     });
+    assert.equal(await page.locator("header .app-title-row #bookingHelpButton").count(), 1);
+    assert.equal(layout.centered, true);
+    assert.equal(layout.beside, true);
     assert.equal(await page.locator("#bookingMode").isVisible(), false);
     assert.equal(layout.iconWidth, 20);
     assert.equal(layout.iconHeight, 20);
-    for (const mode of ["priority", "multiple", "profiles-parallel"]) {
+    for (const mode of ["priority", "multiple", "profiles-parallel", "watch"]) {
       await page.locator(`[data-workspace-tab="${mode}"]`).click();
       await page.getByRole("button", { name: "예약 모드별 사용 방법", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "예약 모드별 사용 방법", exact: true });
@@ -45,10 +47,14 @@ test("PC·휴대폰 도움말은 선택한 모드를 펼치고 예약 설정을 
       assert.equal(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth), true);
       const other = mode === "multiple" ? "priority" : "multiple";
       await dialog.locator(`[data-booking-help="${other}"] summary`).click();
-      assert.equal(await page.locator("#bookingMode").inputValue(), mode);
+      assert.equal(await page.locator("#bookingMode").inputValue(), mode === "watch" ? "priority" : mode);
       await page.getByRole("button", { name: "사용 방법 닫기", exact: true }).click();
       assert.equal(await dialog.isVisible(), false);
       assert.equal(await page.locator("#bookingHelpButton").evaluate(el => el === document.activeElement), true);
+    }
+    for (const tab of ["book", "people", "logs"]) {
+      await page.locator(`[data-workspace-tab="${tab}"]`).click();
+      assert.equal(await page.locator("header #bookingHelpButton").isVisible(), true);
     }
     await page.locator("#bookingHelpButton").focus();
     await page.keyboard.press("Enter");

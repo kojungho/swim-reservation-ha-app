@@ -22,7 +22,6 @@ function initializeWorkspace() {
   const logCard = document.getElementById("logCard");
   logCard.querySelector(".section-title").after(elements.statusDetails, elements.profileStatusList, elements.diagnosticsPanel);
   profilePage.querySelector("h3").before(elements.multipleProfileField, document.getElementById("watchProfileField"));
-  elements.startDate.closest("section").querySelector(".section-title").append(elements.bookingHelpButton);
   const actions = document.createElement("div");
   actions.className = "actions";
   actions.append(elements.siteProfileSelect.closest("label"), elements.reservationSiteButton, elements.reservationLookupButton);
@@ -93,7 +92,6 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   document.getElementById("watchDeselectAll").hidden = tab !== "watch";
   if (tab === "watch") elements.historyList.closest("section").hidden = true;
   elements.bookingMode.closest(".booking-mode-field").hidden = true;
-  elements.bookingHelpButton.hidden = tab === "watch";
   elements.triggerAt.closest("label").hidden = tab === "watch";
   document.getElementById("reservationConnectionDetails").hidden = tab === "watch";
   elements.siteClock.closest(".site-time-panel").hidden = tab === "watch";
