@@ -35,13 +35,13 @@
       <p>실제 예약에 사용할 정보를 최대 5명까지 저장합니다. 각 예약 모드의 선택 목록에 자동 반영되며, 선택하기 전에는 입력란을 채우지 않습니다. 예약 조회용 저장과는 별개입니다.</p>
       <div id="bookingBookList"></div>
       <h3>새 예약자 추가</h3>
-      <div class="grid two">
+      <div class="grid two identity-fields">
         <label>예약자명<input id="bookReserverName" autocomplete="off"></label>
         <label>입금자명<input id="bookDepositorName" autocomplete="off"></label>
         <label>휴대폰 번호<input id="bookPhone" inputmode="numeric" autocomplete="off"></label>
         <label>생년월일<input id="bookBirthDate" inputmode="numeric" maxlength="8" placeholder="YYYYMMDD" autocomplete="off"></label>
       </div>
-      <button id="bookAddButton" type="button" class="secondary">예약자 저장</button>
+      <div class="section-actions"><button id="bookAddButton" type="button" class="secondary">예약자 저장</button></div>
       <p id="bookingBookMessage" role="status"></p>
     </section>
 
@@ -49,18 +49,18 @@
       <h2>예약 조회</h2>
       <p>예약자명과 휴대폰 번호를 조회용으로만 저장합니다. 예약에 사용할 정보나 진행 중인 일정에는 반영되지 않습니다. 이 탭에 들어오면 저장된 조회 대상들의 예약을 확인합니다.</p>
       <div id="lookupProfileList"></div>
-      <div class="section-actions"><button id="addLookupProfileButton" class="secondary" type="button">+ 조회 대상 추가</button><button id="saveLookupProfilesButton" class="secondary" type="button">조회 정보 저장·조회</button><button id="loadLookupProfilesButton" class="secondary" type="button">저장된 조회 정보 불러오기</button></div>
+      <div class="section-actions"><button id="addLookupProfileButton" class="secondary" type="button" aria-label="조회 대상 추가">+ 대상 추가</button><button id="saveLookupProfilesButton" class="secondary" type="button" aria-label="조회 정보 저장·조회">저장·조회</button><button id="loadLookupProfilesButton" class="secondary" type="button" aria-label="저장된 조회 정보 불러오기">불러오기</button></div>
       <p id="lookupMessage" role="status">조회 대상은 최대 5명입니다. 입금자명·생년월일은 필요하지 않습니다.</p>
     </section>
 
     <section id="planCard" class="card">
       <h2>여러 일정 진행</h2>
       <p>현재 입력한 설정을 별도 일정으로 등록한 뒤 목록의 시작을 누르세요. 미래 시각 예약과 취소 자리 감시는 여기서 등록·시작합니다. 등록 후 다른 날짜·모드로 변경해도 진행 중인 일정에는 영향을 주지 않습니다. 최대 20개 저장, 5개 동시 진행.</p>
-      <div class="grid two"><label>일정 이름<input id="planName" placeholder="예: 12월 가족 캠핑"></label><label>취소 자리 조회 간격 (초)<input id="watchInterval" type="number" min="60" max="3600" value="60"></label></div>
+      <div class="grid two plan-fields"><label>일정 이름<input id="planName" placeholder="예: 12월 가족 캠핑"></label><label>조회 간격 (초)<input id="watchInterval" type="number" min="60" max="3600" value="60"></label></div>
       <label id="watchEndsAtField" hidden>감시 마감 날짜·시각 (선택)<input id="watchEndsAt" type="datetime-local" step="1"><small id="watchDeadlineHint">비워두면 숙박 시작일 00시에 감시를 종료합니다. 당일 감시를 원하면 마감을 직접 지정하세요.</small></label>
       <label id="watchProfileField" hidden>취소 자리를 예약할 예약자<select id="watchProfileSelect"></select></label>
       <p id="watchHelp" hidden>예약 방식이나 객실 순위 없이 체크한 객실 중 날짜·박수 조건에 맞는 자리가 나오면 선택한 예약자 한 명으로 객실 하나를 즉시 예약합니다. 조회 사이에 마감될 수 있으며 불확실한 제출 결과는 자동 재시도하지 않습니다.</p>
-      <button id="addPlanButton" class="secondary" type="button">현재 설정으로 일정 등록</button>
+      <div class="section-actions"><button id="addPlanButton" class="secondary" type="button" aria-label="현재 설정으로 예약 일정 등록">예약 일정 등록</button></div>
       <p id="planMessage" role="status"></p>
       <div id="planList" class="history-list"></div>
     </section>
@@ -82,13 +82,13 @@
       <div class="site-time-panel">
         <div><span>쉼오지 서버 시간</span><strong id="siteClock">동기화 중</strong></div>
         <p id="siteTimeMeta">예약 사이트 서버 시간을 확인하고 있습니다.</p>
-        <button id="siteTimeSyncButton" class="secondary" type="button">시간 다시 맞추기</button>
+        <button id="siteTimeSyncButton" class="secondary" type="button" aria-label="시간 다시 맞추기">시간 맞추기</button>
       </div>
     </section>
 
     <section class="card">
-      <div class="section-title section-title-actions"><span>2</span><div><h2 id="roomSectionTitle">객실 우선순위</h2><p id="roomSectionHelp">체크된 객실 중 위에 있는 객실부터 하나가 성공할 때까지 시도합니다.</p></div><button id="siteMapButton" class="secondary">사이트 위치 안내</button></div>
-      <div class="section-actions room-actions"><button id="inspectButton" class="secondary" type="button">새로 고침</button><button id="watchSelectAll" class="secondary" type="button" hidden>전체 선택</button><button id="watchDeselectAll" class="secondary" type="button" hidden>전체 해제</button></div>
+      <div class="section-title"><span>2</span><div><h2 id="roomSectionTitle">객실 우선순위</h2><p id="roomSectionHelp">체크된 객실 중 위에 있는 객실부터 하나가 성공할 때까지 시도합니다.</p></div></div>
+      <div class="section-actions room-actions"><button id="inspectButton" class="secondary" type="button">새로 고침</button><button id="siteMapButton" class="secondary">사이트 위치 안내</button><button id="watchSelectAll" class="secondary" type="button" hidden>전체 선택</button><button id="watchDeselectAll" class="secondary" type="button" hidden>전체 해제</button></div>
       <div id="roomList" class="room-list"></div>
       <label id="multipleProfileField" hidden>예약에 사용할 한 명<select id="multipleProfileSelect"><option value="0">예약자 1</option></select></label>
       <div id="profilePriorities" hidden></div>
@@ -99,16 +99,15 @@
     <section class="card">
       <div class="section-title"><span>3</span><div><h2>예약에 사용할 정보</h2><p>이 탭에서 사용할 예약자 정보를 입력하세요. 일정 등록 시 해당 정보가 함께 저장되며 예약 조회용 저장 정보와는 별개입니다.</p></div></div>
       <h3 id="firstBookingProfileTitle">예약자 1</h3>
-      <label>저장된 예약자 선택<select id="bookingProfileSelect1"></select></label>
-      <div id="firstBookingProfileFields" class="grid two">
+      <label class="booking-select-field">저장된 예약자 선택<select id="bookingProfileSelect1"></select></label>
+      <div id="firstBookingProfileFields" class="grid two identity-fields">
         <label>예약자명<input id="reserverName" autocomplete="off"></label>
         <label>입금자명<input id="depositorName" autocomplete="off"></label>
         <label>휴대폰 번호<input id="phone" inputmode="numeric" autocomplete="off" placeholder="01012345678"></label>
         <label>생년월일<input id="birthDate" inputmode="numeric" autocomplete="off" placeholder="YYYYMMDD" maxlength="8"></label>
       </div>
       <div id="extraProfiles"></div>
-      <button id="addProfileButton" class="secondary" type="button">+ 예약자 추가</button>
-      <div class="section-actions"><button id="saveProfilesButton" class="secondary" type="button" disabled>예약자 저장</button></div>
+      <div class="section-actions"><button id="addProfileButton" class="secondary" type="button">+ 예약자 추가</button><button id="saveProfilesButton" class="secondary" type="button" disabled>예약자 저장</button></div>
       <p id="profileModeHelp">예약에 사용할 사람은 최대 5명까지 저장할 수 있습니다. 조회용 정보는 예약 조회 탭에서 별도로 저장하세요.</p>
     </section>
 
@@ -131,9 +130,9 @@
         <pre id="diagnosticsPreview"></pre>
       </div>
       <div class="actions">
-        <label>사이트에서 조회할 대상<select id="siteProfileSelect"><option value="1">조회 대상 1</option></select></label>
-        <button id="reservationSiteButton" class="secondary">선택한 대상의 예약 조회 사이트 열기</button>
-        <button id="reservationLookupButton" class="secondary">저장된 대상 예약 조회</button>
+        <label>조회 대상<select id="siteProfileSelect"><option value="1">조회 대상 1</option></select></label>
+        <button id="reservationSiteButton" class="secondary" aria-label="선택한 대상의 예약 조회 사이트 열기">사이트 조회</button>
+        <button id="reservationLookupButton" class="secondary" aria-label="저장된 대상 예약 조회">예약 조회</button>
         <button id="stopButton" class="danger">모든 일정 중지</button>
         <button id="runNowButton" class="now" hidden>지금 바로 예약</button>
       </div>
@@ -143,9 +142,9 @@
       <div class="section-title"><span>6</span><div><h2>실행 로그</h2><p>최근 실행 과정과 오류를 HA App 데이터 영역에 저장합니다.</p></div></div>
       <div id="logList" class="log-list"><p>로그를 불러오는 중입니다.</p></div>
       <div class="section-actions log-actions">
-        <button id="refreshLogsButton" class="secondary" type="button">로그 새로고침</button>
-        <button id="copyLogsButton" class="secondary" type="button">로그 복사</button>
-        <button id="saveLogsButton" class="secondary" type="button">로그 파일 저장</button>
+        <button id="refreshLogsButton" class="secondary" type="button" aria-label="로그 새로고침">새로 고침</button>
+        <button id="copyLogsButton" class="secondary" type="button" aria-label="로그 복사">복사</button>
+        <button id="saveLogsButton" class="secondary" type="button" aria-label="로그 파일 저장">파일 저장</button>
       </div>
     </section>
 

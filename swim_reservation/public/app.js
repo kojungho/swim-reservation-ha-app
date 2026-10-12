@@ -443,7 +443,7 @@ function renderExtraProfiles() {
   extraProfiles.forEach((profile, index) => {
     const panel = document.createElement("div");
     panel.className = "second-profile-panel";
-    panel.innerHTML = '<h3>예약자 ' + (index + 2) + '</h3><div class="grid two"></div><button type="button" class="secondary">이 일정에서 제외</button>';
+    panel.innerHTML = '<h3>예약자 ' + (index + 2) + '</h3><div class="grid two identity-fields"></div><div class="section-actions profile-panel-actions"><button type="button" class="secondary">이 일정에서 제외</button></div>';
     for (const [key, label] of [["reserverName", "예약자명"], ["depositorName", "입금자명"], ["phone", "휴대폰 번호"], ["birthDate", "생년월일"]]) {
       const field = document.createElement("label");
       field.textContent = label;
@@ -469,7 +469,8 @@ function renderExtraProfiles() {
     elements.extraProfiles.append(panel);
   });
   elements.addProfileButton.disabled = extraProfiles.length >= 4;
-  elements.addProfileButton.textContent = extraProfiles.length >= 4 ? "예약자 최대 5명 등록됨" : "+ 예약자 추가";
+  elements.addProfileButton.textContent = extraProfiles.length >= 4 ? "최대 5명" : "+ 예약자 추가";
+  elements.addProfileButton.title = extraProfiles.length >= 4 ? "예약자는 최대 5명까지 진행할 수 있습니다." : "이 일정에 사용할 예약자 입력란 추가";
   refreshSiteProfileSelector();
 }
 

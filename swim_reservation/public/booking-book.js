@@ -60,6 +60,7 @@ function selectBookingActor(index, value) {
 }
 function mountExtraBookingSelector(panel, index) {
   const label = document.createElement("label");
+  label.className = "booking-select-field";
   label.textContent = "저장된 예약자 선택";
   const select = document.createElement("select");
   select.id = `bookingProfileSelect${index + 1}`;
@@ -72,7 +73,7 @@ function mountExtraBookingSelector(panel, index) {
   save.id = `saveBookingActor${index + 1}`;
   save.textContent = "예약자 저장";
   save.addEventListener("click", () => perform(() => saveBookingActor(index)));
-  panel.append(save);
+  panel.querySelector(".profile-panel-actions").append(save);
 }
 function renderBookingProfileSelectors() {
   readConfig().profiles.forEach((profile, index) => {

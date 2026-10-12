@@ -23,7 +23,7 @@ function initializeWorkspace() {
   logCard.querySelector(".section-title").after(elements.statusDetails, elements.profileStatusList, elements.diagnosticsPanel);
   profilePage.querySelector("h3").before(elements.multipleProfileField, document.getElementById("watchProfileField"));
   const actions = document.createElement("div");
-  actions.className = "actions";
+  actions.className = "actions lookup-site-controls";
   actions.append(elements.siteProfileSelect.closest("label"), elements.reservationSiteButton, elements.reservationLookupButton);
   document.getElementById("lookupCard").append(actions, elements.reservationList);
   elements.multipleProfileSelect.addEventListener("change", updateBookingProfileVisibility);
@@ -90,6 +90,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   document.getElementById("logCard").hidden = tab !== "logs";
   if (tab === "logs" && entering) void refreshLogs().catch(error => showMessage(`로그 조회 실패: ${error.message}`, true));
   document.getElementById("planCard").hidden = !booking;
+  document.getElementById("planCard").classList.toggle("watch-mode", tab === "watch");
   document.getElementById("watchHelp").hidden = tab !== "watch";
   document.getElementById("watchInterval").closest("label").hidden = tab !== "watch";
   document.getElementById("watchEndsAtField").hidden = tab !== "watch";
@@ -103,7 +104,8 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   elements.siteClock.closest(".site-time-panel").hidden = tab === "watch";
   elements.startDate.closest("section").querySelector("h2").textContent = tab === "watch" ? "숙박 조건" : "예약 날짜와 시각";
   elements.startDate.closest("section").querySelector(".section-title p").textContent = tab === "watch" ? "감시할 숙박 시작 날짜와 박수를 지정하세요. 조건에 맞는 자리를 발견하면 바로 예약을 시도합니다." : "숙박 날짜·박수와 최종 예약을 제출할 시각을 지정하세요. 예약 모드는 상단 탭에서 선택합니다.";
-  document.getElementById("addPlanButton").textContent = tab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 예약 일정 등록";
+  document.getElementById("addPlanButton").textContent = tab === "watch" ? "감시 일정 등록" : "예약 일정 등록";
+  document.getElementById("addPlanButton").setAttribute("aria-label", tab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 예약 일정 등록");
   updateImmediateBookingVisibility();
   if (tab === "monthly") {
     if (!elements.monthlyDialog.open) {
@@ -153,10 +155,10 @@ function renderLookupProfiles() {
   list.replaceChildren();
   lookupProfilesDraft.forEach((profile, index) => {
     const panel = document.createElement("div");
-    panel.className = "second-profile-panel";
+    panel.className = "second-profile-panel lookup-profile-panel";
     const title = document.createElement("h3");
     title.textContent = `조회 대상 ${index + 1}`;
-    const grid = document.createElement("div"); grid.className = "grid two";
+    const grid = document.createElement("div"); grid.className = "grid two lookup-fields";
     for (const [key, label] of [["reserverName", "예약자명"], ["phone", "휴대폰 번호"]]) {
       const field = document.createElement("label"); field.textContent = label;
       const input = document.createElement("input");
@@ -167,9 +169,12 @@ function renderLookupProfiles() {
       input.addEventListener("input", () => { profile[key] = input.value; refreshLookupSiteSelector(); });
       field.append(input); grid.append(field);
     }
-    const remove = document.createElement("button"); remove.type = "button"; remove.className = "secondary"; remove.textContent = "조회 대상 삭제";
-    remove.addEventListener("click", () => { lookupProfilesDraft.splice(index, 1); renderLookupProfiles(); document.getElementById("lookupMessage").textContent = "조회 정보 저장을 눌러 삭제 내용을 반영하세요. 실제 예약은 취소되지 않습니다."; });
-    panel.append(title, grid, remove); list.append(panel);
+    const remove = document.createElement("button"); remove.type = "button"; remove.className = "secondary"; remove.textContent = "삭제";
+    remove.setAttribute("aria-label", `조회 대상 ${index + 1} 삭제`);
+    remove.addEventListener("click", () => { lookupProfilesDraft.splice(index, 1); renderLookupProfiles(); document.getElementById("lookupMessage").textContent = "저장·조회를 눌러 삭제 내용을 반영하세요. 실제 예약은 취소되지 않습니다."; });
+    const header = document.createElement("div"); header.className = "profile-panel-heading";
+    header.append(title, remove);
+    panel.append(header, grid); list.append(panel);
   });
   document.getElementById("addLookupProfileButton").disabled = lookupProfilesDraft.length >= 5;
   refreshLookupSiteSelector();
@@ -179,7 +184,7 @@ function refreshLookupSiteSelector() {
   const select = elements.siteProfileSelect, previous = select.value;
   select.replaceChildren(...lookupProfilesDraft.map((profile, index) => {
     const option = document.createElement("option"); option.value = String(index + 1);
-    option.textContent = `조회 대상 ${index + 1}${profile.reserverName ? ` · ${profile.reserverName}` : ""}`;
+    option.textContent = `${index + 1}. ${profile.reserverName || "미입력"}`;
     return option;
   }));
   select.value = Number(previous) <= lookupProfilesDraft.length && previous ? previous : "1";
