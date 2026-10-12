@@ -304,6 +304,7 @@ async function serveStatic(pathname, response) {
     "/index.html": ["index.html", "text/html; charset=utf-8"],
     "/app.js": ["app.js", "text/javascript; charset=utf-8"],
     "/workspace.js": ["workspace.js", "text/javascript; charset=utf-8"],
+    "/booking-book.js": ["booking-book.js", "text/javascript; charset=utf-8"],
     "/styles.css": ["styles.css", "text/css; charset=utf-8"],
     "/site-map.png": ["site-map.png", "image/png"]
   };

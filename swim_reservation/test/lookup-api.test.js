@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { chromium } from "playwright-core";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -27,14 +29,45 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
       child.once("exit", code => reject(new Error(`서버 종료 ${code}: ${output}`)));
       child.once("error", reject);
     });
-    return async (endpoint, method = "GET", body) => {
+    const api = async (endpoint, method = "GET", body) => {
       const response = await fetch(`http://127.0.0.1:${port}/api/${endpoint}`, { method, headers: { "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
       const result = await response.json();
       assert.ok(response.ok, JSON.stringify(result));
       return result;
     };
+    api.baseUrl = `http://127.0.0.1:${port}/`;
+    return api;
   }
   let api = await boot();
+  const html = await (await fetch(api.baseUrl)).text();
+  const scripts = [...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1]);
+  assert.ok(scripts.includes("booking-book.js"));
+  for (const file of scripts) {
+    const response = await fetch(new URL(file, api.baseUrl));
+    assert.equal(response.status, 200, `HTML에서 참조한 ${file}을 실제 서버가 제공해야 합니다.`);
+    assert.match(response.headers.get("content-type"), /javascript/);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  }
+  const executablePath = [process.env.CHROMIUM_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
+  await t.test("실제 HTTP 서버에서 예약자 관리 파일을 로드하고 탭·선택 목록을 초기화한다", { skip: !executablePath }, async () => {
+    const browser = await chromium.launch({ executablePath, headless: true });
+    try {
+      const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+      const errors = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.goto(api.baseUrl);
+      await page.waitForFunction(() => document.querySelector("#bookingProfileSelect1").options.length === 3);
+      await page.locator(".workspace-tabs .active").waitFor();
+      assert.equal(await page.locator("#reserverName").inputValue(), "");
+      await page.locator("#bookingProfileSelect1").selectOption("1");
+      assert.equal(await page.locator("#reserverName").inputValue(), "둘째");
+      await page.locator('[data-workspace-tab="book"]').click();
+      assert.equal(await page.locator("#bookingBookList .booking-book-row").count(), 2);
+      await page.locator('[data-workspace-tab="profiles-parallel"]').click();
+      assert.equal(await page.locator("#reserverName").inputValue(), "");
+      assert.deepEqual(errors, []);
+    } finally { await browser.close(); }
+  });
   const migrated = await api("lookup-profiles");
   assert.equal(migrated.profiles.length, 2);
   assert.deepEqual(Object.keys(migrated.profiles[0]).sort(), ["phone", "reserverName"]);
