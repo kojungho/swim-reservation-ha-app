@@ -27,6 +27,9 @@ test("320·390·768·1280px의 모든 탭에서 입력과 버튼이 붙거나 �
     async function checkLayout(tab) {
       const issues = await page.evaluate(() => {
         const problems = [];
+        const name = document.querySelector("#planName").getBoundingClientRect();
+        const register = document.querySelector("#addPlanButton").getBoundingClientRect();
+        if (name.width && register.width && (Math.abs(name.bottom - register.bottom) > 1 || register.left <= name.right + 5)) problems.push("일정 이름과 등록 버튼은 같은 줄에 간격을 두고 배치");
         if (document.documentElement.scrollWidth > innerWidth + 1) problems.push("가로 넘침");
         const scope = document.querySelector("dialog:modal") || document;
         const visible = selector => [...scope.querySelectorAll(selector)].filter(el => {
@@ -77,9 +80,13 @@ test("320·390·768·1280px의 모든 탭에서 입력과 버튼이 붙거나 �
         await page.waitForFunction(() => document.querySelector("#lookupMessage").textContent.includes("조회용 정보만 저장"));
         assert.deepEqual(state.lookupBook, [{ reserverName: "가나다", phone: "01012345671" }]);
       }
-      if (tab === "monthly") await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
+      if (tab === "monthly") {
+        await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
+        await page.locator(".monthly-prefetch summary").click();
+      }
       if (tab === "logs") await page.waitForFunction(() => document.querySelector("#logList").textContent.includes("연결 오류"));
       await checkLayout(tab);
+      if (tab === "priority" && [390, 1280].includes(width)) await page.locator("#planCard").screenshot({ path: `/tmp/swim-profiles.6W9Acs/plan-registration-${width}.png` });
     }
     await page.locator('[data-workspace-tab="priority"]').click();
     await page.locator("#reservationConnectionDetails").evaluate(el => { el.open = true; });

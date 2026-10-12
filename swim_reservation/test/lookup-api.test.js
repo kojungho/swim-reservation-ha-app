@@ -39,6 +39,8 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
     return api;
   }
   let api = await boot();
+  assert.equal((await api("month-cache")).intervalMinutes, 60);
+  assert.equal((await api("month-cache", "PUT", { intervalMinutes: 0 })).intervalMinutes, 0);
   const html = await (await fetch(api.baseUrl)).text();
   const scripts = [...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1]);
   assert.ok(scripts.includes("booking-book.js"));
@@ -93,6 +95,7 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
   assert.equal((await api("status")).state, "idle");
   await api("lookup-profiles", "PUT", { profiles: [] });
   await stop(); api = await boot();
+  assert.equal((await api("month-cache")).intervalMinutes, 0);
   assert.deepEqual((await api("lookup-profiles")).profiles, []);
   assert.equal((await api("config")).editorProfileIndex, 1);
   assert.equal((await api("plans")).entries[0].enabled, false);

@@ -14,6 +14,7 @@ import { SiteMap } from "./site-map.js";
 import { lookupProfiles } from "./profile-lookup.js";
 import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./monthly-availability.js";
 import { PlanManager, singleBookingConfig } from "./plan-manager.js";
+import { MonthCache } from "./month-cache.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -41,6 +42,13 @@ const plans = new PlanManager({ dataDir: DATA_DIR, timeSync,
   log: (...args) => store.recordLog(...args)
 });
 const reservationManager = new ReservationManager({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
+const monthCache = new MonthCache({ dataDir: DATA_DIR, now: () => timeSync.now(),
+  inspect: (config, signal) => inspections.inspect(config, signal),
+  knownRooms: async () => (await store.getConfig()).roomPriority.map(room => room.name),
+  canInspect: () => !scheduler.running && !scheduler.preparing && !plans.busy &&
+    ![scheduler, ...[...plans.plans.values()].filter(plan => plan.enabled).map(plan => plan.scheduler)]
+      .some(item => item.armed && triggerEpoch(item.armedConfig?.triggerAt) - timeSync.now() < 300_000)
+});
 
 await store.init();
 await store.getLookupProfiles();
@@ -56,10 +64,18 @@ if (legacyStatus.state === "waiting" && legacyConfig.bookingMode === "priority" 
   await store.updateStatus({ state: "failed", stage: "exception", message: error.message });
 });
 await plans.init();
+await monthCache.init();
+monthCache.start();
 
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+    if (url.pathname === "/api/month-cache" && request.method === "GET") return json(response, 200, monthCache.status());
+    if (url.pathname === "/api/month-cache" && request.method === "PUT") {
+      try { return json(response, 200, await monthCache.configure((await readJsonBody(request)).intervalMinutes)); }
+      catch (error) { return json(response, 400, { error: error.message }); }
+    }
+    if (url.pathname === "/api/month-cache/refresh" && request.method === "POST") return json(response, 202, monthCache.refresh());
     if (url.pathname === "/api/plans" && request.method === "GET") return json(response, 200, { entries: await plans.list() });
     if (url.pathname === "/api/plans/stop-all" && request.method === "POST") {
       for (const plan of plans.plans.values()) if (plan.enabled) await plans.stop(plan.id);
@@ -72,7 +88,7 @@ const server = http.createServer(async (request, response) => {
     const planMatch = /^\/api\/plans\/([a-f0-9-]{36})(?:\/(start|stop))?$/.exec(url.pathname);
     if (planMatch) {
       try {
-        if (request.method === "POST" && planMatch[2] === "start") { await plans.start(planMatch[1]); return json(response, 200, { ok: true, status: await plans.get(planMatch[1]).store.getStatus() }); }
+        if (request.method === "POST" && planMatch[2] === "start") { await monthCache.pause(); await plans.start(planMatch[1]); return json(response, 200, { ok: true, status: await plans.get(planMatch[1]).store.getStatus() }); }
         if (request.method === "POST" && planMatch[2] === "stop") { await plans.stop(planMatch[1]); return json(response, 200, { ok: true }); }
         if (request.method === "DELETE" && !planMatch[2]) { await plans.remove(planMatch[1]); return json(response, 200, { ok: true }); }
       } catch (error) { return json(response, 409, { error: error.message }); }
@@ -209,6 +225,7 @@ const server = http.createServer(async (request, response) => {
       const errors = validateConfig(config);
       if (errors.length) return json(response, 400, { ok: false, error: `확인할 항목: ${errors.join(", ")}` });
       if (scheduler.running) return json(response, 409, { ok: false, error: "이미 예약 엔진이 실행 중입니다." });
+      await monthCache.pause();
       await scheduler.runNow(config);
       return json(response, 202, { ok: true, startedAt: timeSync.now() });
     }
@@ -292,6 +309,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     scheduler.cancelRequested = true;
     scheduler.operation++;
     await plans.close();
+    await monthCache.close();
     await inspections.cancelAll();
     await engine.close();
     server.close(() => process.exit(0));

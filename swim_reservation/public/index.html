@@ -56,11 +56,11 @@
     <section id="planCard" class="card">
       <h2>여러 일정 진행</h2>
       <p>현재 입력한 설정을 별도 일정으로 등록한 뒤 목록의 시작을 누르세요. 미래 시각 예약과 취소 자리 감시는 여기서 등록·시작합니다. 등록 후 다른 날짜·모드로 변경해도 진행 중인 일정에는 영향을 주지 않습니다. 최대 20개 저장, 5개 동시 진행.</p>
-      <div class="grid two plan-fields"><label>일정 이름<input id="planName" placeholder="예: 12월 가족 캠핑"></label><label>조회 간격 (초)<input id="watchInterval" type="number" min="60" max="3600" value="60"></label></div>
+      <div class="plan-registration"><label>일정 이름<input id="planName" placeholder="예: 가족 캠핑"></label><button id="addPlanButton" class="secondary" type="button" aria-label="현재 설정으로 예약 일정 등록">예약 일정 등록</button></div>
+      <div class="grid two plan-fields"><label>조회 간격 (초)<input id="watchInterval" type="number" min="60" max="3600" value="60"></label></div>
       <label id="watchEndsAtField" hidden>감시 마감 날짜·시각 (선택)<input id="watchEndsAt" type="datetime-local" step="1"><small id="watchDeadlineHint">비워두면 숙박 시작일 00시에 감시를 종료합니다. 당일 감시를 원하면 마감을 직접 지정하세요.</small></label>
       <label id="watchProfileField" hidden>취소 자리를 예약할 예약자<select id="watchProfileSelect"></select></label>
       <p id="watchHelp" hidden>예약 방식이나 객실 순위 없이 체크한 객실 중 날짜·박수 조건에 맞는 자리가 나오면 선택한 예약자 한 명으로 객실 하나를 즉시 예약합니다. 조회 사이에 마감될 수 있으며 불확실한 제출 결과는 자동 재시도하지 않습니다.</p>
-      <div class="section-actions"><button id="addPlanButton" class="secondary" type="button" aria-label="현재 설정으로 예약 일정 등록">예약 일정 등록</button></div>
       <p id="planMessage" role="status"></p>
       <div id="planList" class="history-list"></div>
     </section>
@@ -194,6 +194,7 @@
   <dialog id="monthlyDialog" class="monthly-dialog" aria-labelledby="monthlyTitle">
     <div class="booking-help-heading"><h2 id="monthlyTitle">월별 전체 예약 현황</h2><button id="monthlyCloseButton" class="secondary" type="button" aria-label="월별 현황 닫기">닫기</button></div>
     <div class="monthly-controls"><button id="monthlyPrevButton" class="secondary" type="button" aria-label="이전 달">‹</button><label>조회할 월<input id="monthlyMonth" type="month" min="2000-01" max="2100-12"></label><button id="monthlyNextButton" class="secondary" type="button" aria-label="다음 달">›</button><button id="monthlyQueryButton" class="secondary" type="button">조회</button></div>
+    <details class="monthly-prefetch"><summary>3개월 뒤 현황 미리 조회 설정</summary><p id="monthlyCacheHelp">이번 달에서 3개월 뒤인 달만 서버에서 미리 조회합니다. 그 이후 달은 기존처럼 열었을 때 조회합니다.</p><div class="section-actions"><label>자동 조회 간격<select id="monthlyCacheInterval"><option value="0">자동 조회 끄기</option><option value="10">10분</option><option value="30">30분</option><option value="60" selected>1시간</option><option value="180">3시간</option><option value="360">6시간</option><option value="1440">하루</option></select></label><button id="monthlyCacheSave" class="secondary" type="button">설정 저장</button></div><p id="monthlyCacheMessage" role="status"></p></details>
     <p id="monthlyStatus" role="status" aria-live="polite"></p>
     <p class="monthly-legend"><span><span class="monthly-room-mark available">가</span> 예약 가능</span><span><span class="monthly-room-mark booked">완</span> 예약 완료</span><span><span class="monthly-room-mark pending">대</span> 예약 대기</span><span><span class="monthly-room-mark unavailable">불</span> 1박 불가</span><span><span class="monthly-room-mark unknown">?</span> 확인 불가</span></p>
     <p class="monthly-note">한국 시간 기준 지난 날짜는 조회하지 않으며 선택할 수 없습니다. 오늘 이후 날짜를 누르면 숙박 시작 날짜에 반영하고 예약 매크로 화면으로 이동합니다. 오픈 전이나 월별 현황이 없는 날짜는 개별 날짜 링크로 하나씩 확인합니다. 조회 중·실패는 예약 가능 또는 완료를 뜻하지 않습니다. 개별 조회는 1박 기준이며 연속 박수는 별도로 확인해 주세요. 창을 닫거나 달을 바꾸면 진행 중인 조회를 중단합니다.</p>

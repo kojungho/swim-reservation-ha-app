@@ -49,8 +49,16 @@ label { display: grid; gap: 7px; min-width: 0; color: #3f4d46; font-size: 13px; 
 input, select { width: 100%; min-width: 0; max-width: 100%; height: 44px; border: 1px solid #cad5ce; border-radius: 10px; background: white; color: var(--ink); padding: 0 10px; font: inherit; font-size: 14px; outline: none; }
 .grid.two.identity-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 620px; margin-top: 12px; }
 .booking-select-field { max-width: 340px; }
-#planCard .plan-fields { grid-template-columns: minmax(0, 340px); max-width: 520px; margin-top: 16px; }
-#planCard.watch-mode .plan-fields { grid-template-columns: minmax(0, 340px) minmax(0, 140px); }
+#planCard .plan-fields { grid-template-columns: minmax(0, 140px); margin-top: 16px; }
+#planCard:not(.watch-mode) .plan-fields { display: none; }
+.plan-registration { display: flex; align-items: flex-end; gap: 10px; max-width: 520px; margin-top: 16px; }
+.plan-registration label { flex: 1; min-width: 0; margin: 0; }
+.plan-registration button { flex: 0 0 auto; height: 44px; padding: 0 12px; white-space: nowrap; }
+.monthly-prefetch { margin: 16px 0; font-size: 13px; }
+.monthly-prefetch p { line-height: 1.5; }
+.monthly-prefetch .section-actions { align-items: flex-end; }
+.monthly-prefetch label { width: 150px; margin: 0; }
+.monthly-prefetch button { height: 44px; }
 #watchEndsAtField { max-width: 340px; }
 #watchDeadlineHint { font-size: 12px; font-weight: 500; line-height: 1.5; color: var(--muted); }
 input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(34,108,75,.12); }
@@ -252,8 +260,7 @@ dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: any
   .grid.two { grid-template-columns: 1fr; }
   input, select { font-size: 16px; }
   #lookupProfileList { grid-template-columns: 1fr; }
-  #planCard .plan-fields { grid-template-columns: minmax(0, 1fr); }
-  #planCard.watch-mode .plan-fields { grid-template-columns: minmax(0, 1fr) 110px; }
+  #planCard .plan-fields { grid-template-columns: 110px; }
   button:not(.info-button):not(.room-drag-handle):not(.monthly-day):not(#siteMapCloseButton) { min-height: 44px; }
   .site-time-panel { grid-template-columns: minmax(0, 1fr) auto; }
   .site-time-panel > div { align-items: flex-start; flex-direction: column; }
