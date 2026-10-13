@@ -82,7 +82,7 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
     await page.locator("#monthlyNextButton").click();
     await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료") && document.querySelector("#monthlyMonth").value === "2027-01");
     assert.equal(await page.locator("#monthlyMonth").inputValue(), "2027-01");
-    assert.match(await page.locator("#monthlyStatus").innerText(), /예약 오픈 전/);
+    assert.match(await page.locator("#monthlyStatus").textContent(), /예약 오픈 전/);
     assert.equal(dayQueries.length, 31);
     assert.equal(await page.locator("#monthlyContent .available").count(), 30);
     assert.equal(await page.locator("#monthlyContent .error").count(), 1);
@@ -92,7 +92,7 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
     assert.equal(dayQueries.length, 59);
     await page.locator("#monthlyPrevButton").click();
     await page.locator("#monthlyContent table").waitFor();
-    await page.locator("#monthlyCloseButton").click();
+    await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="priority"]').click();
     const countAtClose = dayQueries.length;
     await page.waitForTimeout(100);
     assert.equal(dayQueries.length, countAtClose);

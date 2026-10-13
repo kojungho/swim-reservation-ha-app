@@ -75,7 +75,7 @@ export function validateConfig(config, { futureTrigger = false, nowMs = Date.now
   const profiles = getProfiles(config);
   if (profiles.length < 1 || profiles.length > 5) errors.push("예약자는 1~5명까지 등록 가능");
   profiles.forEach((profile, index) => validateProfile(profile, `예약자 ${index + 1}`, errors));
-  if (config.bookingMode === "multiple" && (!Number.isInteger(config.multipleProfileIndex) || !profiles[config.multipleProfileIndex])) errors.push("여러 객실 동시 예약에 사용할 예약자");
+  if (config.bookingMode === "multiple" && (!Number.isInteger(config.multipleProfileIndex) || !profiles[config.multipleProfileIndex])) errors.push("다중 예약에 사용할 예약자");
   if (config.bookingMode === "profiles-parallel") profiles.forEach((profile, index) => {
     if (!profile.roomPriority?.some(room => room.enabled)) errors.push(`예약자 ${index + 1}의 예약할 객실`);
   });

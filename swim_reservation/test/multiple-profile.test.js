@@ -20,6 +20,6 @@ test("5명이 저장되어도 여러 객실 모드를 유지하고 선택한 한
   }
   for (const value of [-1, 5, 1.5, NaN]) {
     config.multipleProfileIndex = value;
-    assert.match(validateConfig(config).join(","), /여러 객실 동시 예약에 사용할 예약자/);
+    assert.match(validateConfig(config).join(","), /다중 예약에 사용할 예약자/);
   }
 });

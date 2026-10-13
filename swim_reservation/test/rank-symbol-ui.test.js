@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { chromium } from "playwright-core";
-import { mockBookApp } from "./fixtures/ui-book-app.js";
+import { mockBookApp, openPlanDetails } from "./fixtures/ui-book-app.js";
 const executablePath = [process.env.CHROMIUM_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
 test("목록·개인별 순위·일정·이력은 동그라미 숫자로 통일하고 순위 없는 모드는 번호를 생략한다", { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
@@ -16,9 +16,13 @@ test("목록·개인별 순위·일정·이력은 동그라미 숫자로 통일�
     const config = await page.evaluate(() => readConfig());
     state.plans.push({ id: "00000000-0000-0000-0000-000000000001", name: "순위 일정", kind: "scheduled", enabled: false, config, status: { state: "stopped" } });
     await page.evaluate(() => refreshPlans());
+    await openPlanDetails(page);
     assert.match(await page.locator(".plan-profile-targets").innerText(), /① 해 → ② 달/);
+    await page.locator("#planDetailsClose").click();
     await page.evaluate(() => renderHistory([{ id: "test", startDate: "2026-12-20", nights: 1, savedAt: Date.now(), enabledRooms: ["해_하늘존", "샘_산맥존"], bookingMode: "priority" }]));
-    assert.equal(await page.locator(".history-rooms").innerText(), "① 해 → ② 샘");
+    await page.locator("#historyList .plan-detail-open").click();
+    assert.equal(await page.locator("#planList p").textContent(), "① 해 → ② 샘");
+    await page.locator("#planDetailsClose").click();
     await page.evaluate(() => { elements.bookingMode.value = "profiles-parallel"; firstProfilePriority = [{ name: "해_하늘존", enabled: true }, { name: "샘_산맥존", enabled: true }]; renderProfilePriorities(); });
     assert.deepEqual(await page.locator("#profilePriorities .room-rank").allTextContents().then(values => values.slice(0, 2)), ["1순위", "2순위"]);
     await page.evaluate(() => { elements.bookingMode.value = "multiple"; renderRooms(); });

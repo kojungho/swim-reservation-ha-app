@@ -1,3 +1,4 @@
+import { openPlanDetails } from "./fixtures/ui-book-app.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
@@ -88,13 +89,14 @@ test("PC·폰의 일정 입력은 등록 성공·탭 이동 시 초기화하고 
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="priority"]').click();
     await cleared();
+    await openPlanDetails(page, 0);
     await page.locator("#planList .plan-entry").first().getByRole("button", { name: "설정 불러오기", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#planName").value === "등록할 일정");
     assert.equal(await page.locator("#reserverName").inputValue(), "새예약자");
     assert.equal(await page.locator("#startDate").inputValue(), "2026-12-21");
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="people"]').click();
-    await page.waitForFunction(() => document.querySelector("#lookupreserverName1")?.value === "저장된예약자");
+    await page.waitForFunction(() => document.querySelector("#reservationList")?.textContent.includes("저장된예약자"));
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="profiles-parallel"]').click();
     await page.locator("#addProfileButton").click();

@@ -29,7 +29,11 @@ export async function mockBookApp(page, count = 2) {
       if (req.method() === "PUT") state.lookupBook = req.postDataJSON().profiles;
       result = { profiles: state.lookupBook };
     } else if (path === "/api/inspect") result = { rooms: state.availability || state.config.roomPriority.map(room => ({ name: room.name, available: true, status: "available" })) };
-    else if (path === "/api/reservations") result = { reservations: [], lookupErrors: [] };
+    else if (path === "/api/reservations") {
+      const profiles = req.method() === "POST" ? req.postDataJSON().profiles : state.book;
+      state.lookupRequests ||= []; state.lookupRequests.push({ method: req.method(), profiles });
+      result = state.lookupResult || { reservations: [], lookupErrors: [], lookupStatuses: profiles.map((profile, profileIndex) => ({ profileIndex, profileLabel: profile.reserverName, profile: { reserverName: profile.reserverName, phone: profile.phone }, count: 0 })) };
+    }
     else if (path === "/api/plans" && req.method() === "POST") {
       const id = `00000000-0000-0000-0000-${String(state.plans.length + 1).padStart(12, "0")}`;
       state.plans.push({ ...req.postDataJSON(), id, enabled: false, status: { state: "idle" } });
@@ -39,6 +43,10 @@ export async function mockBookApp(page, count = 2) {
       const entry = state.plans.find(plan => plan.id === id);
       Object.assign(entry, req.postDataJSON(), { id, enabled: false, status: { state: "stopped", stage: "stopped", message: "일정 수정을 저장했습니다." } });
       result = { id };
+    } else if (/^\/api\/plans\/[a-f0-9-]{36}$/.test(path) && req.method() === "DELETE") {
+      const id = path.split("/").pop(), entry = state.plans.find(plan => plan.id === id);
+      if (entry?.enabled) return route.fulfill({ status: 409, json: { error: "진행 중 삭제 불가" } });
+      state.plans = state.plans.filter(plan => plan.id !== id); result = { ok: true };
     } else if (path === "/api/plans") result = { entries: state.plans };
     else if (/^\/api\/plans\/[a-f0-9-]{36}\/(start|stop)$/.test(path)) {
       const [, , , id, action] = path.split("/");
@@ -56,4 +64,10 @@ export async function mockBookApp(page, count = 2) {
   await page.goto("https://app.test/");
   await page.waitForFunction(expected => document.querySelector("#bookingProfileSelect1").options.length === expected, count + 1);
   return state;
+}
+
+export async function openPlanDetails(page, index = 0) {
+  if (await page.locator("#planDetailsDialog").isVisible()) await page.locator("#planDetailsClose").click();
+  await page.locator("#executionPlanList .plan-detail-open").nth(index).click();
+  await page.locator("#planList .plan-entry").waitFor();
 }

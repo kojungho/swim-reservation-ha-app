@@ -12,6 +12,7 @@ import { SiteTimeSync } from "./site-time.js";
 import { InspectionService } from "./inspection-service.js";
 import { SiteMap } from "./site-map.js";
 import { lookupProfiles } from "./profile-lookup.js";
+import { normalizeLookupProfiles } from "./lookup-profiles.js";
 import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./monthly-availability.js";
 import { PlanManager, singleBookingConfig } from "./plan-manager.js";
 import { MonthCache } from "./month-cache.js";
@@ -58,7 +59,7 @@ timeSync.start();
 const legacyStatus = await store.getStatus();
 const legacyConfig = legacyStatus.armedConfig || await store.getConfig();
 if (legacyStatus.state === "waiting" && legacyConfig.bookingMode === "priority" && getProfiles(legacyConfig).length > 1) {
-  await store.updateStatus({ state: "stopped", stage: "stopped", message: "기존 다인 순차 대기를 중지했습니다. 예약자 한 명 또는 예약자별 동시 모드를 확인하고 새 일정으로 시작하세요." });
+  await store.updateStatus({ state: "stopped", stage: "stopped", message: "기존 다인 순차 대기를 중지했습니다. 예약자 한 명 또는 다인 예약 모드를 확인하고 새 일정으로 시작하세요." });
 } else await scheduler.restore().catch(async (error) => {
   console.error(`예약 대기 복원 실패: ${error.message}`);
   await store.updateStatus({ state: "failed", stage: "exception", message: error.message });
@@ -159,7 +160,7 @@ const server = http.createServer(async (request, response) => {
       return response.end(`${body}${body ? "\n" : ""}`);
     }
     if (url.pathname === "/api/reservation-check-url" && request.method === "GET") {
-      const requestedProfile = (await store.getLookupProfiles())[Number(url.searchParams.get("profile") || 1) - 1];
+      const requestedProfile = (await store.getSavedProfiles())[Number(url.searchParams.get("profile") || 1) - 1];
       if (!requestedProfile) return json(response, 400, { error: "예약자를 확인해 주세요." });
       return json(response, 200, { ok: true, url: reservationCheckUrl(requestedProfile) });
     }
@@ -180,26 +181,29 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/api/history" && request.method === "GET") {
       return json(response, 200, { entries: await store.listHistory() });
     }
-    if (url.pathname === "/api/reservations" && request.method === "GET") {
-      if (scheduler.running || scheduler.preparing) return json(response, 409, { ok: false, error: "예약 실행 또는 준비 중에는 예약 내역 조회를 잠시 기다려 주세요." });
-      const result = await lookupProfiles(await store.getLookupProfiles(), reservationManager, "조회 대상");
+    if (url.pathname === "/api/reservations" && ["GET", "POST"].includes(request.method)) {
+      if (scheduler.running || scheduler.preparing || plans.busy) return json(response, 409, { ok: false, error: "예약 실행 또는 준비 중에는 예약 내역 조회를 잠시 기다려 주세요." });
+      let profiles;
+      try { profiles = request.method === "POST" ? normalizeLookupProfiles((await readJsonBody(request)).profiles) : await store.getSavedProfiles(); }
+      catch (error) { return json(response, 400, { error: error.message }); }
+      const result = await lookupProfiles(profiles, reservationManager);
       const { reservations, lookupErrors } = result;
-      await store.recordLog(lookupErrors.length ? "error" : "info", "reservation-check", `예약확인 ${reservations.length}건, 조회 실패 ${lookupErrors.length}명.`, { lookupErrors });
+      await store.recordLog(lookupErrors.length ? "error" : "info", "reservation-check", `예약확인 ${reservations.length}건, 조회 실패 ${lookupErrors.length}명.`, { lookupErrors: lookupErrors.map(({ profile, ...item }) => item) });
       return json(response, 200, result);
     }
     const cancelMatch = /^\/api\/reservations\/(\d+)\/cancel$/.exec(url.pathname);
     if (cancelMatch && request.method === "POST") {
-      if (scheduler.running || scheduler.armed) return json(response, 409, { ok: false, error: "예약 대기 또는 실행 중에는 예약 취소를 사용할 수 없습니다." });
+      if (scheduler.running || scheduler.armed || plans.busy) return json(response, 409, { ok: false, error: "예약 대기 또는 실행 중에는 예약 취소를 사용할 수 없습니다." });
       const input = await readJsonBody(request);
       if (input.confirmed !== true) return json(response, 400, { ok: false, error: "예약 취소 최종 확인이 필요합니다." });
       const profileIndex = input.profileIndex ?? 0;
-      const profile = Number.isInteger(profileIndex) && (await store.getLookupProfiles())[profileIndex];
+      const profile = input.profile ? normalizeLookupProfiles([input.profile])[0] : Number.isInteger(profileIndex) && (await store.getSavedProfiles())[profileIndex];
       if (!profile) return json(response, 400, { error: "예약자를 확인해 주세요." });
       const result = await reservationManager.cancel(profile, cancelMatch[1]);
       return json(response, 200, {
         ok: true,
-        canceled: { ...result.canceled, profileIndex, profileLabel: `조회 대상 ${profileIndex + 1}` },
-        reservations: result.reservations.map((item) => ({ ...item, profileIndex, profileLabel: `조회 대상 ${profileIndex + 1}` }))
+        canceled: { ...result.canceled, profileIndex, profileLabel: profile.reserverName },
+        reservations: result.reservations.map((item) => ({ ...item, profileIndex, profileLabel: profile.reserverName }))
       });
     }
     const historyMatch = /^\/api\/history\/([^/]+)(?:\/(load))?$/.exec(url.pathname);

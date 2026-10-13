@@ -57,7 +57,7 @@ test("객실을 마우스·터치로 이동하고 취소·키보드 이동·저�
     await page.mouse.move(h.x + 20, h.y + 150);
     await page.keyboard.press("Escape"); await page.mouse.up();
     assert.deepEqual(await labels(), beforeCancel);
-    await page.locator("#saveButton").click();
+    await page.evaluate(() => elements.saveButton.click());
     await page.waitForFunction(() => document.body.innerText.includes("저장했습니다"));
     assert.deepEqual(config.roomPriority.map(x => x.name), beforeCancel);
     await page.reload();

@@ -38,11 +38,12 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     await page.locator("#roomList input[type=checkbox]").first().check();
     await page.locator("#planName").fill("보존할 일정");
     await page.locator("#addPlanButton").click();
-    await page.locator("#planList .plan-entry").waitFor();
+    await page.locator("#executionPlanList .execution-plan").waitFor();
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="book"]').click();
     assert.equal(await page.locator("#bookingBookList .booking-book-row").count(), 2);
     async function fillBook(number) {
+      if (!await page.locator("#bookEditor").isVisible()) await page.locator("#bookNewButton").click();
       const guest = testGuest(number);
       for (const [key, id] of [["reserverName", "bookReserverName"], ["depositorName", "bookDepositorName"], ["phone", "bookPhone"], ["birthDate", "bookBirthDate"]]) await page.locator("#" + id).fill(guest[key]);
     }

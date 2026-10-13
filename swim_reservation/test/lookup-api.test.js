@@ -17,7 +17,12 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
   const store = new Store(data); await store.init(); await store.saveProfiles(profiles);
   let child;
   async function stop() {
-    if (child && child.exitCode === null) { const exited = once(child, "exit"); child.kill("SIGTERM"); await exited; }
+    if (child && child.exitCode === null) {
+      const processToStop = child, exited = once(processToStop, "exit");
+      const timer = setTimeout(() => processToStop.kill("SIGKILL"), 3000);
+      processToStop.kill("SIGTERM");
+      try { await exited; } finally { clearTimeout(timer); }
+    }
   }
   t.after(async () => { await stop(); await rm(data, { recursive: true, force: true }); });
   async function boot() {
@@ -30,7 +35,7 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
       child.once("error", reject);
     });
     const api = async (endpoint, method = "GET", body) => {
-      const response = await fetch(`http://127.0.0.1:${port}/api/${endpoint}`, { method, headers: { "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
+      const response = await fetch(`http://127.0.0.1:${port}/api/${endpoint}`, { method, signal: AbortSignal.timeout(8000), headers: { "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
       const result = await response.json();
       assert.ok(response.ok, JSON.stringify(result));
       return result;
@@ -75,6 +80,18 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
   const migrated = await api("lookup-profiles");
   assert.equal(migrated.profiles.length, 2);
   assert.deepEqual(Object.keys(migrated.profiles[0]).sort(), ["phone", "reserverName"]);
+  // Missing test browser returns person-specific errors without reaching the site.
+  const allChecks = await api("reservations");
+  assert.deepEqual(allChecks.lookupStatuses.map(item => item.profileLabel), ["첫째", "둘째"]);
+  assert.ok(allChecks.lookupStatuses.every(item => item.error && item.count === undefined));
+  const singleLookup = await api("reservations", "POST", { profiles: [{ reserverName: "1회성", phone: "01011112222", birthDate: "19900101" }] });
+  assert.equal(singleLookup.lookupStatuses.length, 1);
+  assert.deepEqual(singleLookup.lookupStatuses[0].profile, { reserverName: "1회성", phone: "01011112222" });
+  assert.equal((await api("profiles")).profiles.length, 2);
+  assert.deepEqual((await api("lookup-profiles")).profiles, migrated.profiles);
+  const invalidOnce = await fetch(`${api.baseUrl}api/reservations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profiles: [{ reserverName: "잘못된 번호", phone: "123" }] }) });
+  assert.equal(invalidOnce.status, 400);
+  await invalidOnce.text();
   const config = { ...defaultConfig(), startDate: "2030-12-20", triggerAt: "2030-10-01T00:00:00", roomPriority: [{ name: "해_하늘존", enabled: true }], profiles, multipleProfileIndex: 1 };
   const saved = await api("config", "PUT", config);
   assert.equal(saved.config.profiles.length, 1);

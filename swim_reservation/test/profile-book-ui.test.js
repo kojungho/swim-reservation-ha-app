@@ -1,3 +1,4 @@
+import { openPlanDetails } from "./fixtures/ui-book-app.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
@@ -45,14 +46,17 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     await page.locator('[data-profile-index="1"] input[type=checkbox]').nth(1).check();
     await page.locator("#planName").fill("사람별 일정");
     await page.locator("#addPlanButton").click();
-    await page.locator("#planList .plan-entry").waitFor();
+    await page.locator("#executionPlanList .execution-plan").first().waitFor();
     assert.equal(state.plans[0].config.profiles.length, 2);
     assert.equal(state.plans[0].config.profiles[1].reserverName, guest.reserverName);
+    await openPlanDetails(page);
     assert.deepEqual(await page.locator("#planList .plan-profile-targets p").allTextContents(), ["저장예약자1 : ① 해", "저장예약자3 : ① 달"]);
+    await page.locator("#planDetailsClose").click();
     assert.equal(await page.locator("#reserverName").inputValue(), "");
     assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 0);
     assert.equal(await page.locator("#bookingProfileSelect1").inputValue(), "");
     assert.equal(state.book.length, 3);
+    await openPlanDetails(page, 0);
     await page.locator("#planList .plan-entry").getByRole("button", { name: "설정 불러오기", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#reserverName2")?.value === "저장예약자3");
     await page.locator("#workspaceMenuButton").click();
@@ -63,7 +67,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     await page.locator("#startDate").fill("2026-12-21");
     await page.locator("#startDate").fill("2026-12-20");
     await page.locator("#roomList input[type=checkbox]").first().check();
-    await page.locator("#saveButton").click();
+    await page.evaluate(() => elements.saveButton.click());
     await page.waitForFunction(() => document.querySelector("#workspaceMessage").textContent.includes("설정을 HA"));
     assert.equal(state.book.length, 3);
     assert.equal(state.config.profiles.length, 1);
@@ -78,7 +82,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(await page.locator("#addProfileButton").isDisabled(), true);
     await page.locator("#bookingProfileSelect5").selectOption("2");
     assert.equal(await page.locator("#reserverName5").inputValue(), guest.reserverName);
-    await page.locator("#extraProfiles .second-profile-panel").nth(1).getByRole("button", { name: "이 일정에서 제외", exact: true }).click();
+    await page.locator("#extraProfiles .second-profile-panel").nth(1).getByRole("button", { name: "예약자 제외", exact: true }).click();
     assert.equal(await page.locator("#reserverName4").inputValue(), guest.reserverName);
     assert.equal(await page.locator("#addProfileButton").isEnabled(), true);
     assert.deepEqual(state.errors, []);

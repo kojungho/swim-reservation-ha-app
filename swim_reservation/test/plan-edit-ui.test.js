@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { chromium } from "playwright-core";
-import { mockBookApp } from "./fixtures/ui-book-app.js";
+import { mockBookApp, openPlanDetails } from "./fixtures/ui-book-app.js";
 const executablePath = [process.env.CHROMIUM_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
 test("중지된 감시 일정 수정은 등록 대신 수정 저장·취소만 표시하고 중복 등록 없이 저장한다", { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
@@ -12,6 +12,7 @@ test("중지된 감시 일정 수정은 등록 대신 수정 저장·취소만 �
     const id = "00000000-0000-0000-0000-000000000001";
     state.plans.push({ id, name: "감시 원본", kind: "watch", intervalSeconds: 60, enabled: false, watchEndsAt: "", config: { ...state.config, profiles: [state.book[0]], roomPriority: [{ name: "해_하늘존", enabled: true }] }, status: { state: "stopped" } });
     await page.evaluate(() => refreshPlans());
+    await openPlanDetails(page, 0);
     await page.locator("#planList").getByRole("button", { name: "수정", exact: true }).click();
     await page.locator("#planEditNotice").waitFor();
     assert.equal(await page.locator("#addPlanButton").textContent(), "수정 저장");
@@ -22,11 +23,13 @@ test("중지된 감시 일정 수정은 등록 대신 수정 저장·취소만 �
     await page.waitForFunction(() => document.querySelector("#planMessage").textContent.includes("기존 일정 수정을 저장"));
     assert.equal(state.plans.length, 1); assert.equal(state.plans[0].id, id); assert.equal(state.plans[0].name, "감시 변경");
     assert.equal(state.plans[0].enabled, false);
-    assert.equal(await page.locator("#addPlanButton").textContent(), "감시 일정 등록");
+    assert.equal(await page.locator("#addPlanButton").textContent(), "일정 등록");
+    await openPlanDetails(page, 0);
     await page.locator("#planList").getByRole("button", { name: "수정", exact: true }).click();
     await page.locator("#planName").fill("취소할 내용");
     await page.locator("#cancelPlanEdit").click();
     assert.equal(state.plans[0].name, "감시 변경"); assert.equal(await page.locator("#planName").inputValue(), "");
+    await openPlanDetails(page, 0);
     await page.locator("#planList").getByRole("button", { name: "수정", exact: true }).click();
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="priority"]').click();

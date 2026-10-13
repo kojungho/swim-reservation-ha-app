@@ -6,10 +6,10 @@ let defaultRoomOrder = [];
 let planEntries = [];
 let planRefreshPending = false;
 let planBatchPending = false;
+let selectedDetailPlan = null;
+let planDetailPending = false;
 const selectedExecutionPlans = new Set();
 let lookupProfilesDraft = [];
-let lookupProfilesInitialized = false;
-let lookupProfilesLoading = null;
 
 function initializeWorkspace() {
   defaultRoomOrder = rooms.map(room => room.name);
@@ -21,29 +21,25 @@ function initializeWorkspace() {
   const profilePage = elements.reserverName.closest("section");
   const roomPage = elements.roomList.closest("section");
   roomPage.before(profilePage);
-  elements.runNowButton.closest("section").after(document.getElementById("planCard"));
+  const historyCard = document.getElementById("historyCard");
+  historyCard.querySelector(".section-title p").textContent = "일정을 등록한 뒤 선택해 시작·중지하세요. 일정명을 누르면 상세 내용과 수정·불러오기·삭제를 볼 수 있습니다. 최대 20개 저장, 5개 동시 진행.";
+  historyCard.querySelector(".section-title").after(document.getElementById("planCard"));
+  historyCard.append(elements.runNowButton.closest(".actions"), document.getElementById("executionPlanList"), document.getElementById("executionBatchMessage"));
+  historyCard.append(elements.historyList);
+  document.getElementById("executionCard").hidden = true;
   const logCard = document.getElementById("logCard");
   logCard.querySelector(".section-title").after(elements.statusDetails, elements.profileStatusList, elements.diagnosticsPanel);
   profilePage.querySelector("h3").before(elements.multipleProfileField, document.getElementById("watchProfileField"));
   const actions = document.createElement("div");
   actions.className = "actions lookup-site-controls";
   actions.append(elements.siteProfileSelect.closest("label"), elements.reservationSiteButton, elements.reservationLookupButton);
-  document.getElementById("lookupCard").append(actions, elements.reservationList);
+  document.getElementById("savedLookupArea").append(actions, elements.reservationList);
   elements.multipleProfileSelect.addEventListener("change", updateBookingProfileVisibility);
   document.getElementById("watchProfileSelect").addEventListener("change", updateBookingProfileVisibility);
-  document.getElementById("addLookupProfileButton").addEventListener("click", () => {
-    if (lookupProfilesDraft.length < 5) { lookupProfilesDraft.push({ reserverName: "", phone: "" }); renderLookupProfiles(); }
-  });
-  document.getElementById("saveLookupProfilesButton").addEventListener("click", () => perform(async () => {
-    const profiles = lookupProfilesDraft.filter(profile => profile.reserverName.trim() || profile.phone.trim());
-    const result = await request("lookup-profiles", { method: "PUT", body: JSON.stringify({ profiles }) });
-    lookupProfilesDraft = result.profiles || [];
-    lookupProfilesInitialized = true;
-    renderLookupProfiles();
-    document.getElementById("lookupMessage").textContent = "조회용 정보만 저장했습니다. 예약용 정보와 진행 중인 일정은 바뀌지 않습니다.";
-    await loadReservations();
-  }));
-  document.getElementById("loadLookupProfilesButton").addEventListener("click", () => perform(async () => { await loadLookupProfiles(); await loadReservations(); }));
+  initializeReservationLookup();
+  document.getElementById("planDetailsClose").addEventListener("click", () => document.getElementById("planDetailsDialog").close());
+  document.getElementById("planDetailsDialog").addEventListener("close", () => { if (!document.getElementById("planDetailsDialog").open) selectedDetailPlan = null; });
+  document.getElementById("deleteSelectedPlans").addEventListener("click", () => deleteSelectedPlans().catch(error => showMessage(error.message, true)));
   document.querySelectorAll("[data-workspace-tab]").forEach(button => button.addEventListener("click", () => switchWorkspaceTab(button.dataset.workspaceTab)));
   const menuButton = document.getElementById("workspaceMenuButton");
   menuButton.addEventListener("click", () => setWorkspaceMenuOpen(menuButton.getAttribute("aria-expanded") !== "true"));
@@ -103,6 +99,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   const booking = modes.includes(tab) || tab === "watch";
   const profilePage = elements.reserverName.closest("section");
   for (const section of document.querySelectorAll("main.shell > section.card")) section.hidden = !booking;
+  document.getElementById("executionCard").hidden = true;
   profilePage.hidden = !booking;
   document.getElementById("lookupCard").hidden = tab !== "people";
   document.getElementById("bookingBookCard").hidden = tab !== "book";
@@ -115,15 +112,14 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   document.getElementById("watchEndsAtField").hidden = tab !== "watch";
   document.getElementById("watchProfileField").hidden = true;
   renderRoomSelectionControls();
-  if (tab === "watch") elements.historyList.closest("section").hidden = true;
   elements.bookingMode.closest(".booking-mode-field").hidden = true;
   elements.triggerAt.closest("label").hidden = tab === "watch";
   document.getElementById("reservationConnectionDetails").hidden = tab === "watch";
   elements.siteClock.closest(".site-time-panel").hidden = tab === "watch";
   elements.startDate.closest("section").querySelector("h2").textContent = tab === "watch" ? "숙박 조건" : "예약 날짜와 시각";
   elements.startDate.closest("section").querySelector(".section-title p").textContent = tab === "watch" ? "감시할 숙박 시작 날짜와 박수를 지정하세요. 조건에 맞는 자리를 발견하면 바로 예약을 시도합니다." : "숙박 날짜·박수와 최종 예약을 제출할 시각을 지정하세요. 예약 모드는 상단 탭에서 선택합니다.";
-  document.getElementById("addPlanButton").textContent = tab === "watch" ? "감시 일정 등록" : "예약 일정 등록";
-  document.getElementById("addPlanButton").setAttribute("aria-label", tab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 예약 일정 등록");
+  document.getElementById("addPlanButton").textContent = "일정 등록";
+  document.getElementById("addPlanButton").setAttribute("aria-label", tab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 일정 등록");
   renderPlanEditMode();
   updateImmediateBookingVisibility();
   if (tab === "monthly") {
@@ -137,8 +133,8 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   updateBookingProfileVisibility();
   document.querySelectorAll("main.shell > section.card:not([hidden]) .section-title > span").forEach((span, index) => { span.textContent = String(index + 1); });
   if (tab === "people" && entering) void (async () => {
-    if (!lookupProfilesInitialized) await loadLookupProfiles();
-    else refreshLookupSiteSelector();
+    await loadBookingBook();
+    refreshLookupSiteSelector();
     await loadReservations();
   })().catch(error => {
     elements.reservationList.hidden = false;
@@ -151,69 +147,60 @@ function updateBookingProfileVisibility() {
   const index = 0;
   elements.multipleProfileField.hidden = true;
   document.getElementById("firstBookingProfileTitle").hidden = one;
+  document.getElementById("firstBookingProfileTitle").textContent = elements.reserverName.value || "예약자 1";
+  const firstPanel = document.getElementById("firstBookingProfilePanel");
+  firstPanel.classList.toggle("second-profile-panel", !one);
+  firstPanel.dataset.guestColor = !one ? "0" : "";
+  document.getElementById("excludeFirstProfile").hidden = one || !extraProfiles.length;
   document.getElementById("firstBookingProfileFields").hidden = one && index !== 0;
-  [...elements.extraProfiles.children].forEach((panel, extraIndex) => { panel.hidden = one && index !== extraIndex + 1; panel.querySelector("button").hidden = one; });
+  [...elements.extraProfiles.children].forEach((panel, extraIndex) => { panel.hidden = one && index !== extraIndex + 1; panel.dataset.guestColor = String(extraIndex + 1); panel.querySelector(".profile-panel-actions button").hidden = one; });
   elements.addProfileButton.hidden = one;
   elements.profileModeHelp.textContent = workspaceTab === "profiles-parallel" ? "저장된 예약자를 사람별로 선택하거나 직접 입력하세요. 필요한 사람만 추가하며 최대 5명까지 각자의 객실 하나를 동시에 예약합니다. 새 사람은 예약자 저장으로 목록에 추가할 수 있습니다." : "저장된 예약자를 한 명 선택하거나 직접 입력하세요. 새 사람은 예약자 저장으로 목록에 추가할 수 있습니다. 목록은 자동으로 표시되지만 선택 전에는 정보를 입력하지 않습니다.";
 }
 
-async function loadLookupProfiles() {
-  if (lookupProfilesLoading) return lookupProfilesLoading;
-  lookupProfilesLoading = (async () => {
-    const result = await request("lookup-profiles");
-    lookupProfilesDraft = result.profiles || [];
-    lookupProfilesInitialized = true;
-    renderLookupProfiles();
-  })();
-  try { await lookupProfilesLoading; } finally { lookupProfilesLoading = null; }
-}
-
-function renderLookupProfiles() {
-  if (!lookupProfilesDraft.length) lookupProfilesDraft = [{ reserverName: "", phone: "" }];
-  const list = document.getElementById("lookupProfileList");
-  list.replaceChildren();
-  lookupProfilesDraft.forEach((profile, index) => {
-    const panel = document.createElement("div");
-    panel.className = "second-profile-panel lookup-profile-panel";
-    const title = document.createElement("h3");
-    title.textContent = `조회 대상 ${index + 1}`;
-    const grid = document.createElement("div"); grid.className = "grid two lookup-fields";
-    for (const [key, label] of [["reserverName", "예약자명"], ["phone", "휴대폰 번호"]]) {
-      const field = document.createElement("label"); field.textContent = label;
-      const input = document.createElement("input");
-      input.id = `lookup${key}${index + 1}`;
-      input.autocomplete = "off";
-      if (key === "phone") input.inputMode = "numeric";
-      input.value = profile[key] || "";
-      input.addEventListener("input", () => { profile[key] = input.value; refreshLookupSiteSelector(); });
-      field.append(input); grid.append(field);
-    }
-    const remove = document.createElement("button"); remove.type = "button"; remove.className = "secondary"; remove.textContent = "삭제";
-    remove.setAttribute("aria-label", `조회 대상 ${index + 1} 삭제`);
-    remove.addEventListener("click", () => { lookupProfilesDraft.splice(index, 1); renderLookupProfiles(); document.getElementById("lookupMessage").textContent = "저장·조회를 눌러 삭제 내용을 반영하세요. 실제 예약은 취소되지 않습니다."; });
-    const header = document.createElement("div"); header.className = "profile-panel-heading";
-    header.append(title, remove);
-    panel.append(header, grid); list.append(panel);
-  });
-  document.getElementById("addLookupProfileButton").disabled = lookupProfilesDraft.length >= 5;
-  refreshLookupSiteSelector();
-}
 
 function refreshLookupSiteSelector() {
   const select = elements.siteProfileSelect, previous = select.value;
+  lookupProfilesDraft = bookingBook.map(bookingIdentity);
   select.replaceChildren(...lookupProfilesDraft.map((profile, index) => {
     const option = document.createElement("option"); option.value = String(index + 1);
-    option.textContent = `${index + 1}. ${profile.reserverName || "미입력"}`;
+    option.textContent = profile.reserverName || "미입력";
     return option;
   }));
   select.value = Number(previous) <= lookupProfilesDraft.length && previous ? previous : "1";
+  elements.reservationSiteButton.disabled = !lookupProfilesDraft.length;
+}
+
+let oneOffLookupRequest = 0;
+let oneOffLookupRunning = false;
+function updateOneOffLookupButton() {
+  document.getElementById("oneOffLookupButton").disabled = busy || oneOffLookupRunning || !document.getElementById("oneOffName").value.trim() || !/^01\d{8,9}$/.test(document.getElementById("oneOffPhone").value.replace(/\D/g, ""));
+}
+function initializeReservationLookup() {
+  for (const id of ["oneOffName", "oneOffPhone"]) document.getElementById(id).addEventListener("input", updateOneOffLookupButton);
+  document.getElementById("oneOffLookupButton").addEventListener("click", () => {
+    const profile = { reserverName: document.getElementById("oneOffName").value.trim(), phone: document.getElementById("oneOffPhone").value.replace(/\D/g, "") };
+    void lookupOneOff(profile);
+  });
+}
+async function lookupOneOff(profile) {
+  const id = ++oneOffLookupRequest;
+  const container = document.getElementById("oneOffReservations");
+  container.hidden = false; container.textContent = `${profile.reserverName} 조회 중…`;
+  oneOffLookupRunning = true; updateOneOffLookupButton();
+  try {
+    const result = await request("reservations", { method: "POST", body: JSON.stringify({ profiles: [profile] }) });
+    if (id !== oneOffLookupRequest) return;
+    renderReservations(result.reservations || [], { container, profiles: [profile], errors: result.lookupErrors || [], reload: () => lookupOneOff(profile) });
+  } catch (error) { if (id === oneOffLookupRequest) container.textContent = `조회 실패: ${error.message}`; }
+  finally { if (id === oneOffLookupRequest) { oneOffLookupRunning = false; updateOneOffLookupButton(); } }
 }
 
 function planMessage(text) { document.getElementById("planMessage").textContent = shortRoomText(text); }
 function renderPlanEditMode() {
   const button = document.getElementById("addPlanButton");
-  button.textContent = editingPlan ? "수정 저장" : workspaceTab === "watch" ? "감시 일정 등록" : "예약 일정 등록";
-  button.setAttribute("aria-label", editingPlan ? "기존 일정 수정 저장" : workspaceTab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 예약 일정 등록");
+  button.textContent = editingPlan ? "수정 저장" : "일정 등록";
+  button.setAttribute("aria-label", editingPlan ? "기존 일정 수정 저장" : workspaceTab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 일정 등록");
   document.getElementById("planEditNotice").hidden = !editingPlan;
   updateImmediateBookingVisibility();
 }
@@ -278,15 +265,20 @@ async function refreshPlans() {
   try {
     const result = await request("plans");
     planEntries = result.entries || [];
+    if (selectedDetailPlan && !planEntries.some(entry => entry.id === selectedDetailPlan)) document.getElementById("planDetailsDialog").close();
     renderExecutionPlans();
     renderPlanBadge();
+    if (document.getElementById("planDetailsDialog").open && !selectedDetailPlan) return;
     const list = document.getElementById("planList");
+    const focusedAction = list.contains(document.activeElement) ? document.activeElement.dataset.action : null;
     list.replaceChildren();
     if (!planEntries.length) { list.textContent = "등록된 일정이 없습니다."; return; }
-    const modes = { priority: "1개 우선순위", multiple: "여러 객실 동시", "profiles-parallel": "예약자별 동시" };
+    const modes = { priority: "단독 예약", multiple: "다중 예약", "profiles-parallel": "다인 예약" };
     for (const entry of planEntries) {
+      if (selectedDetailPlan !== entry.id) continue;
       const row = document.createElement("div");
       row.className = "plan-entry";
+      row.dataset.planId = entry.id;
       const detail = document.createElement("div");
       const title = document.createElement("strong");
       title.textContent = `${entry.name} · ${entry.config.startDate} / ${entry.config.nights}박`;
@@ -308,19 +300,24 @@ async function refreshPlans() {
       detail.append(title, info, targets, status);
       const controls = document.createElement("div");
       controls.className = "section-actions";
-      for (const [action, label] of [["start", "시작"], ["stop", "중지"], ["edit", "수정"], ["load", "설정 불러오기"], ["delete", "목록 삭제"]]) {
+      for (const [action, label] of [["start", "시작"], ["stop", "중지"], ["edit", "수정"], ["load", "설정 불러오기"], ["delete", "삭제"]]) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "secondary";
         button.textContent = label;
-        button.disabled = action === "start" && (entry.enabled || entry.status.stage === "expired" || ["failed", "success", "running"].includes(entry.status.state)) || ["load", "delete"].includes(action) && entry.enabled;
-        if (action === "edit") button.disabled = entry.enabled || !["idle", "stopped"].includes(entry.status.state);
+        button.dataset.action = action;
+        button.disabled = action === "start" && !planCanStart(entry) || ["load", "delete"].includes(action) && planIsActive(entry) || action === "stop" && !planIsActive(entry);
+        if (action === "edit") button.disabled = planIsActive(entry) || !["idle", "stopped"].includes(entry.status.state);
         if (action === "start" && editingPlan?.id === entry.id) button.disabled = true;
-        if (planBatchPending) button.disabled = true;
+        if (planBatchPending || planDetailPending) button.disabled = true;
         button.addEventListener("click", async () => {
+          if (planDetailPending || planBatchPending) return;
+          planDetailPending = true;
+          controls.querySelectorAll("button").forEach(control => { control.disabled = true; });
           button.disabled = true;
           try {
             if (action === "load" || action === "edit") {
+              document.getElementById("planDetailsDialog").close();
               editorGeneration++;
               editingPlan = null;
               loadConfig(entry.config);
@@ -338,17 +335,19 @@ async function refreshPlans() {
               if (action === "start" && !window.confirm(`${entry.name}\n${entry.config.startDate}부터 ${entry.config.nights}박 · ${entry.kind === "watch" ? "체크한 객실 중 조건에 맞는 하나 예약" : modes[entry.config.bookingMode]}\n${entry.kind === "watch" ? "조건이 맞는 자리가 나오면" : "지정 시각에"} 환불 규정 동의와 최종 예약 제출까지 자동 진행합니다. 다른 일정과 중복되는지 확인하셨나요?`)) return;
               if (action === "delete" && !window.confirm("이 일정을 목록에서 삭제할까요? 실제 예약은 취소되지 않습니다.")) return;
               const result = await request(`plans/${entry.id}${action === "delete" ? "" : `/${action}`}`, { method: action === "delete" ? "DELETE" : "POST", ...(action === "start" ? { body: JSON.stringify({ expectedRevision: entry.revision }) } : {}) });
+              if (action === "delete") document.getElementById("planDetailsDialog").close();
               if (action === "delete" && editingPlan?.id === entry.id) resetPlanEditor();
               planMessage(result.status?.stage === "expired" ? result.status.message : `${entry.name}: ${label} 완료`);
             }
-          } catch (error) { planMessage(error.message); }
-          finally { await refreshPlans(); button.disabled = false; }
+          } catch (error) { planMessage(error.message); document.getElementById("planDetailsMessage").textContent = error.message; }
+          finally { planDetailPending = false; await refreshPlans(); }
         });
         controls.append(button);
       }
       row.append(detail, controls);
       list.append(row);
     }
+    if (focusedAction) list.querySelector(`[data-action="${focusedAction}"]:not(:disabled)`)?.focus({ preventScroll: true });
   } catch (error) { planMessage(`일정 조회 실패: ${error.message}`); }
   finally { planRefreshPending = false; }
 }
@@ -373,23 +372,54 @@ function renderExecutionPlans() {
   list.replaceChildren();
   if (!planEntries.length) list.textContent = "등록된 일정이 없습니다. 아래에서 일정을 등록해 주세요.";
   for (const entry of planEntries) {
-    const label = document.createElement("label"); label.className = `execution-plan${planIsActive(entry) ? " active-plan" : ""}`;
+    const label = document.createElement("div"); label.className = `execution-plan${planIsActive(entry) ? " active-plan" : ""}`;
     const input = document.createElement("input"); input.type = "checkbox"; input.dataset.planId = entry.id;
     input.checked = selectedExecutionPlans.has(entry.id); input.disabled = planBatchPending;
     input.setAttribute("aria-label", `${entry.name} · ${entry.config.startDate} · ${entry.config.nights}박 선택`);
     input.addEventListener("change", () => { if (input.checked) selectedExecutionPlans.add(entry.id); else selectedExecutionPlans.delete(entry.id); renderExecutionPlans(); });
-    const text = document.createElement("span");
+    const text = document.createElement("button"); text.type = "button"; text.className = "plan-detail-open"; text.dataset.planId = entry.id;
     text.textContent = `${entry.name} · ${entry.config.startDate} / ${entry.config.nights}박`;
-    const state = document.createElement("small"); state.textContent = planIsActive(entry) ? "진행 중" : entry.status?.state === "success" ? "완료" : entry.status?.state === "failed" ? "확인 필요" : "중지";
+    text.setAttribute("aria-haspopup", "dialog");
+    text.addEventListener("click", async () => {
+      selectedDetailPlan = entry.id;
+      document.getElementById("planList").textContent = "일정 정보를 불러오는 중…";
+      document.getElementById("planDetailsTitle").textContent = entry.name;
+      document.getElementById("planDetailsMessage").textContent = "";
+      const dialog = document.getElementById("planDetailsDialog");
+      if (!dialog.open) dialog.showModal();
+      await refreshPlans();
+    });
+    const state = document.createElement("small"); state.textContent = `${bookingModeName(entry)} · ${planIsActive(entry) ? "진행 중" : entry.status?.state === "success" ? "완료" : entry.status?.state === "failed" ? "확인 필요" : "중지"}`;
     label.append(input, text, state); list.append(label);
+    label.addEventListener("click", event => { if (!event.target.closest("input,button")) text.click(); });
   }
-  if (focusId) [...list.querySelectorAll("input")].find(input => input.dataset.planId === focusId)?.focus({ preventScroll: true });
+  if (focusId) [...list.querySelectorAll("[data-plan-id]")].find(input => input.dataset.planId === focusId)?.focus({ preventScroll: true });
   const blocked = busy || planBatchPending;
   const capacity = Math.max(0, 5 - planEntries.filter(planIsActive).length);
   document.getElementById("startAllPlans").disabled = blocked || !capacity || !planEntries.some(planCanStart);
   document.getElementById("startSelectedPlans").disabled = blocked || !capacity || !planEntries.some(entry => selectedExecutionPlans.has(entry.id) && planCanStart(entry));
   elements.stopButton.disabled = blocked || !planEntries.some(planIsActive) && !["waiting", "running"].includes(currentState);
   document.getElementById("stopSelectedPlans").disabled = blocked || !planEntries.some(entry => selectedExecutionPlans.has(entry.id) && planIsActive(entry));
+  document.getElementById("deleteSelectedPlans").disabled = blocked || !planEntries.some(entry => selectedExecutionPlans.has(entry.id) && planCanDeleteSelected(entry));
+}
+
+function bookingModeName(entry) { return entry.kind === "watch" ? "취소 자리 감시" : ({ priority: "단독 예약", multiple: "다중 예약", "profiles-parallel": "다인 예약" })[entry.config?.bookingMode] || "단독 예약"; }
+function planCanDeleteSelected(entry) { return !planIsActive(entry) && ["idle", "stopped"].includes(entry.status?.state || "idle"); }
+async function deleteSelectedPlans() {
+  if (busy || planBatchPending) return;
+  planBatchPending = true; renderExecutionPlans();
+  try {
+    const snapshot = (await request("plans")).entries || [];
+    const targets = snapshot.filter(entry => selectedExecutionPlans.has(entry.id) && planCanDeleteSelected(entry));
+    if (!targets.length || !window.confirm(`${targets.map(entry => entry.name).join("\n")}\n\n중지된 ${targets.length}개 일정을 삭제할까요? 실제 예약은 취소되지 않습니다. 진행·완료·확인 필요 일정은 선택 삭제에서 제외합니다.`)) return;
+    const failures = [];
+    for (const entry of targets) {
+      try { await request(`plans/${entry.id}`, { method: "DELETE" }); selectedExecutionPlans.delete(entry.id); }
+      catch (error) { failures.push(`${entry.name}: ${error.message}`); }
+    }
+    document.getElementById("executionBatchMessage").textContent = `삭제 ${targets.length - failures.length}개${failures.length ? ` · 실패: ${failures.join(" / ")}` : ""}`;
+    await refreshPlans();
+  } finally { planBatchPending = false; renderExecutionPlans(); }
 }
 async function batchPlanAction(action, all) {
   if (planBatchPending || busy) return;
@@ -441,7 +471,7 @@ function refreshWatchProfileSelector() {
 
 function renderWatchRooms() {
   renderRoomSelectionControls();
-  elements.roomSectionTitle.textContent = "감시할 객실";
+  elements.roomSectionTitle.textContent = "객실 선택";
   elements.roomSectionHelp.textContent = "원하는 객실을 체크만 하세요. 순위 없이 조건에 맞는 자리가 나오면 객실 하나를 예약합니다.";
   elements.roomList.hidden = false;
   elements.profilePriorities.hidden = true;

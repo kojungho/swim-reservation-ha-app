@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { chromium } from "playwright-core";
-import { mockBookApp } from "./fixtures/ui-book-app.js";
+import { mockBookApp, openPlanDetails } from "./fixtures/ui-book-app.js";
 const executablePath = [process.env.CHROMIUM_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
 test("예약 가능 체크·조건 변경·전체 선택·PC 2열·예약자 도구·날짜 전체 클릭을 지원한다", { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
@@ -63,7 +63,7 @@ test("예약 가능 체크·조건 변경·전체 선택·PC 2열·예약자 도
     await page.locator("#profilePriorities").screenshot({ path: `/tmp/swim-profiles.6W9Acs/profile-room-columns-${width}.png` });
     state.plans.push(...[1, 2].map(number => ({ id: `00000000-0000-0000-0000-${String(number).padStart(12, "0")}`, name: `일정 ${number}`, kind: "scheduled", enabled: false, config: state.config, status: { state: "stopped" } })));
     await page.evaluate(() => refreshPlans());
-    if (width > 900) assert.equal(await page.locator("#planList").evaluate(el => getComputedStyle(el).gridTemplateColumns.split(" ").length), 2);
+    if (width > 900) assert.equal(await page.locator("#executionPlanList").evaluate(el => getComputedStyle(el).gridTemplateColumns.split(" ").length), 2);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: `/tmp/swim-profiles.6W9Acs/booking-layout-${width}.png`, fullPage: true });
     assert.deepEqual(state.errors, []); assert.equal(state.planCalls.length, 0); await page.close();

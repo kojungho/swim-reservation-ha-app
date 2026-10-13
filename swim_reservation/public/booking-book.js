@@ -1,6 +1,7 @@
 let bookingBook = [];
 let bookingBookWriting = false;
 let bookingBookLoaded = false;
+let editingBookIdentity = null;
 const bookingIdentityKeys = ["reserverName", "depositorName", "phone", "birthDate"];
 
 function bookingIdentity(profile = {}) {
@@ -20,15 +21,49 @@ async function loadBookingBook() {
   bookingBookLoaded = true;
   renderBookingBook();
   renderBookingProfileSelectors();
+  refreshLookupSiteSelector();
 }
 function initializeBookingBook() {
   document.getElementById("bookingProfileSelect1").addEventListener("change", event => selectBookingActor(0, event.target.value));
+  document.getElementById("bookNewButton").addEventListener("click", () => openBookEditor());
+  document.getElementById("bookCancelButton").addEventListener("click", closeBookEditor);
+  for (const id of ["bookReserverName", "bookDepositorName", "bookPhone", "bookBirthDate"]) document.getElementById(id).addEventListener("input", updateBookEditor);
   document.getElementById("bookAddButton").addEventListener("click", () => perform(async () => {
     const profile = Object.fromEntries(bookingIdentityKeys.map((key, index) => [key, document.getElementById(["bookReserverName", "bookDepositorName", "bookPhone", "bookBirthDate"][index]).value]));
-    await appendBookingIdentity(profile);
-    for (const id of ["bookReserverName", "bookDepositorName", "bookPhone", "bookBirthDate"]) document.getElementById(id).value = "";
+    if (editingBookIdentity) {
+      const index = matchingBookIndex(editingBookIdentity);
+      if (index < 0) throw new Error("수정할 예약자가 변경되었습니다. 목록에서 다시 선택하세요.");
+      if (!completeBookingIdentity(profile)) throw new Error("예약자 정보를 모두 확인하세요.");
+      const duplicate = matchingBookIndex(profile);
+      if (duplicate >= 0 && duplicate !== index) throw new Error("이미 저장된 예약자입니다.");
+      await writeBookingBook(bookingBook.map((saved, item) => item === index ? { ...saved, ...bookingIdentity(profile) } : saved));
+    } else await appendBookingIdentity(profile);
+    closeBookEditor();
     document.getElementById("bookingBookMessage").textContent = "예약자를 저장했습니다. 각 모드의 선택 목록에 추가되었습니다.";
   }));
+}
+function openBookEditor(profile = null) {
+  editingBookIdentity = profile ? { ...profile } : null;
+  document.getElementById("bookEditor").hidden = false;
+  document.getElementById("bookEditorTitle").textContent = profile ? `${profile.reserverName} 정보 수정` : "새 예약자 추가";
+  bookingIdentityKeys.forEach((key, index) => { document.getElementById(["bookReserverName", "bookDepositorName", "bookPhone", "bookBirthDate"][index]).value = profile?.[key] || ""; });
+  updateBookEditor();
+  document.getElementById("bookReserverName").focus();
+}
+function closeBookEditor() {
+  editingBookIdentity = null;
+  document.getElementById("bookEditor").hidden = true;
+  bookingIdentityKeys.forEach((_, index) => { document.getElementById(["bookReserverName", "bookDepositorName", "bookPhone", "bookBirthDate"][index]).value = ""; });
+  updateBookEditor();
+}
+function updateBookEditor() {
+  const locked = busy || bookingBookWriting;
+  for (const id of ["bookReserverName", "bookDepositorName", "bookPhone", "bookBirthDate", "bookCancelButton"]) document.getElementById(id).disabled = locked;
+  document.getElementById("bookNewButton").disabled = locked || !bookingBookLoaded || bookingBook.length >= 5;
+  for (const button of document.querySelectorAll("#bookingBookList button")) button.disabled = locked;
+  const draft = Object.fromEntries(bookingIdentityKeys.map((key, index) => [key, document.getElementById(["bookReserverName", "bookDepositorName", "bookPhone", "bookBirthDate"][index]).value]));
+  document.getElementById("bookAddButton").disabled = busy || bookingBookWriting || !bookingBookLoaded || !completeBookingIdentity(draft) || !editingBookIdentity && bookingBook.length >= 5;
+  document.getElementById("bookAddButton").textContent = editingBookIdentity ? "수정 저장" : "예약자 저장";
 }
 async function writeBookingBook(next) {
   if (!bookingBookLoaded) throw new Error("저장된 예약자 정보를 먼저 확인해야 합니다. 화면을 새로고침해 주세요.");
@@ -39,7 +74,7 @@ async function writeBookingBook(next) {
     const result = await request("profiles", { method: "PUT", body: JSON.stringify({ profiles: next.map(profile => ({ ...profile, ...bookingIdentity(profile) })) }) });
     bookingBook = result.profiles || [];
     renderBookingBook();
-  } finally { bookingBookWriting = false; renderBookingProfileSelectors(); }
+  } finally { bookingBookWriting = false; renderBookingProfileSelectors(); refreshLookupSiteSelector(); updateBookEditor(); }
 }
 async function appendBookingIdentity(profile) {
   if (!completeBookingIdentity(profile)) throw new Error("예약자명·입금자명·휴대폰 번호·생년월일을 모두 확인하세요.");
@@ -61,7 +96,7 @@ function selectBookingActor(index, value) {
 function mountExtraBookingSelector(panel, index) {
   const label = document.createElement("label");
   label.className = "booking-select-field";
-  label.textContent = "저장된 예약자 선택";
+  label.textContent = "예약자 저장 목록";
   const select = document.createElement("select");
   select.id = `bookingProfileSelect${index + 1}`;
   select.addEventListener("change", event => selectBookingActor(index, event.target.value));
@@ -96,6 +131,7 @@ function renderBookingBook() {
   bookingBook.forEach((profile, index) => {
     const row = document.createElement("div");
     row.className = "booking-book-row";
+    row.dataset.guestColor = String(index);
     const name = document.createElement("span");
     name.textContent = `${profile.reserverName} · ${profile.phone} · 입금자 ${profile.depositorName}`;
     const remove = document.createElement("button");
@@ -111,8 +147,13 @@ function renderBookingBook() {
       await writeBookingBook(bookingBook.filter((_, item) => item !== current));
       document.getElementById("bookingBookMessage").textContent = "저장 정보를 삭제했습니다. 등록된 일정은 유지됩니다.";
     }));
-    row.append(name, remove);
+    const edit = document.createElement("button"); edit.type = "button"; edit.className = "secondary"; edit.textContent = "수정";
+    edit.setAttribute("aria-label", `${profile.reserverName} 정보 수정`);
+    edit.addEventListener("click", () => openBookEditor(profile));
+    const actions = document.createElement("div"); actions.className = "section-actions"; actions.append(edit, remove);
+    row.append(name, actions);
     list.append(row);
   });
-  document.getElementById("bookAddButton").disabled = bookingBook.length >= 5;
+  document.getElementById("bookNewButton").disabled = bookingBook.length >= 5;
+  updateBookEditor();
 }

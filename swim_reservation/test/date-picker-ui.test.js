@@ -19,14 +19,13 @@ test("공통 달력은 좌우 월 이동·날짜·초 단위 시각·월 범위�
     await page.locator("#datePickerDialog").screenshot({ path: `/tmp/swim-profiles.6W9Acs/date-picker-${width}.png` });
     await page.locator("#datePickerNext").click();
     assert.equal(await page.locator("#datePickerMonth").textContent(), "2027년 1월");
-    await page.locator('[data-date="2027-01-08"]').click();
     assert.equal(await page.locator("#startDate").inputValue(), "2026-12-20");
     await page.locator("#datePickerCancel").click();
     assert.equal(await page.locator("#startDate").inputValue(), "2026-12-20");
     await page.locator("#startDate").click();
     await page.locator("#datePickerNext").click();
     await page.locator('[data-date="2027-01-08"]').click();
-    await page.locator("#datePickerApply").click();
+    assert.equal(await page.locator("#datePickerDialog").isVisible(), false);
     assert.equal(await page.locator("#startDate").inputValue(), "2027-01-08");
     assert.equal(await page.locator("#triggerAt").inputValue(), "2026-11-01T00:00");
     await page.locator("#triggerAt").fill("2026-11-01T03:04:05");

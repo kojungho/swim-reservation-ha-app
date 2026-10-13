@@ -190,6 +190,33 @@ button.monthly-day:focus-visible { outline: 2px solid var(--green); outline-offs
 .execution-plan span { overflow-wrap: anywhere; line-height: 1.5; }
 .execution-plan small { color: var(--muted); white-space: nowrap; }
 .execution-plan.active-plan { border-color: #b5d8c4; }
+.execution-plan { grid-template-columns: 18px minmax(0, 1fr); }
+.execution-plan .plan-detail-open { padding: 0; min-height: 40px; background: transparent; color: var(--ink); text-align: left; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.execution-plan small { grid-column: 2; white-space: normal; }
+#planCard { padding: 0; margin: 0 0 16px; border: 0; box-shadow: none; background: transparent; }
+#planList { display: block; }
+#planDetailsDialog .plan-entry { margin-top: 14px; }
+.reservation-person-group { padding: 14px; border: 1px solid var(--line); border-radius: 13px; }
+.reservation-person-group h3 { margin: 0 0 12px; overflow-wrap: anywhere; }
+.reservation-person-group > p { font-size: 13px; }
+.reservation-person-group .reservation-row { background: #ffffffb8; }
+[data-guest-color="0"] { background: #edf7ef; border-color: #b9d8c0; }
+[data-guest-color="1"] { background: #edf4ff; border-color: #bdd0ec; }
+[data-guest-color="2"] { background: #fff5e7; border-color: #e8d0ab; }
+[data-guest-color="3"] { background: #f5effc; border-color: #d4c4e8; }
+[data-guest-color="4"] { background: #fff0f1; border-color: #e5bdc2; }
+.booking-book-row .section-actions { margin: 0; flex-shrink: 0; }
+.one-off-lookup { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 14px; }
+.one-off-lookup .lookup-fields { max-width: 440px; }
+.monthly-footer { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.monthly-footer > a { flex: 0 0 auto; }
+.monthly-footer .monthly-prefetch { margin: 0; flex: 1; min-width: 140px; }
+.monthly-prefetch summary { text-align: right; cursor: pointer; font-weight: 700; font-size: 13px; padding: 12px 0; }
+.monthly-prefetch[open] { flex-basis: 100%; }
+.monthly-prefetch[open] summary { text-align: right; }
+#historyList:not(:empty) { margin-top: 16px; }
+.legacy-history-row { border-style: dashed; }
+#historyList:empty { display: none; }
 .room-toggle input:disabled { cursor: not-allowed; opacity: .55; }
 @media (min-width: 900px) {
   #roomList { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -208,7 +235,7 @@ button.monthly-day:focus-visible { outline: 2px solid var(--green); outline-offs
   .site-map-label { display: none; }
   .site-map-icon { font-size: 24px; }
 }
-.booking-book-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.booking-book-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; margin-top: 10px; font-size: 14px; }
 .booking-book-row button { flex-shrink: 0; padding: 8px 12px; }
 .booking-actor-save { margin: 0; }
 .booking-book-row span { min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
@@ -300,8 +327,9 @@ dt { color: var(--muted); } dd { margin: 0; font-weight: 700; overflow-wrap: any
 .site-map-upload p { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: #52635a; }
 @media (max-width: 680px) {
   .shell { margin-top: 84px; }
-  header { display: block; }
-  .badge { display: inline-block; margin-top: 16px; }
+  header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+  header h1 { font-size: clamp(21px, 5.5vw, 30px); }
+  header .badge { display: inline-block; margin-top: 24px; padding: 7px 9px; font-size: 11px; white-space: nowrap; }
   .card { padding: 20px 16px; border-radius: 16px; }
   .grid.two { grid-template-columns: 1fr; }
   input, select { font-size: 16px; }

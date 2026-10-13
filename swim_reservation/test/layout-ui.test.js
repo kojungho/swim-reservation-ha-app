@@ -62,24 +62,22 @@ test("320·390·768·1280px의 모든 탭에서 입력과 버튼이 붙거나 �
       if (tab === "profiles-parallel") { await page.locator("#addProfileButton").click(); await page.locator("#bookingProfileSelect2").selectOption("0"); }
       if (tab === "people") {
         await page.locator("#reservationList .reservation-row").waitFor();
+        await page.locator(".one-off-lookup summary").click();
         const sizes = await page.evaluate(() => {
-          const first = document.querySelector("#lookupreserverName1").getBoundingClientRect();
-          const phone = document.querySelector("#lookupphone1").getBoundingClientRect();
+          const first = document.querySelector("#oneOffName").getBoundingClientRect();
+          const phone = document.querySelector("#oneOffPhone").getBoundingClientRect();
           const select = document.querySelector("#siteProfileSelect").getBoundingClientRect();
           const button = document.querySelector("#reservationSiteButton").getBoundingClientRect();
-          return { paired: Math.abs(first.top - phone.top) < 1, selectWidth: select.width, aligned: Math.abs(select.bottom - button.bottom) < 1, panelHeight: document.querySelector(".lookup-profile-panel").getBoundingClientRect().height };
+          return { paired: Math.abs(first.top - phone.top) < 1, selectWidth: select.width, aligned: Math.abs(select.bottom - button.bottom) < 1 };
         });
         assert.equal(sizes.paired, true);
         assert.equal(sizes.aligned, true);
         assert.ok(sizes.selectWidth <= 220);
-        assert.ok(sizes.panelHeight < 170);
         if ([390, 1280].includes(width)) await page.locator("#lookupCard").screenshot({ path: `/tmp/swim-profiles.6W9Acs/lookup-redesign-${width}.png` });
         await page.locator("#siteProfileSelect").selectOption("2");
         assert.equal(await page.locator("#siteProfileSelect").inputValue(), "2");
-        await page.getByRole("button", { name: "조회 대상 2 삭제", exact: true }).click();
-        await page.locator("#saveLookupProfilesButton").click();
-        await page.waitForFunction(() => document.querySelector("#lookupMessage").textContent.includes("조회용 정보만 저장"));
-        assert.deepEqual(state.lookupBook, [{ reserverName: "가나다", phone: "01012345671" }]);
+        assert.equal(await page.locator("#reservationList .reservation-person-group").count(), 2);
+        assert.match(await page.locator("#reservationList .reservation-person-group").nth(1).innerText(), /내역 없음/);
       }
       if (tab === "monthly") {
         await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
