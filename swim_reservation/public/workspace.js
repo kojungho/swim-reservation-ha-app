@@ -296,7 +296,7 @@ async function refreshPlans() {
       profiles.forEach((profile, index) => {
         const line = document.createElement("p");
         const candidates = entry.config.bookingMode === "profiles-parallel" && entry.kind !== "watch" ? profile.roomPriority || [] : entry.config.roomPriority;
-        const names = candidates.filter(room => room.enabled).map(room => shortRoomText(room.name)).join(entry.kind === "watch" || entry.config.bookingMode === "multiple" ? ", " : " → ");
+        const names = roomSummaryText(candidates.filter(room => room.enabled).map(room => room.name), entry.kind !== "watch" && entry.config.bookingMode !== "multiple");
         line.textContent = `${profile.reserverName || `예약자 ${index + 1}`} : ${names || "선택된 객실 없음"}`;
         targets.append(line);
       });

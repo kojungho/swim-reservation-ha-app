@@ -48,7 +48,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     await page.locator("#planList .plan-entry").waitFor();
     assert.equal(state.plans[0].config.profiles.length, 2);
     assert.equal(state.plans[0].config.profiles[1].reserverName, guest.reserverName);
-    assert.deepEqual(await page.locator("#planList .plan-profile-targets p").allTextContents(), ["저장예약자1 : 해", "저장예약자3 : 달"]);
+    assert.deepEqual(await page.locator("#planList .plan-profile-targets p").allTextContents(), ["저장예약자1 : ① 해", "저장예약자3 : ① 달"]);
     assert.equal(await page.locator("#reserverName").inputValue(), "");
     assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 0);
     assert.equal(await page.locator("#bookingProfileSelect1").inputValue(), "");

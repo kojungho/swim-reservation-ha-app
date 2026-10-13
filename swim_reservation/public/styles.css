@@ -166,7 +166,7 @@ button.monthly-day:focus-visible { outline: 2px solid var(--green); outline-offs
 .room-toggle { display: flex; justify-content: center; margin: 0; }
 .room-toggle input { width: 19px; height: 19px; }
 .room-name { min-width: 0; overflow-wrap: anywhere; font-weight: 760; }
-.room-rank { display: inline-block; min-width: 48px; margin-right: 7px; color: var(--green); }
+.room-rank { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; margin-right: 6px; color: var(--green); font-size: 18px; font-weight: 500; vertical-align: middle; }
 .room-detected { display: inline-block; margin-left: 7px; padding: 3px 6px; border-radius: 999px; background: #dcefe4; color: #12603d; font-size: 10px; vertical-align: 1px; }
 .availability { display: inline-block; margin-left: 9px; padding: 4px 7px; border-radius: 999px; background: #e7ece9; color: #5a6861; font-size: 11px; vertical-align: 1px; }
 .availability.available { background: #d8f1e2; color: #12603d; }
