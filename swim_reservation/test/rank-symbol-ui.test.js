@@ -26,6 +26,7 @@ test("목록·개인별 순위·일정·이력은 동그라미 숫자로 통일�
     await page.evaluate(() => { switchWorkspaceTab("watch"); });
     assert.equal(await page.locator("#roomList .room-rank").count(), 0);
     assert.equal(await page.evaluate(() => roomSummaryText(["해_하늘존", "샘_산맥존"], false)), "해, 샘");
+    assert.equal(await page.evaluate(() => shortRoomText("예약자 1: 2순위 샘_산맥존 진행 중")), "예약자 1: ② 샘 진행 중");
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.deepEqual(state.errors, []); await page.close();
   }
