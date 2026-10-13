@@ -212,6 +212,18 @@
     <a id="monthlySourceLink" class="button secondary" href="https://newpension.logosweb.or.kr/reservation/reservation2.php?id=swim" target="_blank" rel="noopener noreferrer">원본 월별 현황 사이트</a>
   </dialog>
   <button id="siteMapButton" class="site-map-floating" type="button" aria-label="사이트 위치" title="사이트 위치"><span class="site-map-icon" aria-hidden="true">🗺️</span><span class="site-map-label">사이트 위치</span></button>
+  <dialog id="datePickerDialog" class="date-picker-dialog" aria-labelledby="datePickerTitle">
+    <h2 id="datePickerTitle">날짜 선택</h2>
+    <div class="date-picker-heading">
+      <button id="datePickerPrev" type="button" class="secondary" aria-label="이전 달">‹</button>
+      <strong id="datePickerMonth" aria-live="polite"></strong>
+      <button id="datePickerNext" type="button" class="secondary" aria-label="다음 달">›</button>
+    </div>
+    <div id="datePickerDays" class="date-picker-days"></div>
+    <label id="datePickerTimeField" hidden>시각 (시:분:초)<input id="datePickerTime" type="time" step="1"></label>
+    <p id="datePickerError" role="alert"></p>
+    <div class="date-picker-actions"><button id="datePickerCancel" type="button" class="secondary">취소</button><button id="datePickerApply" type="button">선택</button></div>
+  </dialog>
   <script src="workspace.js"></script>
   <script src="booking-book.js"></script>
   <script src="app.js"></script>

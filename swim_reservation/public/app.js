@@ -101,12 +101,7 @@ async function init() {
 }
 
 function bindEvents() {
-  document.addEventListener("click", event => {
-    const input = event.target;
-    if (input instanceof HTMLInputElement && ["date", "datetime-local", "month"].includes(input.type) && !input.disabled && !input.readOnly) {
-      try { input.showPicker?.(); } catch { /* Unsupported browsers retain their native date control. */ }
-    }
-  });
+  initializeDatePicker();
   elements.monthlyQueryButton.addEventListener("click", () => void loadMonthlyAvailability(true));
   elements.monthlyCacheSave.addEventListener("click", async () => {
     elements.monthlyCacheSave.disabled = true;
@@ -1169,4 +1164,89 @@ async function request(path, options = {}) {
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+}
+
+// One calendar across desktop/mobile; only committing dispatches editor changes.
+function initializeDatePicker() {
+  const dialog = document.getElementById("datePickerDialog");
+  const get = name => document.getElementById(`datePicker${name}`);
+  let target = null, month = "", selected = "";
+  const eligible = input => input instanceof HTMLInputElement && ["date", "datetime-local", "month"].includes(input.type) && !input.disabled && !input.readOnly;
+  const shift = delta => {
+    const [year, number] = month.split("-").map(Number);
+    const date = new Date(Date.UTC(year, number - 1 + delta, 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  };
+  const allowedMonth = value => value >= (target.min.slice(0, 7) || "0001-01") && value <= (target.max.slice(0, 7) || "9999-12");
+  function render() {
+    const [year, number] = month.split("-").map(Number);
+    get("Month").textContent = `${year}년 ${number}월`;
+    get("Prev").disabled = !allowedMonth(shift(-1));
+    get("Next").disabled = !allowedMonth(shift(1));
+    get("Days").hidden = target.type === "month";
+    get("TimeField").hidden = target.type !== "datetime-local";
+    get("Error").textContent = "";
+    get("Apply").disabled = target.type !== "month" && !selected;
+    get("Days").replaceChildren();
+    if (target.type === "month") return;
+    for (const label of ["일", "월", "화", "수", "목", "금", "토"]) {
+      const cell = document.createElement("span"); cell.textContent = label; get("Days").append(cell);
+    }
+    const offset = new Date(Date.UTC(year, number - 1, 1)).getUTCDay();
+    for (let index = 0; index < offset; index++) get("Days").append(document.createElement("span"));
+    const count = new Date(Date.UTC(year, number, 0)).getUTCDate();
+    for (let day = 1; day <= count; day++) {
+      const value = `${month}-${String(day).padStart(2, "0")}`;
+      const button = document.createElement("button");
+      button.type = "button"; button.className = "date-picker-day"; button.textContent = day;
+      button.dataset.date = value; button.setAttribute("aria-label", `${year}년 ${number}월 ${day}일`);
+      button.setAttribute("aria-pressed", String(value === selected));
+      button.disabled = Boolean(target.min && value < target.min.slice(0, 10) || target.max && value > target.max.slice(0, 10));
+      button.addEventListener("click", () => { selected = value; render(); get("Days").querySelector(`[data-date="${value}"]`).focus(); });
+      get("Days").append(button);
+    }
+  }
+  function open(input) {
+    if (dialog.open) return;
+    target = input;
+    const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    selected = input.type === "month" ? "" : input.value.slice(0, 10);
+    month = (input.value || today).slice(0, 7);
+    if (input.min && month < input.min.slice(0, 7)) month = input.min.slice(0, 7);
+    if (input.max && month > input.max.slice(0, 7)) month = input.max.slice(0, 7);
+    get("Title").textContent = input.type === "month" ? "월 선택" : input.type === "datetime-local" ? "날짜·시각 선택" : "날짜 선택";
+    get("Time").value = input.value.split("T")[1] || "00:00:00";
+    render(); dialog.showModal();
+    (get("Days").querySelector('[aria-pressed="true"]:not(:disabled)') || get("Next")).focus();
+  }
+  // Suppress the OS picker even when its indicator is clicked; retain typed input.
+  document.addEventListener("pointerdown", event => { if (eligible(event.target)) event.preventDefault(); });
+  document.addEventListener("click", event => { if (eligible(event.target)) { event.preventDefault(); open(event.target); } });
+  document.addEventListener("keydown", event => {
+    if (eligible(event.target) && (event.key === " " || event.key === "ArrowDown" && event.altKey)) { event.preventDefault(); open(event.target); }
+  });
+  get("Prev").addEventListener("click", () => { month = shift(-1); render(); });
+  get("Next").addEventListener("click", () => { month = shift(1); render(); });
+  get("Cancel").addEventListener("click", () => dialog.close());
+  get("Apply").addEventListener("click", () => {
+    let value = target.type === "month" ? month : selected;
+    if (target.type === "datetime-local") {
+      if (!get("Time").value || !get("Time").checkValidity()) { get("Error").textContent = "올바른 시각을 입력해 주세요."; return; }
+      value += `T${get("Time").value}`;
+    }
+    const previous = target.value;
+    target.value = value;
+    if (!target.checkValidity()) { target.value = previous; get("Error").textContent = "선택할 수 있는 날짜·시각 범위를 확인해 주세요."; return; }
+    if (previous !== target.value) {
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    dialog.close();
+  });
+  dialog.addEventListener("click", event => {
+    if (event.target !== dialog) return;
+    const rect = dialog.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+  });
+  dialog.addEventListener("close", () => target?.focus({ preventScroll: true }));
 }

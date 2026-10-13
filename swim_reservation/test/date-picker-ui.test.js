@@ -1,0 +1,58 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { chromium } from "playwright-core";
+import { mockBookApp } from "./fixtures/ui-book-app.js";
+const executablePath = [process.env.CHROMIUM_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
+test("공통 달력은 좌우 월 이동·날짜·초 단위 시각·월 범위·취소를 PC와 모바일에서 지원한다", { skip: !executablePath }, async t => {
+  const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
+  for (const width of [320, 390, 1280]) {
+    const page = await browser.newPage({ viewport: { width, height: 900 } });
+    const state = await mockBookApp(page);
+    await page.locator("#startDate").click();
+    assert.equal(await page.locator("#datePickerMonth").textContent(), "2026년 12월");
+    const geometry = await page.locator("#datePickerDialog").evaluate(dialog => {
+      const prev = document.getElementById("datePickerPrev").getBoundingClientRect(), next = document.getElementById("datePickerNext").getBoundingClientRect();
+      return { aligned: prev.top === next.top && prev.left < next.left, fits: dialog.scrollWidth <= dialog.clientWidth && dialog.getBoundingClientRect().right <= innerWidth };
+    });
+    assert.deepEqual(geometry, { aligned: true, fits: true });
+    await page.locator("#datePickerDialog").screenshot({ path: `/tmp/swim-profiles.6W9Acs/date-picker-${width}.png` });
+    await page.locator("#datePickerNext").click();
+    assert.equal(await page.locator("#datePickerMonth").textContent(), "2027년 1월");
+    await page.locator('[data-date="2027-01-08"]').click();
+    assert.equal(await page.locator("#startDate").inputValue(), "2026-12-20");
+    await page.locator("#datePickerCancel").click();
+    assert.equal(await page.locator("#startDate").inputValue(), "2026-12-20");
+    await page.locator("#startDate").click();
+    await page.locator("#datePickerNext").click();
+    await page.locator('[data-date="2027-01-08"]').click();
+    await page.locator("#datePickerApply").click();
+    assert.equal(await page.locator("#startDate").inputValue(), "2027-01-08");
+    assert.equal(await page.locator("#triggerAt").inputValue(), "2026-11-01T00:00");
+    await page.locator("#triggerAt").fill("2026-11-01T03:04:05");
+    await page.locator("#triggerAt").click();
+    await page.locator("#datePickerNext").click();
+    await page.locator('[data-date="2026-12-02"]').click();
+    await page.locator("#datePickerApply").click();
+    assert.equal(await page.locator("#triggerAt").inputValue(), "2026-12-02T03:04:05");
+    await page.locator("#triggerAt").click(); await page.keyboard.press("Escape");
+    assert.equal(await page.locator("#datePickerDialog").isVisible(), false);
+    await page.evaluate(() => { elements.startDate.value = "2028-02-01"; });
+    await page.locator("#startDate").click();
+    assert.equal(await page.locator('[data-date="2028-02-29"]').count(), 1);
+    await page.locator("#datePickerPrev").click();
+    assert.equal(await page.locator("#datePickerMonth").textContent(), "2028년 1월");
+    await page.locator("#datePickerCancel").click();
+    await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="monthly"]').click();
+    await page.locator("#monthlyMonth").fill("2000-01");
+    await page.locator("#monthlyMonth").click();
+    assert.equal(await page.locator("#datePickerPrev").isDisabled(), true);
+    assert.equal(await page.locator("#datePickerDays").isVisible(), false);
+    await page.locator("#datePickerNext").click(); await page.locator("#datePickerApply").click();
+    assert.equal(await page.locator("#monthlyMonth").inputValue(), "2000-02");
+    assert.deepEqual(state.errors, []);
+    assert.equal(state.writes.some(path => /run-now|\/start$/.test(path)), false);
+    await page.screenshot({ path: `/tmp/swim-profiles.6W9Acs/date-picker-page-${width}.png` });
+    await page.close();
+  }
+});
