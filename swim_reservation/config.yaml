@@ -1,8 +1,8 @@
 name: "쉼오지 예약 도우미"
-version: "2.9.0"
+version: "2.10.0"
 image: "ghcr.io/kojungho/swim-reservation"
 slug: "swim_reservation"
-description: "단독·다중·다인 예약 및 취소 자리 감시를 지원합니다. 저장 이력에서 일정 등록·실행을 관리하고, 저장 예약자 전체 조회와 1회성 조회를 제공합니다."
+description: "단독·다중·객실 수 기준 다인 예약 및 취소 대기를 지원합니다. 예약자 20명 저장, 일정 등록·실행과 전체/1회성 조회를 제공합니다."
 url: "https://github.com/kojungho/swim-reservation-ha-app"
 arch:
   - amd64
