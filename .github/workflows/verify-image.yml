@@ -1,0 +1,38 @@
+name: Verify published HA images
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published image version
+        required: true
+        default: '2.7.0'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    name: Runtime check ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Download without login and check browser runtime
+        env:
+          IMAGE_VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$IMAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          docker run --rm --entrypoint node "ghcr.io/kojungho/swim-reservation:${IMAGE_VERSION}" --input-type=module -e "
+            import { chromium } from 'playwright-core';
+            const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+            const page = await browser.newPage();
+            await page.goto('data:text/html,<title>swim-image-check</title>');
+            if (await page.title() !== 'swim-image-check') throw new Error('Browser runtime check failed');
+            await browser.close();
+            console.log('Published image browser runtime passed');
+          "
