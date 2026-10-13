@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { Store } from "./store.js";
@@ -6,6 +6,7 @@ import { Scheduler } from "./scheduler.js";
 import { normalizeConfig, validateConfig, getProfiles, bookingOpenIso, triggerEpoch } from "./config.js";
 
 // Each plan owns its configuration, status and browser. Editor changes never affect armed plans.
+function planRevision(plan) { return createHash("sha256").update(JSON.stringify([plan.name, plan.kind, plan.config, plan.intervalSeconds, plan.watchEndsAt || ""])).digest("hex"); }
 export class PlanManager {
   constructor({ dataDir, timeSync, engineFactory, inspect, log = async () => {}, canInspect = () => true }) {
     Object.assign(this, { dataDir, timeSync, engineFactory, inspect, log, canInspect });
@@ -75,7 +76,7 @@ export class PlanManager {
     await this.persist();
   }
   async list() {
-    return Promise.all([...this.plans.values()].map(async plan => ({ id: plan.id, name: plan.name, kind: plan.kind, intervalSeconds: plan.intervalSeconds, watchEndsAt: plan.watchEndsAt || "", watchDeadlineAt: plan.kind === "watch" ? watchDeadlineAt(plan) : null, enabled: plan.enabled, config: plan.config, status: await plan.store.getStatus() })));
+    return Promise.all([...this.plans.values()].map(async plan => ({ id: plan.id, revision: planRevision(plan), name: plan.name, kind: plan.kind, intervalSeconds: plan.intervalSeconds, watchEndsAt: plan.watchEndsAt || "", watchDeadlineAt: plan.kind === "watch" ? watchDeadlineAt(plan) : null, enabled: plan.enabled, config: plan.config, status: await plan.store.getStatus() })));
   }
   async add(input) {
     return this.locked(async () => {
@@ -117,9 +118,10 @@ export class PlanManager {
       return id;
     });
   }
-  async start(id) {
+  async start(id, { expectedRevision } = {}) {
     return this.locked(async () => {
       const plan = this.get(id);
+      if (expectedRevision !== undefined && expectedRevision !== planRevision(plan)) throw new Error("일정이 다른 화면에서 변경되었습니다. 최신 내용을 다시 확인하고 시작해 주세요.");
       if (plan.enabled || plan.checking || plan.scheduler.running || plan.scheduler.preparing) throw new Error("이미 진행 중인 일정입니다.");
       if ([...this.plans.values()].filter(item => item.enabled).length >= 5) throw new Error("동시 진행 일정은 최대 5개입니다.");
       const generation = ++plan.generation;

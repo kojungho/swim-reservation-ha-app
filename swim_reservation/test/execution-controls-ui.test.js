@@ -29,6 +29,7 @@ test("PC·폰에서 일정 목록을 실행 영역 아래에 두고 미래 예�
         if (req.method() === "PUT") { config = normalizeConfig(req.postDataJSON()); result = { config }; }
         else result = config;
       } else if (path === "/api/profiles") result = { profiles: [profile] };
+      else if (path === "/api/inspect") result = { rooms: config.roomPriority.map(room => ({ name: room.name, available: true, status: "available" })) };
       else if (path.startsWith("/api/site-time")) result = { synced, serverNowMs: now, lastSyncedAt: now, offsetMs: 0, rttMs: 0, error: "동기화 실패 테스트" };
       else if (path === "/api/plans" && req.method() === "POST") {
         const id = `00000000-0000-0000-0000-${String(plans.length + 1).padStart(12, "0")}`;
@@ -67,9 +68,9 @@ test("PC·폰에서 일정 목록을 실행 영역 아래에 두고 미래 예�
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="priority"]').click();
     await page.locator("#startDate").fill("2026-12-20");
-    await page.locator("#triggerAt").fill("2026-10-12T09:00");
+    await page.locator("#triggerAt").evaluate((input, value) => { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); }, "2026-10-12T09:00");
     await page.locator("#runNowButton").waitFor({ state: "visible" });
-    await page.locator("#triggerAt").fill("2026-10-12T11:00");
+    await page.locator("#triggerAt").evaluate((input, value) => { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); }, "2026-10-12T11:00");
     assert.equal(await page.locator("#runNowButton").isVisible(), false);
     now = Date.parse("2026-10-12T11:00:00+09:00");
     await page.locator("#siteTimeSyncButton").click();
@@ -86,10 +87,10 @@ test("PC·폰에서 일정 목록을 실행 영역 아래에 두고 미래 예�
     await page.locator("#siteTimeSyncButton").click();
     await page.locator("#runNowButton").waitFor({ state: "visible" });
     await page.locator("#startDate").fill("2027-01-20");
-    await page.locator("#triggerAt").fill("2026-10-12T09:00");
+    await page.locator("#triggerAt").evaluate((input, value) => { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); }, "2026-10-12T09:00");
     assert.equal(await page.locator("#runNowButton").isVisible(), false);
     await page.locator("#startDate").fill("2026-12-20");
-    await page.locator("#triggerAt").fill("2026-10-12T09:00");
+    await page.locator("#triggerAt").evaluate((input, value) => { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); }, "2026-10-12T09:00");
     await page.locator("#bookingProfileSelect1").selectOption("0");
     await page.waitForFunction(() => document.querySelector("#reserverName").value === "테스트예약자");
     await page.locator("#roomList input[type=checkbox]").first().check();

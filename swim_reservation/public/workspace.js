@@ -5,6 +5,8 @@ let editingPlan = null;
 let defaultRoomOrder = [];
 let planEntries = [];
 let planRefreshPending = false;
+let planBatchPending = false;
+const selectedExecutionPlans = new Set();
 let lookupProfilesDraft = [];
 let lookupProfilesInitialized = false;
 let lookupProfilesLoading = null;
@@ -49,12 +51,15 @@ function initializeWorkspace() {
   document.addEventListener("keydown", event => { if (event.key === "Escape" && menuButton.getAttribute("aria-expanded") === "true") { setWorkspaceMenuOpen(false); menuButton.focus(); } });
   document.getElementById("addPlanButton").addEventListener("click", () => registerPlan(workspaceTab === "watch" ? "watch" : "scheduled", false).catch(error => planMessage(error.message)));
   document.getElementById("cancelPlanEdit").addEventListener("click", () => { resetPlanEditor(); planMessage("수정을 취소했습니다. 저장된 일정은 변경되지 않았습니다."); });
+  for (const [id, action, all] of [["startAllPlans", "start", true], ["startSelectedPlans", "start", false], ["stopSelectedPlans", "stop", false]]) {
+    document.getElementById(id).addEventListener("click", () => batchPlanAction(action, all).catch(error => showMessage(error.message, true)));
+  }
   document.getElementById("watchEndsAt").addEventListener("input", updateWatchDeadlineHint);
   for (const [id, enabled] of [["watchSelectAll", true], ["watchDeselectAll", false]]) document.getElementById(id).addEventListener("click", () => {
-    if (workspaceTab !== "watch") return;
-    rooms.forEach(room => { room.enabled = enabled; });
+    const groups = workspaceTab !== "watch" && elements.bookingMode.value === "profiles-parallel" ? [firstProfilePriority, ...extraProfiles.map(profile => profile.roomPriority || [])] : [rooms];
+    groups.forEach(items => items.forEach(room => { if (!enabled || canSelectRoom(room.name) || workspaceTab === "watch") room.enabled = enabled; }));
     editorGeneration++;
-    renderWatchRooms();
+    renderRooms();
   });
   workspaceTab = elements.bookingMode.value;
   switchWorkspaceTab(workspaceTab, { keepEditor: true });
@@ -109,8 +114,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   document.getElementById("watchInterval").closest("label").hidden = tab !== "watch";
   document.getElementById("watchEndsAtField").hidden = tab !== "watch";
   document.getElementById("watchProfileField").hidden = true;
-  document.getElementById("watchSelectAll").hidden = tab !== "watch";
-  document.getElementById("watchDeselectAll").hidden = tab !== "watch";
+  renderRoomSelectionControls();
   if (tab === "watch") elements.historyList.closest("section").hidden = true;
   elements.bookingMode.closest(".booking-mode-field").hidden = true;
   elements.triggerAt.closest("label").hidden = tab === "watch";
@@ -146,7 +150,7 @@ function updateBookingProfileVisibility() {
   const one = workspaceTab !== "profiles-parallel";
   const index = 0;
   elements.multipleProfileField.hidden = true;
-  document.getElementById("firstBookingProfileTitle").hidden = one && index !== 0;
+  document.getElementById("firstBookingProfileTitle").hidden = one;
   document.getElementById("firstBookingProfileFields").hidden = one && index !== 0;
   [...elements.extraProfiles.children].forEach((panel, extraIndex) => { panel.hidden = one && index !== extraIndex + 1; panel.querySelector("button").hidden = one; });
   elements.addProfileButton.hidden = one;
@@ -274,6 +278,7 @@ async function refreshPlans() {
   try {
     const result = await request("plans");
     planEntries = result.entries || [];
+    renderExecutionPlans();
     renderPlanBadge();
     const list = document.getElementById("planList");
     list.replaceChildren();
@@ -311,6 +316,7 @@ async function refreshPlans() {
         button.disabled = action === "start" && (entry.enabled || entry.status.stage === "expired" || ["failed", "success", "running"].includes(entry.status.state)) || ["load", "delete"].includes(action) && entry.enabled;
         if (action === "edit") button.disabled = entry.enabled || !["idle", "stopped"].includes(entry.status.state);
         if (action === "start" && editingPlan?.id === entry.id) button.disabled = true;
+        if (planBatchPending) button.disabled = true;
         button.addEventListener("click", async () => {
           button.disabled = true;
           try {
@@ -331,7 +337,7 @@ async function refreshPlans() {
             } else {
               if (action === "start" && !window.confirm(`${entry.name}\n${entry.config.startDate}부터 ${entry.config.nights}박 · ${entry.kind === "watch" ? "체크한 객실 중 조건에 맞는 하나 예약" : modes[entry.config.bookingMode]}\n${entry.kind === "watch" ? "조건이 맞는 자리가 나오면" : "지정 시각에"} 환불 규정 동의와 최종 예약 제출까지 자동 진행합니다. 다른 일정과 중복되는지 확인하셨나요?`)) return;
               if (action === "delete" && !window.confirm("이 일정을 목록에서 삭제할까요? 실제 예약은 취소되지 않습니다.")) return;
-              const result = await request(`plans/${entry.id}${action === "delete" ? "" : `/${action}`}`, { method: action === "delete" ? "DELETE" : "POST" });
+              const result = await request(`plans/${entry.id}${action === "delete" ? "" : `/${action}`}`, { method: action === "delete" ? "DELETE" : "POST", ...(action === "start" ? { body: JSON.stringify({ expectedRevision: entry.revision }) } : {}) });
               if (action === "delete" && editingPlan?.id === entry.id) resetPlanEditor();
               planMessage(result.status?.stage === "expired" ? result.status.message : `${entry.name}: ${label} 완료`);
             }
@@ -354,6 +360,73 @@ function renderPlanBadge() {
   elements.statusBadge.className = `badge ${running ? "running" : "waiting"}`;
   elements.statusBadge.textContent = `${active.length}개 일정 ${running ? "실행 중" : "대기·감시 중"}`;
 }
+function planCanStart(entry) {
+  return !entry.enabled && ["idle", "stopped"].includes(entry.status?.state || "idle") && entry.status?.stage !== "expired" && editingPlan?.id !== entry.id;
+}
+function planIsActive(entry) { return entry.enabled || ["running", "waiting"].includes(entry.status?.state); }
+function renderExecutionPlans() {
+  const list = document.getElementById("executionPlanList");
+  if (!list) return;
+  const knownIds = new Set(planEntries.map(entry => entry.id));
+  for (const id of selectedExecutionPlans) if (!knownIds.has(id)) selectedExecutionPlans.delete(id);
+  const focusId = list.contains(document.activeElement) ? document.activeElement.dataset.planId : null;
+  list.replaceChildren();
+  if (!planEntries.length) list.textContent = "등록된 일정이 없습니다. 아래에서 일정을 등록해 주세요.";
+  for (const entry of planEntries) {
+    const label = document.createElement("label"); label.className = `execution-plan${planIsActive(entry) ? " active-plan" : ""}`;
+    const input = document.createElement("input"); input.type = "checkbox"; input.dataset.planId = entry.id;
+    input.checked = selectedExecutionPlans.has(entry.id); input.disabled = planBatchPending;
+    input.setAttribute("aria-label", `${entry.name} · ${entry.config.startDate} · ${entry.config.nights}박 선택`);
+    input.addEventListener("change", () => { if (input.checked) selectedExecutionPlans.add(entry.id); else selectedExecutionPlans.delete(entry.id); renderExecutionPlans(); });
+    const text = document.createElement("span");
+    text.textContent = `${entry.name} · ${entry.config.startDate} / ${entry.config.nights}박`;
+    const state = document.createElement("small"); state.textContent = planIsActive(entry) ? "진행 중" : entry.status?.state === "success" ? "완료" : entry.status?.state === "failed" ? "확인 필요" : "중지";
+    label.append(input, text, state); list.append(label);
+  }
+  if (focusId) [...list.querySelectorAll("input")].find(input => input.dataset.planId === focusId)?.focus({ preventScroll: true });
+  const blocked = busy || planBatchPending;
+  const capacity = Math.max(0, 5 - planEntries.filter(planIsActive).length);
+  document.getElementById("startAllPlans").disabled = blocked || !capacity || !planEntries.some(planCanStart);
+  document.getElementById("startSelectedPlans").disabled = blocked || !capacity || !planEntries.some(entry => selectedExecutionPlans.has(entry.id) && planCanStart(entry));
+  elements.stopButton.disabled = blocked || !planEntries.some(planIsActive) && !["waiting", "running"].includes(currentState);
+  document.getElementById("stopSelectedPlans").disabled = blocked || !planEntries.some(entry => selectedExecutionPlans.has(entry.id) && planIsActive(entry));
+}
+async function batchPlanAction(action, all) {
+  if (planBatchPending || busy) return;
+  planBatchPending = true; renderExecutionPlans();
+  try {
+    const snapshot = (await request("plans")).entries || [];
+    planEntries = snapshot; renderExecutionPlans();
+    let targets = snapshot.filter(entry => (all || selectedExecutionPlans.has(entry.id)) && (action === "start" ? planCanStart(entry) : planIsActive(entry)));
+    let limited = 0;
+    if (action === "start") {
+      const capacity = Math.max(0, 5 - planEntries.filter(planIsActive).length);
+      limited = Math.max(0, targets.length - capacity); targets = targets.slice(0, capacity);
+      if (!targets.length) return;
+      const names = targets.map(entry => `${entry.name} · ${entry.config.startDate} / ${entry.config.nights}박`).join("\n");
+      if (!window.confirm(`${names}\n\n위 ${targets.length}개 일정을 시작할까요? 예약 시각 또는 감시 조건이 맞으면 환불 규정 동의와 최종 예약까지 자동 진행합니다.${limited ? `\n동시 진행은 최대 5개여서 나머지 ${limited}개는 시작하지 않습니다.` : ""}`)) return;
+    }
+    let succeeded = 0; const failures = [];
+    let legacyStop = Promise.resolve();
+    if (action === "stop" && all) {
+      clearTimeout(availabilityTimer); availabilityController?.abort(); availabilityRequest++;
+      legacyStop = request("stop", { method: "POST" }).catch(error => failures.push(`기존 실행: ${error.message}`));
+    }
+    const runEntry = async entry => {
+      try {
+        const result = await request(`plans/${entry.id}/${action}`, { method: "POST", ...(action === "start" ? { body: JSON.stringify({ expectedRevision: entry.revision }) } : {}) });
+        if (action === "start" && result.status && !["waiting", "running", "success"].includes(result.status.state)) failures.push(`${entry.name}: ${result.status.message || "일정이 시작되지 않았습니다. 최신 상태를 확인해 주세요."}`);
+        else succeeded++;
+      } catch (error) { failures.push(`${entry.name}: ${error.message}`); }
+    };
+    if (action === "stop") await Promise.all([legacyStop, ...targets.map(runEntry)]);
+    else for (const entry of targets) await runEntry(entry);
+    const message = `${action === "start" ? "시작" : "중지"} 완료 ${succeeded}개${limited ? ` · 동시 진행 제한으로 제외 ${limited}개` : ""}${failures.length ? ` · 실패 ${failures.length}개: ${failures.join(" / ")}` : ""}`;
+    document.getElementById("executionBatchMessage").textContent = shortRoomText(message);
+    await refreshPlans(); await refreshStatus();
+    if (action === "stop" && all) scheduleAvailabilityCheck(0);
+  } finally { planBatchPending = false; renderExecutionPlans(); }
+}
 
 function refreshWatchProfileSelector() {
   const select = document.getElementById("watchProfileSelect"), previous = select.value;
@@ -367,6 +440,7 @@ function refreshWatchProfileSelector() {
 }
 
 function renderWatchRooms() {
+  renderRoomSelectionControls();
   elements.roomSectionTitle.textContent = "감시할 객실";
   elements.roomSectionHelp.textContent = "원하는 객실을 체크만 하세요. 순위 없이 조건에 맞는 자리가 나오면 객실 하나를 예약합니다.";
   elements.roomList.hidden = false;

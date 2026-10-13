@@ -3,11 +3,11 @@ import { defaultConfig, normalizeConfig, normalizeProfile } from "../../src/conf
 
 export const testGuest = (number = 1) => ({ reserverName: `저장예약자${number}`, depositorName: `입금자${number}`, phone: `0101234567${number}`, birthDate: "19900101" });
 export async function mockBookApp(page, count = 2) {
-  const state = { book: Array.from({ length: count }, (_, index) => testGuest(index + 1)), lookupBook: [], plans: [], writes: [], errors: [], rejectBook: false, logsRead: 0 };
+  const state = { book: Array.from({ length: count }, (_, index) => testGuest(index + 1)), lookupBook: [], plans: [], planCalls: [], dialogs: [], writes: [], errors: [], rejectBook: false, logsRead: 0 };
   if (state.book.length) state.book[0].roomPriority = [{ name: "달_하늘존", enabled: true }];
   state.config = normalizeConfig({ ...defaultConfig(), startDate: "2026-12-20", triggerAt: "2026-10-20T00:00:00", profiles: state.book, roomPriority: [{ name: "해_하늘존", enabled: false }, { name: "달_하늘존", enabled: false }] });
   page.on("pageerror", error => state.errors.push(error.message));
-  page.on("dialog", dialog => dialog.accept());
+  page.on("dialog", dialog => { state.dialogs.push(dialog.message()); return state.rejectDialogs ? dialog.dismiss() : dialog.accept(); });
   await page.route("https://app.test/**", async route => {
     const req = route.request(), path = new URL(req.url()).pathname;
     if (!path.startsWith("/api/")) {
@@ -28,7 +28,8 @@ export async function mockBookApp(page, count = 2) {
     } else if (path === "/api/lookup-profiles") {
       if (req.method() === "PUT") state.lookupBook = req.postDataJSON().profiles;
       result = { profiles: state.lookupBook };
-    } else if (path === "/api/reservations") result = { reservations: [], lookupErrors: [] };
+    } else if (path === "/api/inspect") result = { rooms: state.availability || state.config.roomPriority.map(room => ({ name: room.name, available: true, status: "available" })) };
+    else if (path === "/api/reservations") result = { reservations: [], lookupErrors: [] };
     else if (path === "/api/plans" && req.method() === "POST") {
       const id = `00000000-0000-0000-0000-${String(state.plans.length + 1).padStart(12, "0")}`;
       state.plans.push({ ...req.postDataJSON(), id, enabled: false, status: { state: "idle" } });
@@ -39,6 +40,15 @@ export async function mockBookApp(page, count = 2) {
       Object.assign(entry, req.postDataJSON(), { id, enabled: false, status: { state: "stopped", stage: "stopped", message: "일정 수정을 저장했습니다." } });
       result = { id };
     } else if (path === "/api/plans") result = { entries: state.plans };
+    else if (/^\/api\/plans\/[a-f0-9-]{36}\/(start|stop)$/.test(path)) {
+      const [, , , id, action] = path.split("/");
+      const entry = state.plans.find(plan => plan.id === id);
+      state.planCalls.push({ id, action, body: req.postData() ? req.postDataJSON() : {} });
+      if (action === "start" && state.rejectStartPlan === id) return route.fulfill({ status: 409, json: { error: "시작 실패 테스트" } });
+      entry.enabled = action === "start";
+      entry.status = { state: action === "start" ? "waiting" : "stopped", stage: action === "start" ? "armed" : "stopped" };
+      result = { ok: true, status: entry.status };
+    }
     else if (path === "/api/logs") { state.logsRead++; result = { entries: [] }; }
     else result = { entries: [], rooms: [], state: "idle", stage: "idle", synced: true, serverNowMs: Date.parse("2026-10-12T10:00:00+09:00"), lastSyncedAt: Date.now(), offsetMs: 0, rttMs: 1 };
     return route.fulfill({ json: result });

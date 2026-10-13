@@ -78,7 +78,7 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/api/month-cache/refresh" && request.method === "POST") return json(response, 202, monthCache.refresh());
     if (url.pathname === "/api/plans" && request.method === "GET") return json(response, 200, { entries: await plans.list() });
     if (url.pathname === "/api/plans/stop-all" && request.method === "POST") {
-      for (const plan of plans.plans.values()) if (plan.enabled) await plans.stop(plan.id);
+      await Promise.all([...plans.plans.values()].filter(plan => plan.enabled || plan.checking || plan.scheduler.running || plan.scheduler.preparing).map(plan => plans.stop(plan.id)));
       return json(response, 200, { ok: true });
     }
     if (url.pathname === "/api/plans" && request.method === "POST") {
@@ -89,7 +89,7 @@ const server = http.createServer(async (request, response) => {
     if (planMatch) {
       try {
         if (request.method === "PUT" && !planMatch[2]) return json(response, 200, { id: await plans.update(planMatch[1], await readJsonBody(request)) });
-        if (request.method === "POST" && planMatch[2] === "start") { await monthCache.pause(); await plans.start(planMatch[1]); return json(response, 200, { ok: true, status: await plans.get(planMatch[1]).store.getStatus() }); }
+        if (request.method === "POST" && planMatch[2] === "start") { const input = await readJsonBody(request); await monthCache.pause(); await plans.start(planMatch[1], input); return json(response, 200, { ok: true, status: await plans.get(planMatch[1]).store.getStatus() }); }
         if (request.method === "POST" && planMatch[2] === "stop") { await plans.stop(planMatch[1]); return json(response, 200, { ok: true }); }
         if (request.method === "DELETE" && !planMatch[2]) { await plans.remove(planMatch[1]); return json(response, 200, { ok: true }); }
       } catch (error) { return json(response, 409, { error: error.message }); }

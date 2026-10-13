@@ -40,9 +40,9 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(state.book.length, 3);
     assert.equal(state.book[0].roomPriority.find(room => room.name === "달_하늘존").enabled, true);
     assert.equal(await page.locator("#saveBookingActor2").isDisabled(), true);
+    await page.locator("#startDate").fill("2026-12-20");
     await page.locator('[data-profile-index="0"] input[type=checkbox]').first().check();
     await page.locator('[data-profile-index="1"] input[type=checkbox]').nth(1).check();
-    await page.locator("#startDate").fill("2026-12-20");
     await page.locator("#planName").fill("사람별 일정");
     await page.locator("#addPlanButton").click();
     await page.locator("#planList .plan-entry").waitFor();
@@ -61,6 +61,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(await page.locator("#reserverName").inputValue(), guest.reserverName);
     assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 0);
     await page.locator("#startDate").fill("2026-12-21");
+    await page.locator("#startDate").fill("2026-12-20");
     await page.locator("#roomList input[type=checkbox]").first().check();
     await page.locator("#saveButton").click();
     await page.waitForFunction(() => document.querySelector("#workspaceMessage").textContent.includes("설정을 HA"));

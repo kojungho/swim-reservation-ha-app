@@ -5,6 +5,18 @@ function rankSymbol(rank) { return Number.isInteger(rank) && rank >= 1 && rank <
 function roomSummaryText(names = [], ranked = true, separator = ranked ? " → " : ", ") {
   return names.map((name, index) => `${ranked ? `${rankSymbol(index + 1)} ` : ""}${shortRoomText(name)}`).join(separator);
 }
+function canSelectRoom(name) { return availabilityContext === `${elements.startDate.value}/${Number(elements.nights.value)}` && ["available", "available-before-open"].includes(availabilityByRoom.get(name)); }
+function setRoomSelection(items, enabled) {
+  items.forEach(room => { if (!enabled || canSelectRoom(room.name) || workspaceTab === "watch") room.enabled = enabled; });
+  editorGeneration++;
+  renderRooms();
+}
+function renderRoomSelectionControls() {
+  const groups = workspaceTab !== "watch" && elements.bookingMode.value === "profiles-parallel" ? [firstProfilePriority, ...extraProfiles.map(profile => profile.roomPriority || [])] : [rooms];
+  document.getElementById("watchSelectAll").hidden = false;
+  document.getElementById("watchSelectAll").disabled = workspaceTab !== "watch" && !groups.some(items => items.some(room => canSelectRoom(room.name) && !room.enabled));
+  document.getElementById("watchDeselectAll").hidden = !groups.some(items => items.some(room => room.enabled));
+}
 const elements = Object.fromEntries([
   "startDate", "triggerAt", "nights", "bookingMode", "epochValue", "openAtValue", "reservationUrl", "roomList", "roomSectionTitle", "roomSectionHelp", "reserverName",
   "depositorName", "phone", "birthDate", "extraProfiles", "addProfileButton", "saveProfilesButton", "siteProfileSelect", "profilePriorities", "profileModeHelp", "multipleProfileField", "multipleProfileSelect",
@@ -26,6 +38,7 @@ let currentState = "idle";
 let currentStage = "idle";
 let availabilityTimer = null;
 let availabilityRequest = 0;
+let availabilityContext = "";
 let availabilityController = null;
 let siteTimeBase = null;
 let autoLookupCompletedKey = "";
@@ -88,6 +101,12 @@ async function init() {
 }
 
 function bindEvents() {
+  document.addEventListener("click", event => {
+    const input = event.target;
+    if (input instanceof HTMLInputElement && ["date", "datetime-local", "month"].includes(input.type) && !input.disabled && !input.readOnly) {
+      try { input.showPicker?.(); } catch { /* Unsupported browsers retain their native date control. */ }
+    }
+  });
   elements.monthlyQueryButton.addEventListener("click", () => void loadMonthlyAvailability(true));
   elements.monthlyCacheSave.addEventListener("click", async () => {
     elements.monthlyCacheSave.disabled = true;
@@ -172,15 +191,7 @@ function bindEvents() {
     await registerPlan("now", true);
     await refreshStatus();
   }));
-  elements.stopButton.addEventListener("click", () => perform(async () => {
-    clearTimeout(availabilityTimer);
-    availabilityController?.abort();
-    availabilityRequest += 1;
-    await request("stop", { method: "POST" });
-    await request("plans/stop-all", { method: "POST" });
-    await refreshPlans();
-    await refreshStatus();
-  }));
+  elements.stopButton.addEventListener("click", () => batchPlanAction("stop", true).catch(error => showMessage(error.message, true)));
   elements.inspectButton.addEventListener("click", () => perform(async () => {
     showMessage("미니 PC에서 예약 페이지에 연결하고 있습니다.");
     await refreshAvailability();
@@ -533,6 +544,7 @@ function renderProfilePriorities() {
   elements.profilePriorities.replaceChildren();
   if (!parallel) return;
   const profiles = readConfig().profiles;
+  elements.profilePriorities.classList.toggle("single-profile", profiles.length === 1);
   profiles.forEach((profile, profileIndex) => {
     const priority = profileIndex ? (extraProfiles[profileIndex - 1].roomPriority ||= []) : firstProfilePriority;
     if (!priority.length) priority.push(...rooms.map(room => ({ name: room.name, enabled: room.enabled })));
@@ -542,6 +554,15 @@ function renderProfilePriorities() {
     const title = document.createElement("h3");
     title.textContent = `예약자 ${profileIndex + 1}${profile.reserverName ? ` · ${profile.reserverName}` : ""} 객실 우선순위`;
     panel.append(title);
+    const toolbar = document.createElement("div");
+    toolbar.className = "section-actions room-actions profile-room-actions";
+    const selectAll = document.createElement("button"), clearAll = document.createElement("button");
+    for (const button of [selectAll, clearAll]) { button.type = "button"; button.className = "secondary"; }
+    selectAll.textContent = "전체 선택"; selectAll.disabled = !priority.some(room => canSelectRoom(room.name) && !room.enabled);
+    clearAll.textContent = "전체 해제"; clearAll.hidden = !priority.some(room => room.enabled);
+    selectAll.addEventListener("click", () => setRoomSelection(priority, true));
+    clearAll.addEventListener("click", () => setRoomSelection(priority, false));
+    toolbar.append(selectAll, clearAll); panel.append(toolbar);
     const list = document.createElement("div");
     list.className = "room-list";
     list.dataset.profileIndex = String(profileIndex);
@@ -551,7 +572,7 @@ function renderProfilePriorities() {
       const row = document.createElement("div");
       row.className = `room-row${room.enabled ? " enabled" : ""}`;
       const availability = availabilityByRoom.get(room.name) || "unknown";
-      row.innerHTML = `<label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} aria-label="예약자 ${profileIndex + 1} ${escapeHtml(room.name)} 선택"></label><div class="room-name"><span class="room-rank">${room.enabled ? rankSymbol(rank) : "—"}</span>${escapeHtml(room.name)}<span class="availability ${availability}">${AVAILABILITY_LABELS[availability]}</span></div><button class="room-drag-handle" type="button" aria-label="예약자 ${profileIndex + 1} ${escapeHtml(room.name)} 순서 이동"><span class="drag-bars" aria-hidden="true"></span></button>`;
+      row.innerHTML = `<label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} ${canSelectRoom(room.name) ? "" : "disabled"} aria-label="예약자 ${profileIndex + 1} ${escapeHtml(room.name)} 선택"></label><div class="room-name"><span class="room-rank">${room.enabled ? `${rank}순위` : "—"}</span>${escapeHtml(room.name)}<span class="availability ${availability}">${AVAILABILITY_LABELS[availability]}</span></div><button class="room-drag-handle" type="button" aria-label="예약자 ${profileIndex + 1} ${escapeHtml(room.name)} 순서 이동"><span class="drag-bars" aria-hidden="true"></span></button>`;
       row.querySelector("input").addEventListener("change", event => { room.enabled = event.target.checked; renderProfilePriorities(); });
       const handle = row.querySelector("button");
       handle.addEventListener("pointerdown", event => startRoomDrag(event, row, index, list, priority, renderProfilePriorities));
@@ -570,6 +591,7 @@ function renderProfilePriorities() {
     panel.append(list);
     elements.profilePriorities.append(panel);
   });
+  renderRoomSelectionControls();
 }
 
 async function saveConfig() {
@@ -632,6 +654,7 @@ function renderRooms() {
   if (workspaceTab === "watch") { renderWatchRooms(); return; }
   const parallel = elements.bookingMode.value === "profiles-parallel";
   renderProfilePriorities();
+  renderRoomSelectionControls();
   const multiple = elements.bookingMode.value === "multiple";
   elements.roomSectionTitle.textContent = parallel ? "예약자별 객실 우선순위" : multiple ? "동시 예약할 객실" : "객실 우선순위";
   elements.roomList.hidden = parallel;
@@ -648,8 +671,8 @@ function renderRooms() {
     const availability = availabilityByRoom.get(room.name);
     const availabilityLabel = AVAILABILITY_LABELS[availability] || AVAILABILITY_LABELS.unknown;
     row.innerHTML = `
-      <label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} aria-label="${escapeHtml(room.name)} 선택"></label>
-      <div class="room-name">${multiple ? "" : `<span class="room-rank">${room.enabled ? rankSymbol(rank) : "—"}</span>`}${escapeHtml(room.name)}${room.newlyDetected ? '<span class="room-detected">신규 자동 추가</span>' : ""}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
+      <label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} ${canSelectRoom(room.name) ? "" : "disabled"} aria-label="${escapeHtml(room.name)} 선택"></label>
+      <div class="room-name">${multiple ? "" : `<span class="room-rank">${room.enabled ? `${rank}순위` : "—"}</span>`}${escapeHtml(room.name)}${room.newlyDetected ? '<span class="room-detected">신규 자동 추가</span>' : ""}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
       ${multiple ? "" : `<button class="room-drag-handle" type="button" aria-label="${escapeHtml(room.name)} 순서 이동" title="누른 채 드래그하여 이동 · 키보드 위아래 방향키" aria-describedby="roomDragHelp"><span class="drag-bars" aria-hidden="true"></span></button>`}`;
     row.querySelector("input").addEventListener("change", (event) => { room.enabled = event.target.checked; renderRooms(); });
     const handle = row.querySelector(".room-drag-handle");
@@ -678,8 +701,9 @@ function startRoomDrag(event, row, index, list = elements.roomList, items = room
   event.preventDefault();
   const handle = event.currentTarget;
   const pointerId = event.pointerId;
-  let y = event.clientY, moved = false, target = index, frame;
+  let y = event.clientY, x = event.clientX, moved = false, target = index, frame;
   const initialY = y;
+  const initialX = x;
   roomDrag = { index };
   handle.setPointerCapture(pointerId);
   row.classList.add("dragging");
@@ -688,7 +712,8 @@ function startRoomDrag(event, row, index, list = elements.roomList, items = room
     rows.forEach(item => item.classList.remove("drop-before", "drop-after"));
     const boundary = rows.findIndex(item => {
       const rect = item.getBoundingClientRect();
-      return y < rect.top + rect.height / 2;
+      const columns = getComputedStyle(list).gridTemplateColumns.split(" ").length;
+      return columns > 1 ? y < rect.top || y <= rect.bottom && x < rect.left + rect.width / 2 : y < rect.top + rect.height / 2;
     });
     const insertion = boundary < 0 ? rows.length : boundary;
     target = insertion > index ? insertion - 1 : insertion;
@@ -709,7 +734,8 @@ function startRoomDrag(event, row, index, list = elements.roomList, items = room
   const move = e => {
     if (e.pointerId !== pointerId) return;
     y = e.clientY;
-    moved ||= Math.abs(y - initialY) > 5;
+    x = e.clientX;
+    moved ||= Math.abs(y - initialY) > 5 || Math.abs(x - initialX) > 5;
     if (moved) mark();
   };
   const finish = (commit) => {
@@ -829,6 +855,7 @@ function updateImmediateBookingVisibility() {
   const allowed = !editingPlan && ["priority", "multiple", "profiles-parallel"].includes(workspaceTab) &&
     Number.isFinite(now) && Number.isFinite(trigger) && Number.isFinite(opening) && trigger <= now && opening <= now;
   elements.runNowButton.hidden = !allowed;
+  elements.triggerAt.closest("label").hidden = workspaceTab === "watch" || allowed;
   return allowed;
 }
 
@@ -894,6 +921,7 @@ function renderStatus(status) {
   const state = status.state || "idle";
   currentState = state;
   currentStage = status.stage || "idle";
+  renderExecutionPlans();
   elements.statusBadge.className = `badge ${state}`;
   elements.statusBadge.textContent = STATE_LABELS[state] || state;
   renderPlanBadge();
@@ -950,6 +978,7 @@ async function copyDiagnostics() {
 }
 
 function renderInspection(result, { beforeOpen = false, addedRooms = [] } = {}) {
+  availabilityContext = `${elements.startDate.value}/${Number(elements.nights.value)}`;
   const existingNames = new Set(rooms.map((room) => room.name));
   for (const found of result) {
     const name = String(found?.name || "").trim();
@@ -1012,6 +1041,8 @@ function scheduleAvailabilityCheck(delay = 500) {
   availabilityController?.abort();
   availabilityRequest += 1;
   clearTimeout(availabilityTimer);
+  availabilityByRoom.clear();
+  renderRooms();
   availabilityTimer = setTimeout(() => refreshAvailability(), delay);
 }
 
@@ -1064,6 +1095,7 @@ function setButtonsDisabled(disabled) {
   for (const button of [elements.inspectButton, elements.reservationSiteButton, elements.reservationLookupButton, elements.siteTimeSyncButton, elements.saveButton, elements.stopButton, elements.runNowButton, elements.refreshLogsButton, elements.copyLogsButton, elements.saveLogsButton]) button.disabled = disabled;
   renderBookingProfileSelectors();
   for (const button of elements.reservationList.querySelectorAll("button")) button.disabled = disabled;
+  renderExecutionPlans();
 }
 
 async function refreshLogs() {

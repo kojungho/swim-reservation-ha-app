@@ -11,6 +11,18 @@ function config(mode = "priority") {
   return { ...defaultConfig(), startDate: "2030-10-20", nights: 2, triggerAt: "2030-10-13T00:00:00", bookingMode: mode, profiles: [profile], roomPriority: [{ name: "해_하늘존", enabled: true }, { name: "샘_산맥존", enabled: true }] };
 }
 const found = [{ name: "해_하늘존", status: "available", available: true }, { name: "샘_산맥존", status: "booked", available: false }];
+test("다른 화면에서 변경된 일정은 이전 확인값으로 시작하지 않는다", async t => {
+  const { manager, calls } = await fixture(t);
+  const id = await manager.add({ name: "원본", kind: "scheduled", config: config() });
+  const revision = (await manager.list())[0].revision;
+  await manager.update(id, { name: "수정본", kind: "scheduled", config: { ...config(), nights: 3 } });
+  await assert.rejects(manager.start(id, { expectedRevision: revision }), /변경/);
+  assert.equal(calls.length, 0); assert.equal(manager.get(id).enabled, false);
+  const nextRevision = (await manager.list())[0].revision;
+  assert.notEqual(revision, nextRevision);
+  await manager.start(id, { expectedRevision: nextRevision });
+  assert.equal(manager.get(id).enabled, true);
+});
 test("중지된 일정만 동일 ID로 수정·복원하며 진행 중·완료·결과 미확인은 거부한다", async t => {
   const { manager, dataDir } = await fixture(t);
   const id = await manager.add({ name: "원래 일정", kind: "scheduled", config: config() });

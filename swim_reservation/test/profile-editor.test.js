@@ -34,6 +34,7 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="priority"]').click();
     await page.locator("#bookingProfileSelect1").selectOption("0");
+    await page.locator("#startDate").fill("2026-12-20");
     await page.locator("#roomList input[type=checkbox]").first().check();
     await page.locator("#planName").fill("보존할 일정");
     await page.locator("#addPlanButton").click();

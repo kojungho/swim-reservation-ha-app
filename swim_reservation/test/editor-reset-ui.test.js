@@ -26,6 +26,7 @@ test("PC·폰의 일정 입력은 등록 성공·탭 이동 시 초기화하고 
       let result;
       if (endpoint === "/api/config") result = config;
       else if (endpoint === "/api/profiles") result = { profiles: [saved] };
+      else if (endpoint === "/api/inspect") result = { rooms: config.roomPriority.map(room => ({ name: room.name, available: true, status: "available" })) };
       else if (endpoint === "/api/lookup-profiles") result = { profiles: [{ reserverName: saved.reserverName, phone: saved.phone }] };
       else if (endpoint === "/api/plans" && req.method() === "POST") {
         const input = req.postDataJSON();
@@ -49,7 +50,7 @@ test("PC·폰의 일정 입력은 등록 성공·탭 이동 시 초기화하고 
     const fill = async name => {
       await page.locator("#planName").fill(name);
       await page.locator("#startDate").fill("2026-12-21");
-      await page.locator("#triggerAt").fill("2026-10-20T00:00");
+      await page.locator("#triggerAt").evaluate(input => { input.value = "2026-10-20T00:00"; input.dispatchEvent(new Event("input", { bubbles: true })); });
       await page.locator("#nights").selectOption("3");
       await page.locator("#reserverName").fill("새예약자");
       await page.locator("#depositorName").fill("새입금자");
