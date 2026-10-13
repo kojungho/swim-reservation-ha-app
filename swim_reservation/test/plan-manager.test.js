@@ -11,6 +11,29 @@ function config(mode = "priority") {
   return { ...defaultConfig(), startDate: "2030-10-20", nights: 2, triggerAt: "2030-10-13T00:00:00", bookingMode: mode, profiles: [profile], roomPriority: [{ name: "해_하늘존", enabled: true }, { name: "샘_산맥존", enabled: true }] };
 }
 const found = [{ name: "해_하늘존", status: "available", available: true }, { name: "샘_산맥존", status: "booked", available: false }];
+test("중지된 일정만 동일 ID로 수정·복원하며 진행 중·완료·결과 미확인은 거부한다", async t => {
+  const { manager, dataDir } = await fixture(t);
+  const id = await manager.add({ name: "원래 일정", kind: "scheduled", config: config() });
+  await manager.start(id);
+  await assert.rejects(manager.update(id, { kind: "watch", config: config() }), /중지/);
+  await manager.stop(id);
+  await manager.update(id, { name: "수정 일정", kind: "watch", intervalSeconds: 120, watchEndsAt: "2030-10-21T18:00", config: { ...config(), nights: 3 } });
+  let entries = await manager.list();
+  assert.equal(entries.length, 1); assert.equal(entries[0].id, id); assert.equal(entries[0].enabled, false);
+  assert.equal(entries[0].name, "수정 일정"); assert.equal(entries[0].config.nights, 3); assert.equal(entries[0].intervalSeconds, 120);
+  for (const state of ["success", "failed", "running"]) {
+    await manager.get(id).store.updateStatus({ state });
+    await assert.rejects(manager.update(id, { kind: "watch", config: config() }), /결과/);
+  }
+  await manager.get(id).store.updateStatus({ state: "stopped" });
+  await assert.rejects(manager.update(id, { kind: "watch", config: config(), watchEndsAt: "2030-02-30T18:00" }), /마감/);
+  assert.equal(manager.get(id).name, "수정 일정");
+  await manager.close();
+  const restored = new PlanManager({ dataDir, timeSync: manager.timeSync, inspect: manager.inspect, engineFactory: manager.engineFactory });
+  await restored.init(); t.after(() => restored.close());
+  entries = await restored.list();
+  assert.equal(entries[0].id, id); assert.equal(entries[0].config.nights, 3); assert.equal(entries[0].watchEndsAt, "2030-10-21T18:00:00");
+});
 async function fixture(t, inspect = async () => found) {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "swim-plans-test-"));
   const calls = [];

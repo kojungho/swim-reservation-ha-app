@@ -57,6 +57,7 @@
       <h2>여러 일정 진행</h2>
       <p>현재 입력한 설정을 별도 일정으로 등록한 뒤 목록의 시작을 누르세요. 미래 시각 예약과 취소 자리 감시는 여기서 등록·시작합니다. 등록 후 다른 날짜·모드로 변경해도 진행 중인 일정에는 영향을 주지 않습니다. 최대 20개 저장, 5개 동시 진행.</p>
       <div class="plan-registration"><label>일정 이름<input id="planName" placeholder="예: 가족 캠핑"></label><button id="addPlanButton" class="secondary" type="button" aria-label="현재 설정으로 예약 일정 등록">예약 일정 등록</button></div>
+      <div id="planEditNotice" class="section-actions" hidden><span>기존 일정 수정 중 · 저장 후 시작을 눌러야 실행됩니다.</span><button id="cancelPlanEdit" class="secondary" type="button">수정 취소</button></div>
       <div class="grid two plan-fields"><label>조회 간격 (초)<input id="watchInterval" type="number" min="60" max="3600" value="60"></label></div>
       <label id="watchEndsAtField" hidden>감시 마감 날짜·시각 (선택)<input id="watchEndsAt" type="datetime-local" step="1"><small id="watchDeadlineHint">비워두면 숙박 시작일 00시에 감시를 종료합니다. 당일 감시를 원하면 마감을 직접 지정하세요.</small></label>
       <label id="watchProfileField" hidden>취소 자리를 예약할 예약자<select id="watchProfileSelect"></select></label>

@@ -89,6 +89,10 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
   await api("plans", "POST", { kind: "scheduled", config });
   await api("plans", "POST", { kind: "watch", config, watchEndsAt: "2030-12-20T18:00" });
   assert.equal((await api("plans")).entries[1].watchDeadlineAt, "2030-12-20T18:00:00");
+  const editId = (await api("plans")).entries[1].id;
+  assert.equal((await api(`plans/${editId}`, "PUT", { name: "감시 수정", kind: "watch", config, intervalSeconds: 180, watchEndsAt: "2030-12-20T18:00" })).id, editId);
+  assert.equal((await api("plans")).entries.length, 2);
+  assert.equal((await api("plans")).entries[1].intervalSeconds, 180);
   const invalidDeadline = await fetch(new URL("api/plans", api.baseUrl), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "watch", config, watchEndsAt: "2030-02-30T18:00" }) });
   assert.equal(invalidDeadline.status, 400);
   assert.equal((await api("plans")).entries[0].config.profiles.length, 1);

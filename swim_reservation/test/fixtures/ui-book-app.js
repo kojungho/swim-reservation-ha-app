@@ -33,6 +33,11 @@ export async function mockBookApp(page, count = 2) {
       const id = `00000000-0000-0000-0000-${String(state.plans.length + 1).padStart(12, "0")}`;
       state.plans.push({ ...req.postDataJSON(), id, enabled: false, status: { state: "idle" } });
       result = { id };
+    } else if (/^\/api\/plans\/[a-f0-9-]{36}$/.test(path) && req.method() === "PUT") {
+      const id = path.split("/").pop();
+      const entry = state.plans.find(plan => plan.id === id);
+      Object.assign(entry, req.postDataJSON(), { id, enabled: false, status: { state: "stopped", stage: "stopped", message: "일정 수정을 저장했습니다." } });
+      result = { id };
     } else if (path === "/api/plans") result = { entries: state.plans };
     else if (path === "/api/logs") { state.logsRead++; result = { entries: [] }; }
     else result = { entries: [], rooms: [], state: "idle", stage: "idle", synced: true, serverNowMs: Date.parse("2026-10-12T10:00:00+09:00"), lastSyncedAt: Date.now(), offsetMs: 0, rttMs: 1 };

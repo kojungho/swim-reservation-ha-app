@@ -1,5 +1,5 @@
 name: "쉼오지 예약 도우미"
-version: "2.5.0"
+version: "2.6.0"
 slug: "swim_reservation"
 description: "모드별 예약·독립 일정·취소 자리 감시를 지원합니다. 예약자별 동시는 최대 5명, 다른 모드는 한 명을 사용하며 예약 조회용 정보는 별도 저장합니다."
 url: "https://github.com/kojungho/swim-reservation-ha-app"

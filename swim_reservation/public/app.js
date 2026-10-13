@@ -819,7 +819,7 @@ function updateImmediateBookingVisibility() {
   const now = currentSiteTime();
   const trigger = Date.parse(`${elements.triggerAt.value}+09:00`);
   const opening = Date.parse(`${bookingOpenIso(elements.startDate.value)}+09:00`);
-  const allowed = ["priority", "multiple", "profiles-parallel"].includes(workspaceTab) &&
+  const allowed = !editingPlan && ["priority", "multiple", "profiles-parallel"].includes(workspaceTab) &&
     Number.isFinite(now) && Number.isFinite(trigger) && Number.isFinite(opening) && trigger <= now && opening <= now;
   elements.runNowButton.hidden = !allowed;
   return allowed;

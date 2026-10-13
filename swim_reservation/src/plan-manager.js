@@ -31,7 +31,7 @@ export class PlanManager {
     const recordLog = store.recordLog.bind(store);
     store.recordLog = async (level, event, message, details) => {
       const entry = await recordLog(level, event, message, details);
-      await this.log(level, event, `${row.name}: ${message}`, { planId: row.id, ...details });
+      await this.log(level, event, `${this.plans.get(row.id)?.name || row.name}: ${message}`, { planId: row.id, ...details });
       return entry;
     };
     await store.saveConfig(row.config, { recordHistory: false });
@@ -94,6 +94,28 @@ export class PlanManager {
     const plan = this.plans.get(id);
     if (!plan) throw new Error("일정을 찾지 못했습니다.");
     return plan;
+  }
+  async update(id, input) {
+    return this.locked(async () => {
+      const plan = this.get(id);
+      if (plan.enabled || plan.checking || plan.scheduler.running || plan.scheduler.preparing) throw new Error("먼저 일정을 중지하고 진행 작업이 끝난 후 수정해 주세요.");
+      const status = await plan.store.getStatus();
+      if (!["idle", "stopped"].includes(status.state)) throw new Error("완료 또는 결과 확인이 필요한 일정은 수정할 수 없습니다. 예약확인 후 새 일정으로 등록해 주세요.");
+      if (!["scheduled", "watch", "now"].includes(input.kind)) throw new Error("일정 종류를 확인해 주세요.");
+      const config = input.kind === "watch" ? normalizeWatchConfig(input.config, Number(input.watchProfileIndex ?? 0)) : singleBookingConfig(input.config);
+      const errors = validateConfig(config);
+      if (errors.length) throw new Error(`확인할 항목: ${errors.join(", ")}`);
+      const watchEndsAt = input.kind === "watch" ? normalizeWatchEndsAt(input.watchEndsAt) : undefined;
+      await plan.store.saveConfig(config, { recordHistory: false });
+      clearTimeout(plan.timer);
+      Object.assign(plan, { name: String(input.name || `${config.startDate} ${config.nights}박`).trim().slice(0, 80), kind: input.kind, config,
+        watchEndsAt, watchVersion: input.kind === "watch" ? 2 : undefined, intervalSeconds: Math.max(60, Math.min(3600, Math.trunc(Number(input.intervalSeconds) || 60))), failures: 0 });
+      plan.generation++;
+      await plan.store.updateStatus({ state: "stopped", stage: "stopped", message: "일정 수정을 저장했습니다. 시작을 눌러 다시 실행하세요.", targetAt: null, prepareAt: null, armedConfig: null, selectedRoom: null, selectedRooms: [], succeededRooms: [], failedRooms: [], profileStatuses: [], technicalMessage: null, lastCheckedAt: null });
+      await this.persist();
+      await this.log("info", "plan-updated", `${plan.name}: 중지된 일정 수정 저장`, { planId: id });
+      return id;
+    });
   }
   async start(id) {
     return this.locked(async () => {

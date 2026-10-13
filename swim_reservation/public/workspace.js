@@ -1,6 +1,7 @@
 let workspaceTab = "priority";
 let editorGeneration = 0;
 let planRegistrationPending = false;
+let editingPlan = null;
 let defaultRoomOrder = [];
 let planEntries = [];
 let planRefreshPending = false;
@@ -43,6 +44,7 @@ function initializeWorkspace() {
   document.getElementById("loadLookupProfilesButton").addEventListener("click", () => perform(async () => { await loadLookupProfiles(); await loadReservations(); }));
   document.querySelectorAll("[data-workspace-tab]").forEach(button => button.addEventListener("click", () => switchWorkspaceTab(button.dataset.workspaceTab)));
   document.getElementById("addPlanButton").addEventListener("click", () => registerPlan(workspaceTab === "watch" ? "watch" : "scheduled", false).catch(error => planMessage(error.message)));
+  document.getElementById("cancelPlanEdit").addEventListener("click", () => { resetPlanEditor(); planMessage("수정을 취소했습니다. 저장된 일정은 변경되지 않았습니다."); });
   document.getElementById("watchEndsAt").addEventListener("input", updateWatchDeadlineHint);
   for (const [id, enabled] of [["watchSelectAll", true], ["watchDeselectAll", false]]) document.getElementById(id).addEventListener("click", () => {
     if (workspaceTab !== "watch") return;
@@ -106,6 +108,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   elements.startDate.closest("section").querySelector(".section-title p").textContent = tab === "watch" ? "감시할 숙박 시작 날짜와 박수를 지정하세요. 조건에 맞는 자리를 발견하면 바로 예약을 시도합니다." : "숙박 날짜·박수와 최종 예약을 제출할 시각을 지정하세요. 예약 모드는 상단 탭에서 선택합니다.";
   document.getElementById("addPlanButton").textContent = tab === "watch" ? "감시 일정 등록" : "예약 일정 등록";
   document.getElementById("addPlanButton").setAttribute("aria-label", tab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 예약 일정 등록");
+  renderPlanEditMode();
   updateImmediateBookingVisibility();
   if (tab === "monthly") {
     if (!elements.monthlyDialog.open) {
@@ -191,6 +194,13 @@ function refreshLookupSiteSelector() {
 }
 
 function planMessage(text) { document.getElementById("planMessage").textContent = text; }
+function renderPlanEditMode() {
+  const button = document.getElementById("addPlanButton");
+  button.textContent = editingPlan ? "수정 저장" : workspaceTab === "watch" ? "감시 일정 등록" : "예약 일정 등록";
+  button.setAttribute("aria-label", editingPlan ? "기존 일정 수정 저장" : workspaceTab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 예약 일정 등록");
+  document.getElementById("planEditNotice").hidden = !editingPlan;
+  updateImmediateBookingVisibility();
+}
 
 function updateWatchDeadlineHint() {
   const custom = document.getElementById("watchEndsAt").value;
@@ -199,6 +209,8 @@ function updateWatchDeadlineHint() {
 
 function resetPlanEditor(tab = workspaceTab) {
   editorGeneration++;
+  editingPlan = null;
+  renderPlanEditMode();
   roomDrag?.cancel?.();
   clearTimeout(availabilityTimer);
   availabilityController?.abort();
@@ -219,7 +231,8 @@ function resetPlanEditor(tab = workspaceTab) {
 
 async function registerPlan(kind, start) {
   if (planRegistrationPending) throw new Error("일정을 등록 중입니다. 잠시 기다려 주세요.");
-  const generation = editorGeneration, tab = workspaceTab;
+  const generation = editorGeneration, tab = workspaceTab, edit = editingPlan;
+  if (edit && kind !== "watch") kind = edit.kind;
   const button = document.getElementById("addPlanButton");
   planRegistrationPending = true;
   button.disabled = true;
@@ -230,7 +243,7 @@ async function registerPlan(kind, start) {
       const selected = { ...config.profiles[index], roomPriority: [] };
       config = { ...config, profiles: [selected], profile: selected, profile1: selected, profile2: {}, useSecondProfile: false, multipleProfileIndex: 0 };
     }
-    const result = await request("plans", { method: "POST", body: JSON.stringify({ name: document.getElementById("planName").value, kind, watchProfileIndex: 0, intervalSeconds: document.getElementById("watchInterval").value, watchEndsAt: kind === "watch" ? document.getElementById("watchEndsAt").value : "", config }) });
+    const result = await request(edit ? `plans/${edit.id}` : "plans", { method: edit ? "PUT" : "POST", body: JSON.stringify({ name: document.getElementById("planName").value, kind, watchProfileIndex: 0, intervalSeconds: document.getElementById("watchInterval").value, watchEndsAt: kind === "watch" ? document.getElementById("watchEndsAt").value : "", config }) });
     if (!result.id) throw new Error("일정 등록 결과를 확인하지 못했습니다.");
     const cleared = generation === editorGeneration && tab === workspaceTab && !roomDrag;
     if (cleared) resetPlanEditor();
@@ -238,7 +251,7 @@ async function registerPlan(kind, start) {
       try { await request(`plans/${result.id}/start`, { method: "POST" }); }
       catch (error) { await refreshPlans(); throw new Error(`일정은 등록했지만 시작하지 못했습니다: ${error.message}. 목록에서 설정을 확인하세요.`); }
     }
-    planMessage(`${start ? "독립 일정으로 실행했습니다." : "일정을 등록했습니다. 목록에서 시작을 누르면 실행됩니다."} ${cleared ? "입력란을 초기화했습니다." : "새로 편집한 입력 내용은 유지했습니다."}`);
+    planMessage(`${edit ? "기존 일정 수정을 저장했습니다. 목록에서 시작을 눌러 다시 실행하세요." : start ? "독립 일정으로 실행했습니다." : "일정을 등록했습니다. 목록에서 시작을 누르면 실행됩니다."} ${cleared ? "입력란을 초기화했습니다." : "새로 편집한 입력 내용은 유지했습니다."}`);
     await refreshPlans();
   } finally { planRegistrationPending = false; button.disabled = false; }
 }
@@ -278,27 +291,36 @@ async function refreshPlans() {
       detail.append(title, info, targets, status);
       const controls = document.createElement("div");
       controls.className = "section-actions";
-      for (const [action, label] of [["start", "시작"], ["stop", "중지"], ["load", "설정 불러오기"], ["delete", "목록 삭제"]]) {
+      for (const [action, label] of [["start", "시작"], ["stop", "중지"], ["edit", "수정"], ["load", "설정 불러오기"], ["delete", "목록 삭제"]]) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "secondary";
         button.textContent = label;
         button.disabled = action === "start" && (entry.enabled || entry.status.stage === "expired" || ["failed", "success", "running"].includes(entry.status.state)) || ["load", "delete"].includes(action) && entry.enabled;
+        if (action === "edit") button.disabled = entry.enabled || !["idle", "stopped"].includes(entry.status.state);
+        if (action === "start" && editingPlan?.id === entry.id) button.disabled = true;
         button.addEventListener("click", async () => {
           button.disabled = true;
           try {
-            if (action === "load") {
+            if (action === "load" || action === "edit") {
+              editorGeneration++;
+              editingPlan = null;
               loadConfig(entry.config);
               switchWorkspaceTab(entry.kind === "watch" ? "watch" : entry.config.bookingMode, { keepEditor: true });
+              editingPlan = action === "edit" ? { id: entry.id, kind: entry.kind } : null;
+              renderPlanEditMode();
               document.getElementById("planName").value = entry.name;
               document.getElementById("watchEndsAt").value = entry.kind === "watch" ? entry.watchEndsAt || "" : "";
               document.getElementById("watchInterval").value = entry.intervalSeconds || 60;
               updateWatchDeadlineHint();
               scheduleAvailabilityCheck();
+              planMessage(action === "edit" ? `${entry.name}: 입력 내용을 변경하고 수정 저장을 누르세요. 기존 일정만 갱신되며 자동 시작하지 않습니다.` : "새 일정 등록용으로 설정을 불러왔습니다.");
+              elements.startDate.closest("section").scrollIntoView({ behavior: "smooth", block: "start" });
             } else {
               if (action === "start" && !window.confirm(`${entry.name}\n${entry.config.startDate}부터 ${entry.config.nights}박 · ${entry.kind === "watch" ? "체크한 객실 중 조건에 맞는 하나 예약" : modes[entry.config.bookingMode]}\n${entry.kind === "watch" ? "조건이 맞는 자리가 나오면" : "지정 시각에"} 환불 규정 동의와 최종 예약 제출까지 자동 진행합니다. 다른 일정과 중복되는지 확인하셨나요?`)) return;
               if (action === "delete" && !window.confirm("이 일정을 목록에서 삭제할까요? 실제 예약은 취소되지 않습니다.")) return;
               const result = await request(`plans/${entry.id}${action === "delete" ? "" : `/${action}`}`, { method: action === "delete" ? "DELETE" : "POST" });
+              if (action === "delete" && editingPlan?.id === entry.id) resetPlanEditor();
               planMessage(result.status?.stage === "expired" ? result.status.message : `${entry.name}: ${label} 완료`);
             }
           } catch (error) { planMessage(error.message); }
