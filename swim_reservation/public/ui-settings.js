@@ -137,7 +137,10 @@ function updateStayFields(force = false) {
   const opening = bookingOpenIso(elements.startDate.value);
   const badge = document.getElementById("stayOpeningDate");
   badge.hidden = !opening || !(Date.parse(`${opening}+09:00`) > currentSiteTime());
-  badge.textContent = opening ? `예약 오픈일 ${opening.slice(0, 10)}` : "";
+  if (opening) {
+    const date = document.createElement("time"); date.dateTime = opening.slice(0, 10); date.textContent = date.dateTime;
+    badge.replaceChildren(document.createTextNode("예약 오픈일 "), date);
+  } else badge.replaceChildren();
   badge.title = opening ? `예약 오픈일 ${opening.slice(0, 10)}` : "";
   badge.setAttribute("aria-label", badge.title);
 }
