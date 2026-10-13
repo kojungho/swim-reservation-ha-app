@@ -81,7 +81,7 @@ function seoulToday() {
 
 function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   const modes = ["priority", "multiple", "profiles-parallel"];
-  if (![...modes, "watch", "people", "monthly", "book", "logs"].includes(tab)) return;
+  if (![...modes, "watch", "people", "monthly", "book", "logs", "settings"].includes(tab)) return;
   const entering = workspaceTab !== tab;
   workspaceTab = tab;
   if (entering && !keepEditor) resetPlanEditor(tab);
@@ -107,6 +107,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   document.getElementById("lookupCard").hidden = tab !== "people";
   document.getElementById("bookingBookCard").hidden = tab !== "book";
   document.getElementById("logCard").hidden = tab !== "logs";
+  document.getElementById("settingsCard").hidden = tab !== "settings";
   if (tab === "logs" && entering) void refreshLogs().catch(error => showMessage(`로그 조회 실패: ${error.message}`, true));
   document.getElementById("planCard").hidden = !booking;
   document.getElementById("planCard").classList.toggle("watch-mode", tab === "watch");

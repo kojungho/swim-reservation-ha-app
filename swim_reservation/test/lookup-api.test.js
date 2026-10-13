@@ -78,6 +78,30 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
     } finally { await browser.close(); }
   });
   const migrated = await api("lookup-profiles");
+  await t.test("실제 API로 설정·사진 6개 저장과 선택·전체 삭제를 확인하고 예약 데이터는 변경하지 않는다", async () => {
+    const settingsBefore = await api("ui-settings");
+    const settings = { ...settingsBefore, serverTime: false, menuCorner: "bottom-left", mapCorner: "bottom-left", fonts: { ...settingsBefore.fonts, room: 18 } };
+    assert.deepEqual(await api("ui-settings", "PUT", settings), settings);
+    assert.deepEqual(await api("ui-settings"), settings);
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7XcAAAAASUVORK5CYII=", "base64");
+    for (let index = 0; index < 6; index++) {
+      const response = await fetch(`${api.baseUrl}api/site-map`, { method: "PUT", headers: { "Content-Type": "image/png" }, body: png });
+      assert.equal(response.status, 200); await response.json();
+    }
+    let gallery = await api("site-map/gallery"); assert.equal(gallery.entries.length, 6);
+    const full = await fetch(`${api.baseUrl}api/site-map`, { method: "PUT", body: png }); assert.equal(full.status, 409); await full.json();
+    const first = gallery.entries[0].id;
+    await api(`site-map/gallery/${first}`, "POST", {});
+    const photo = await fetch(`${api.baseUrl}api/site-map/gallery/${first}`); assert.equal(photo.headers.get("content-type"), "image/png"); assert.deepEqual(Buffer.from(await photo.arrayBuffer()), png);
+    await stop(); api = await boot();
+    assert.deepEqual(await api("ui-settings"), settings);
+    gallery = await api("site-map/gallery"); assert.equal(gallery.activeId, first); assert.equal(gallery.entries.length, 6);
+    const removed = await api("site-map/gallery", "DELETE", { ids: [first, gallery.entries[1].id] }); assert.equal(removed.entries.length, 4);
+    await api("site-map/gallery", "DELETE", { ids: removed.entries.map(entry => entry.id) });
+    assert.deepEqual(await api("site-map/gallery"), { entries: [], activeId: null });
+    assert.equal((await api("profiles")).profiles.length, 2);
+    await api("ui-settings", "PUT", settingsBefore);
+  });
   assert.equal(migrated.profiles.length, 2);
   assert.deepEqual(Object.keys(migrated.profiles[0]).sort(), ["phone", "reserverName"]);
   // Missing test browser returns person-specific errors without reaching the site.

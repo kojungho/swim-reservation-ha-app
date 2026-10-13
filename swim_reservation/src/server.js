@@ -11,6 +11,7 @@ import { ReservationManager } from "./reservation-manager.js";
 import { SiteTimeSync } from "./site-time.js";
 import { InspectionService } from "./inspection-service.js";
 import { SiteMap } from "./site-map.js";
+import { UiSettings } from "./ui-settings.js";
 import { lookupProfiles } from "./profile-lookup.js";
 import { normalizeLookupProfiles } from "./lookup-profiles.js";
 import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./monthly-availability.js";
@@ -24,6 +25,7 @@ const PUBLIC_DIR = path.join(ROOT, "public");
 
 const store = new Store(DATA_DIR);
 const siteMap = new SiteMap(DATA_DIR, path.join(PUBLIC_DIR, "site-map.png"));
+const uiSettings = new UiSettings(DATA_DIR);
 const engine = new ReservationEngine({ store, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
 const timeSync = new SiteTimeSync();
 const scheduler = new Scheduler({ store, engine, timeSync });
@@ -71,6 +73,28 @@ monthCache.start();
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+    if (url.pathname === "/api/ui-settings" && request.method === "GET") return json(response, 200, await uiSettings.read());
+    if (url.pathname === "/api/ui-settings" && request.method === "PUT") {
+      try { return json(response, 200, await uiSettings.save(await readJsonBody(request))); }
+      catch (error) { return json(response, 400, { error: error.message }); }
+    }
+    if (url.pathname === "/api/site-map/gallery") {
+      try {
+        if (request.method === "GET") return json(response, 200, await siteMap.list());
+        if (request.method === "DELETE") return json(response, 200, await siteMap.remove((await readJsonBody(request)).ids));
+      } catch (error) { if (error.statusCode) return json(response, error.statusCode, { error: error.message }); throw error; }
+    }
+    const photoMatch = /^\/api\/site-map\/gallery\/([a-f0-9-]{36})$/.exec(url.pathname);
+    if (photoMatch) {
+      try {
+        if (request.method === "POST") return json(response, 200, await siteMap.select(photoMatch[1]));
+        if (request.method === "GET") {
+          const image = await siteMap.readPhoto(photoMatch[1]);
+          response.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+          return response.end(image);
+        }
+      } catch (error) { if (error.statusCode) return json(response, error.statusCode, { error: error.message }); throw error; }
+    }
     if (url.pathname === "/api/month-cache" && request.method === "GET") return json(response, 200, monthCache.status());
     if (url.pathname === "/api/month-cache" && request.method === "PUT") {
       try { return json(response, 200, await monthCache.configure((await readJsonBody(request)).intervalMinutes)); }
@@ -328,6 +352,7 @@ async function serveStatic(pathname, response) {
     "/app.js": ["app.js", "text/javascript; charset=utf-8"],
     "/workspace.js": ["workspace.js", "text/javascript; charset=utf-8"],
     "/booking-book.js": ["booking-book.js", "text/javascript; charset=utf-8"],
+    "/ui-settings.js": ["ui-settings.js", "text/javascript; charset=utf-8"],
     "/styles.css": ["styles.css", "text/css; charset=utf-8"],
     "/site-map.png": ["site-map.png", "image/png"]
   };

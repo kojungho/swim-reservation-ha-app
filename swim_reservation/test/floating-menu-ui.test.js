@@ -13,7 +13,7 @@ test("플로팅 메뉴는 선택 이름·활성 색상·드롭다운 닫기·스
     assert.equal(await menu.isVisible(), false);
     await button.click();
     assert.equal(await button.getAttribute("aria-expanded"), "true");
-    assert.equal(await menu.getByRole("button").count(), 8);
+    assert.equal(await menu.getByRole("button").count(), 9);
     await page.locator('[data-workspace-tab="book"]').click();
     assert.equal(await menu.isVisible(), false);
     assert.equal(await page.locator("#workspaceMenuLabel").textContent(), "예약자 정보");

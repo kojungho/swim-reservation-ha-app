@@ -56,7 +56,7 @@ test("320·390·768·1280px의 모든 탭에서 입력과 버튼이 붙거나 �
       });
       assert.deepEqual(issues, [], `${width}px ${tab}`);
     }
-    for (const tab of ["priority", "multiple", "profiles-parallel", "watch", "book", "people", "monthly", "logs"]) {
+    for (const tab of ["priority", "multiple", "profiles-parallel", "watch", "book", "people", "monthly", "logs", "settings"]) {
       await page.locator("#workspaceMenuButton").click();
       await page.locator(`[data-workspace-tab="${tab}"]`).click();
       if (tab === "profiles-parallel") { await page.locator("#addProfileButton").click(); await page.locator("#bookingProfileSelect2").selectOption("0"); }

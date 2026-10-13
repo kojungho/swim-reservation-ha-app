@@ -27,6 +27,7 @@
       <button type="button" data-workspace-tab="people">예약 조회</button>
       <button type="button" data-workspace-tab="monthly">월별 예약 현황</button>
       <button type="button" data-workspace-tab="logs">로그</button>
+      <button type="button" data-workspace-tab="settings">설정</button>
     </nav>
     </div>
     <p id="workspaceMessage" role="status"></p>
@@ -150,7 +151,12 @@
       </div>
     </section>
 
-    <aside class="notice">
+    <section id="settingsCard" class="card" aria-label="설정" hidden>
+      <div id="settingsControls"></div>
+      <div class="actions"><button id="settingsSave" type="button">저장</button><button id="settingsReset" class="secondary" type="button">기본값</button></div>
+      <p id="settingsMessage" role="status" aria-live="polite"></p>
+    </section>
+    <aside class="notice" id="safetyNotice">
       <strong>안전한 운영을 위해</strong>
       <p>HA OS 미니 PC의 시간 동기화와 인터넷 연결을 확인하세요. App 포트를 인터넷에 직접 공개하지 말고 Home Assistant Ingress를 통해 접속하세요. 대상 예약 사이트 자체는 HTTP 연결을 사용합니다.</p>
     </aside>
@@ -162,7 +168,10 @@
       <input id="siteMapFile" type="file" accept="image/*" hidden>
       <p id="siteMapMessage" role="status" aria-live="polite">PC나 휴대폰의 사진을 선택하면 안내 사진이 변경됩니다. 등록한 사진은 모든 기기에 적용됩니다.</p>
     </div>
-    <img id="siteMapImage" src="api/site-map" alt="쉼오지캠프 사이트 위치 안내도">
+    <img id="siteMapImage" src="api/site-map" alt="쉼오지캠프 사이트 위치 안내도" tabindex="0" role="button" aria-label="현재 안내 사진 확대">
+    <div class="gallery-heading"><strong>사진 이력 <span id="galleryCount">0/6</span></strong><button type="button" class="info-button" data-settings-help="사진은 최대 6개까지 보관합니다. 적용을 누르면 모든 기기의 안내 사진이 변경됩니다. 삭제한 사진은 복구할 수 없습니다. 현재 사진을 삭제하면 남은 사진 중 가장 최근 사진을 적용하며, 모두 삭제하면 기본 안내 사진을 표시합니다." aria-label="사진 이력 설명">ⓘ</button></div>
+    <div id="mapGallery" class="map-gallery"></div>
+    <div class="actions"><button id="galleryDeleteSelected" class="danger" type="button" disabled>선택 삭제</button><button id="galleryDeleteAll" class="danger" type="button" disabled>전체 삭제</button></div>
   </dialog>
   <dialog id="serverTimeDialog" class="booking-help-dialog" aria-labelledby="serverTimeTitle"><div class="booking-help-heading"><h2 id="serverTimeTitle">쉼오지 서버 시간</h2><button id="serverTimeClose" type="button" class="secondary">닫기</button></div><strong id="serverTimeValue">동기화 중</strong><div class="site-time-panel"><p id="siteTimeMeta">예약 사이트 서버 시간을 확인하고 있습니다.</p><button id="siteTimeSyncButton" class="secondary" type="button" aria-label="동기화">동기화</button></div></dialog>
   <dialog id="bookingHelpDialog" class="booking-help-dialog" aria-labelledby="bookingHelpTitle">
@@ -195,7 +204,7 @@
     <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>미래 시각 예약과 취소 대기는 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 예약 대기는 사이트가 허용하는 경우 정보 입력까지 미리 준비하고, 서버 시간에 맞춰 지정 시각에 최종 제출합니다. 오픈 전 다음 단계 접근이 제한되면 지정 시각에 처음부터 진행합니다. ‘지금 바로 예약’은 실행 시각이 미래이거나 서버 시간이 미확인인 경우 표시하지 않으며 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약자 정보’ 탭은 실제 예약에 사용할 사람들을 관리합니다. 각 모드에 선택 목록은 자동 표시되지만 사람을 선택하기 전에는 입력란을 채우지 않습니다. 일정 등록 후에는 선택과 입력을 초기화합니다. ‘예약 조회’는 저장한 모든 예약자의 내역을 조회합니다. 저장하지 않는 ‘1회성 조회’는 이름과 휴대폰 번호만 입력해 별도로 확인합니다. 등록된 일정의 설정은 이후 편집과 관계없이 유지됩니다.</p></div>
   </dialog>
   <dialog id="monthlyDialog" class="monthly-dialog" aria-label="월별 예약 현황">
-    <div class="monthly-controls"><button id="monthlyPrevButton" class="secondary" type="button" aria-label="이전 달">‹</button><label><input id="monthlyMonth" aria-label="조회 월" type="month" min="2000-01" max="2100-12"></label><button id="monthlyNextButton" class="secondary" type="button" aria-label="다음 달">›</button><button id="monthlyQueryButton" class="secondary" type="button">조회</button></div>
+    <div class="monthly-controls"><button id="monthlyPrevButton" class="secondary" type="button" aria-label="이전 달">‹</button><label><input id="monthlyMonth" aria-label="조회 월" type="month" min="2000-01" max="2100-12"></label><button id="monthlyNextButton" class="secondary" type="button" aria-label="다음 달">›</button><div class="monthly-query-control"><button id="monthlyQueryButton" class="secondary" type="button">조회</button><span id="monthlyQuerySpinner" class="query-spinner" role="status" aria-label="월별 예약 조회 중" hidden></span></div></div>
     <p class="monthly-legend"><span><span class="monthly-room-mark available">가</span> 예약 가능</span><span><span class="monthly-room-mark booked">완</span> 예약 완료</span><span><span class="monthly-room-mark pending">대</span> 예약 대기</span><span><span class="monthly-room-mark unavailable">불</span> 1박 불가</span><span><span class="monthly-room-mark unknown">?</span> 확인 불가</span></p>
     <div id="monthlyContent" class="monthly-content"></div>
     <div id="monthlyDayDetails" class="monthly-day-details" aria-live="polite"></div>
@@ -215,6 +224,9 @@
     <p id="datePickerError" role="alert"></p>
     <div class="date-picker-actions"><button id="datePickerCancel" type="button" class="secondary">취소</button><button id="datePickerApply" type="button">선택</button></div>
   </dialog>
+  <dialog id="settingsHelpDialog" class="help-dialog"><div class="site-map-heading"><strong>안내</strong><button id="settingsHelpClose" type="button" aria-label="닫기">×</button></div><p id="settingsHelpText"></p></dialog>
+  <dialog id="mapZoomDialog" class="site-map-dialog"><div class="site-map-heading"><strong>사진 확대</strong><button id="mapZoomClose" type="button" aria-label="닫기">×</button></div><img id="mapZoomImage" alt="사이트 위치 사진 확대"></dialog>
+  <script src="ui-settings.js"></script>
   <script src="workspace.js"></script>
   <script src="booking-book.js"></script>
   <script src="app.js"></script>

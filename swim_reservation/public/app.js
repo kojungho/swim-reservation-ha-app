@@ -100,6 +100,7 @@ async function init() {
   loadConfig({ ...config, profiles: [{}], profile2: {}, useSecondProfile: false, multipleProfileIndex: 0, editorProfileIndex: 0 });
   bindEvents();
   initializeWorkspace();
+  await initializeUiSettings();
   initializeBookingBook();
   await loadBookingBook().catch(error => showMessage(`예약자 정보 조회 실패: ${error.message}`, true));
   await refreshHistory();
@@ -140,6 +141,7 @@ function bindEvents() {
   elements.monthlyDialog.addEventListener("close", () => {
     monthlyController?.abort();
     monthlyRequest++;
+    setMonthlyLoading(false);
     const target = selectedMonthlyDate ? elements.startDate : document.querySelector('[data-workspace-tab="monthly"]');
     if (selectedMonthlyDate) switchWorkspaceTab(elements.bookingMode.value, { keepEditor: true });
     target.focus({ preventScroll: true });
@@ -226,6 +228,7 @@ function bindEvents() {
   elements.siteMapButton.addEventListener("click", () => {
     elements.siteMapImage.src = `${API("site-map")}?v=${Date.now()}`;
     elements.siteMapDialog.showModal();
+    void loadMapGallery().catch(error => { elements.siteMapMessage.textContent = `사진 이력 조회 실패: ${error.message}`; });
   });
   elements.siteMapUploadButton.addEventListener("click", () => elements.siteMapFile.click());
   elements.siteMapFile.addEventListener("change", uploadSiteMap);
@@ -237,7 +240,9 @@ function bindEvents() {
 
 async function uploadSiteMap() {
   const file = elements.siteMapFile.files?.[0];
-  if (!file) return;
+  if (!file || galleryBusy) return;
+  galleryBusy = true;
+  renderMapGallery();
   elements.siteMapUploadButton.disabled = true;
   elements.siteMapMessage.textContent = "사진을 등록하고 있습니다…";
   let bitmap;
@@ -255,12 +260,14 @@ async function uploadSiteMap() {
     await request("site-map", { method: "PUT", headers: { "Content-Type": "image/png" }, body: blob });
     elements.siteMapImage.src = `${API("site-map")}?v=${Date.now()}`;
     elements.siteMapMessage.textContent = "사진을 등록했습니다. 앱을 재시작하거나 업데이트해도 유지됩니다.";
+    await loadMapGallery().catch(error => { elements.siteMapMessage.textContent += ` 사진 이력 조회 실패: ${error.message}`; });
   } catch (error) {
     elements.siteMapMessage.textContent = `등록 실패: ${error.message}`;
   } finally {
     bitmap?.close();
     elements.siteMapFile.value = "";
-    elements.siteMapUploadButton.disabled = false;
+    galleryBusy = false;
+    renderMapGallery();
   }
 }
 
@@ -279,13 +286,13 @@ async function loadMonthlyAvailability(force = false) {
   const id = ++monthlyRequest;
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
     elements.monthlyStatus.textContent = "조회할 월을 선택해 주세요.";
-    elements.monthlyQueryButton.disabled = false;
+    setMonthlyLoading(false);
     return;
   }
   const controller = new AbortController();
   monthlyController = controller;
   selectedMonthlyDate = null;
-  elements.monthlyQueryButton.disabled = true;
+  setMonthlyLoading(true);
   const [year, number] = month.split("-").map(Number);
   const roomNames = rooms.map(room => room.name);
   let result = { month, opensAt: bookingOpenIso(`${month}-01`), beforeOpen: isBeforeOpen(`${month}-01`), roomNames, capturedAt: Date.now(), progressText: "월별 페이지 조회 중…", days: Array.from({ length: new Date(Date.UTC(year, number, 0)).getUTCDate() }, (_, index) => ({ date: `${month}-${String(index + 1).padStart(2, "0")}`, queryState: "queued", rooms: roomNames.map(name => ({ name, status: "unknown" })) })) };
@@ -380,7 +387,7 @@ async function loadMonthlyAvailability(force = false) {
     result.progressText = `조회 중단: ${error.message}`;
     renderMonthlyAvailability(result);
   } finally {
-    if (id === monthlyRequest) elements.monthlyQueryButton.disabled = false;
+    if (id === monthlyRequest) setMonthlyLoading(false);
   }
 }
 
@@ -434,8 +441,8 @@ function renderMonthlyAvailability(result) {
           const name = shortRoomText(room.name);
           return `<span class="monthly-room-row" title="${escapeHtml(`${name} · ${label}`)}"><span class="monthly-room-mark ${status}" aria-label="${label}">${mark}</span><span class="monthly-room-name">${escapeHtml(name)}</span></span>`;
         }).join("");
-        const states = { queued: "대기 중", checking: "조회 중", error: "조회 실패", partial: "일부 확인 불가", done: "확인됨" };
-        button.innerHTML = `<span class="monthly-day-number">${Number(day.date.slice(-2))}</span><span class="monthly-day-rooms">${past ? '<span class="monthly-cell unknown">지난 날짜</span>' : badges || '<span class="monthly-cell unknown">미확인</span>'}</span><span class="monthly-day-state ${past ? "past" : day.queryState || "done"}">${past ? "조회 제외" : states[day.queryState] || "확인됨"}</span>`;
+        if (day.queryState === "error") button.setAttribute("aria-label", `${day.date} · 조회 실패 · 날짜 선택 후 다시 확인`);
+        button.innerHTML = `<span class="monthly-day-number">${Number(day.date.slice(-2))}</span><span class="monthly-day-rooms">${past ? '<span class="monthly-cell unknown">지난 날짜</span>' : badges || '<span class="monthly-cell unknown">미확인</span>'}</span><span hidden aria-hidden="true" class="monthly-day-state ${past ? "past" : day.queryState || "done"}"></span>`;
         button.addEventListener("click", () => {
           if (day.date < seoulToday()) return;
           selectedMonthlyDate = day.date;
@@ -885,6 +892,7 @@ function updateImmediateBookingVisibility() {
   elements.runNowButton.hidden = !allowed;
   document.getElementById("triggerDetails").hidden = workspaceTab === "watch" || allowed || !elements.triggerAt.value;
   elements.triggerAt.closest("label").hidden = workspaceTab === "watch" || allowed;
+  applyUiVisibility();
   return allowed;
 }
 

@@ -28,6 +28,7 @@ test("객실을 마우스·터치로 이동하고 취소·키보드 이동·저�
     });
     await page.goto("https://app.test/");
     await page.waitForFunction(() => document.querySelector("#planList").textContent.includes("등록된 일정이 없습니다."));
+    await page.waitForFunction(() => availabilityContext === `${elements.startDate.value}/${Number(elements.nights.value)}`);
     await page.locator("#roomList").evaluate(el => { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -180); });
     const labels = () => page.locator(".room-drag-handle").evaluateAll(xs => xs.map(x => x.getAttribute("aria-label").replace(" 순서 이동", "")));
     const handle = page.locator(".room-drag-handle").first();
