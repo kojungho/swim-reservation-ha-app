@@ -28,11 +28,14 @@ function initializeWorkspace() {
   historyCard.append(elements.historyList);
   document.getElementById("executionCard").hidden = true;
   const logCard = document.getElementById("logCard");
-  logCard.querySelector(".section-title").after(elements.statusDetails, elements.profileStatusList, elements.diagnosticsPanel);
+  logCard.querySelector(".log-help").after(elements.statusDetails, elements.profileStatusList, elements.diagnosticsPanel);
   profilePage.querySelector("h3").before(elements.multipleProfileField, document.getElementById("watchProfileField"));
   const actions = document.createElement("div");
   actions.className = "actions lookup-site-controls";
-  actions.append(elements.siteProfileSelect.closest("label"), elements.reservationSiteButton, elements.reservationLookupButton);
+  const lookupControl = document.createElement("div"); lookupControl.className = "lookup-request-control";
+  const spinner = document.createElement("span"); spinner.id = "reservationLookupSpinner"; spinner.className = "query-spinner"; spinner.hidden = true; spinner.setAttribute("role", "status"); spinner.setAttribute("aria-label", "예약 조회 중");
+  lookupControl.append(elements.reservationLookupButton, spinner);
+  actions.append(elements.siteProfileSelect.closest("label"), elements.reservationSiteButton, lookupControl);
   document.getElementById("savedLookupArea").append(actions, elements.reservationList);
   elements.multipleProfileSelect.addEventListener("change", updateBookingProfileVisibility);
   document.getElementById("watchProfileSelect").addEventListener("change", updateBookingProfileVisibility);
@@ -133,9 +136,9 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   updateBookingProfileVisibility();
   document.querySelectorAll("main.shell > section.card:not([hidden]) .section-title > span").forEach((span, index) => { span.textContent = String(index + 1); });
   if (tab === "people" && entering) void (async () => {
-    await loadBookingBook();
-    refreshLookupSiteSelector();
-    await loadReservations();
+    setReservationLookupLoading(1);
+    try { await loadBookingBook(); refreshLookupSiteSelector(); await loadReservations(); }
+    finally { setReservationLookupLoading(-1); }
   })().catch(error => {
     elements.reservationList.hidden = false;
     elements.reservationList.textContent = `예약조회 실패: ${error.message}`;
@@ -211,7 +214,7 @@ function updateWatchDeadlineHint() {
 }
 
 function resetPlanEditor(tab = workspaceTab) {
-  document.getElementById("triggerDetails").open = false;
+  document.getElementById("reservationConnectionDetails").open = false;
   document.getElementById("watchEndsAtDetails").open = false;
   editorGeneration++;
   editingPlan = null;

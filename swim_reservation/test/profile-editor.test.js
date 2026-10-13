@@ -78,7 +78,7 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     const before = state.logsRead;
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="logs"]').click();
-    await page.waitForFunction(() => document.querySelector("#logList").textContent.includes("저장된 실행 로그"));
+    await page.waitForFunction(() => document.querySelector("#logList").textContent.includes("저장된 로그"));
     assert.ok(state.logsRead > before);
     assert.equal(await page.locator("#logCard").isVisible(), true);
     assert.equal(await page.locator("#copyLogsButton").isVisible(), true);

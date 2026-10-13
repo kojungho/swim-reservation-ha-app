@@ -799,13 +799,18 @@ function updateGeneratedValues() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     elements.epochValue.textContent = "—";
     elements.openAtValue.textContent = "—";
-    elements.reservationUrl.value = "";
+    elements.reservationUrl.removeAttribute("href");
+    elements.reservationUrl.setAttribute("aria-disabled", "true");
+    elements.reservationUrl.textContent = "숙박 날짜를 먼저 선택해 주세요.";
     return;
   }
   const epoch = Math.floor(Date.parse(`${date}T00:00:00+09:00`) / 1000);
   elements.epochValue.textContent = String(epoch);
   elements.openAtValue.textContent = formatOpeningTime(date);
-  elements.reservationUrl.value = `https://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim&adaystart=${epoch}`;
+  const url = `https://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim&adaystart=${epoch}`;
+  elements.reservationUrl.href = url;
+  elements.reservationUrl.textContent = url;
+  elements.reservationUrl.removeAttribute("aria-disabled");
 }
 
 function bookingOpenIso(startDate) {
@@ -922,14 +927,25 @@ async function maybeAutoLookupReservations(status) {
 }
 
 let savedLookupRequest = 0;
+let savedLookupPending = 0;
+function setReservationLookupLoading(delta) {
+  savedLookupPending = Math.max(0, savedLookupPending + delta);
+  const loading = savedLookupPending > 0;
+  const spinner = document.getElementById("reservationLookupSpinner");
+  if (spinner) spinner.hidden = !loading;
+  elements.reservationList.setAttribute("aria-busy", String(loading));
+}
 async function loadReservations() {
   const id = ++savedLookupRequest;
   const profiles = bookingBook.map(bookingIdentity);
-  const result = await request("reservations");
-  if (id !== savedLookupRequest) return result;
-  const queried = result.lookupStatuses?.length ? result.lookupStatuses.map(item => item.profile || profiles[item.profileIndex]) : profiles;
-  renderReservations(result.reservations || [], { profiles: queried, errors: result.lookupErrors || [] });
-  return result;
+  setReservationLookupLoading(1);
+  try {
+    const result = await request("reservations");
+    if (id !== savedLookupRequest) return result;
+    const queried = result.lookupStatuses?.length ? result.lookupStatuses.map(item => item.profile || profiles[item.profileIndex]) : profiles;
+    renderReservations(result.reservations || [], { profiles: queried, errors: result.lookupErrors || [] });
+    return result;
+  } finally { setReservationLookupLoading(-1); }
 }
 
 function renderStatus(status) {
@@ -1133,7 +1149,7 @@ async function refreshLogs() {
   elements.logList.replaceChildren();
   if (!entries.length) {
     const empty = document.createElement("p");
-    empty.textContent = "저장된 실행 로그가 없습니다.";
+    empty.textContent = "저장된 로그가 없습니다.";
     elements.logList.append(empty);
     return;
   }
@@ -1154,7 +1170,7 @@ function formatLogEntry(entry) {
 
 async function copyLogs() {
   if (!currentLogText) await refreshLogs();
-  const text = currentLogText || "저장된 실행 로그가 없습니다.";
+  const text = currentLogText || "저장된 로그가 없습니다.";
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -1165,7 +1181,7 @@ async function copyLogs() {
     document.execCommand("copy");
     textarea.remove();
   }
-  showMessage("실행 로그를 복사했습니다.");
+  showMessage("로그를 복사했습니다.");
 }
 
 async function saveLogs() {
@@ -1178,7 +1194,7 @@ async function saveLogs() {
   link.download = `swim-reservation-log-${day}.txt`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
-  showMessage("실행 로그 파일을 저장했습니다.");
+  showMessage("로그 파일을 저장했습니다.");
 }
 
 function showMessage(message, error = false, successLabel = "저장 완료") {

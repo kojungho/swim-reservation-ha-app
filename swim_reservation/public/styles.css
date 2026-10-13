@@ -31,14 +31,19 @@ header .badge { display: inline-block; position: static; margin-left: auto; flex
 input[type="date"]::-webkit-calendar-picker-indicator, input[type="datetime-local"]::-webkit-calendar-picker-indicator, input[type="month"]::-webkit-calendar-picker-indicator { display: none; }
 .stay-fields.grid.two { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
 #triggerDetails { margin-top: 14px; font-size: 13px; }
-#triggerDetails summary { cursor: pointer; font-weight: 700; }
+.booking-details { margin-top: 14px; }
+.booking-details summary { display: list-item; cursor: pointer; font-size: 16px; font-weight: 750; line-height: 1.5; }
+.booking-details summary:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
+#reservationConnectionDetails > .grid { margin-top: 12px; }
+#reservationConnectionDetails #triggerDetails { margin: 0; }
+.booking-link-field { display: grid; gap: 8px; margin-top: 14px; font-size: 13px; font-weight: 750; }
+#reservationUrl { display: block; color: var(--green-dark); overflow-wrap: anywhere; font-weight: 500; line-height: 1.5; }
+#reservationUrl[aria-disabled="true"] { color: var(--muted); }
 #triggerDetails label { max-width: 360px; }
-.watch-settings-row { display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: start; gap: 12px; margin-top: 16px; }
+.watch-settings-row { display: block; margin-top: 16px; }
+.watch-settings-fields { display: grid; grid-template-columns: 100px minmax(0, 1fr); align-items: start; gap: 12px; }
 .watch-settings-row > label { margin: 0; }
-#watchEndsAtDetails { padding-top: 25px; min-width: 0; }
-#watchEndsAtDetails summary { display: flex; align-items: center; min-height: 44px; padding: 8px 10px; border-radius: 10px; background: var(--wash); font-size: 12px; cursor: pointer; font-weight: 700; }
-#watchEndsAtDetails summary::before { content: "▸"; margin-right: 6px; }
-#watchEndsAtDetails[open] summary::before { content: "▾"; }
+#watchEndsAtDetails { padding-top: 0; min-width: 0; }
 #watchEndsAtField { max-width: none; }
 .watch-settings-row:has(details[open]) > label { grid-row: 1; }
 #workspaceMenuButton { display: flex; align-items: center; gap: 10px; max-width: 100%; height: 46px; padding: 10px 14px; border: 1px solid #c8d8cf; border-radius: 13px; background: white; color: var(--green-dark); box-shadow: 0 4px 16px rgba(20,60,40,.14); }
@@ -248,6 +253,10 @@ button.monthly-day:focus-visible { outline: 2px solid var(--green); outline-offs
 #historyList:not(:empty) { margin-top: 16px; }
 .legacy-history-row { border-style: dashed; }
 #historyList:empty { display: none; }
+.lookup-request-control { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.query-spinner { display: inline-block; width: 16px; height: 16px; flex: 0 0 16px; border: 2px solid #d8e5dd; border-top-color: var(--green); border-radius: 50%; animation: query-spin .8s linear infinite; }
+@keyframes query-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .query-spinner { animation: none; } }
 .room-toggle input:disabled { cursor: not-allowed; opacity: .55; }
 @media (min-width: 900px) {
   #roomList { grid-template-columns: repeat(2, minmax(0, 1fr)); }

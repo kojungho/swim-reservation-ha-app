@@ -29,7 +29,7 @@ test("PC·폰은 날짜/박수 한 줄·접힌 시각/종료일·시간 팝업·
       return { paired: Math.abs(rect("startDate").top - rect("nights").top) < 1, menuRight: rect("workspaceMenuButton").right > innerWidth - 40, metaSingleLine: document.querySelector(".header-meta").getBoundingClientRect().height < 35, overflow: document.documentElement.scrollWidth > innerWidth };
     });
     assert.deepEqual(geometry, { paired: true, menuRight: true, metaSingleLine: true, overflow: false });
-    await page.locator("#triggerDetails summary").click(); assert.equal(await page.locator("#triggerAt").isVisible(), true);
+    await page.locator("#reservationConnectionDetails summary").click(); assert.equal(await page.locator("#triggerAt").isVisible(), true);
     await page.locator("#serverTimeButton").click();
     assert.equal(await page.locator("#siteTimeSyncButton").textContent(), "동기화");
     assert.match(await page.locator("#serverTimeValue").textContent(), /2026/);
@@ -38,12 +38,14 @@ test("PC·폰은 날짜/박수 한 줄·접힌 시각/종료일·시간 팝업·
     await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="watch"]').click();
     assert.equal(await page.locator("#workspaceMenuLabel").textContent(), "취소 대기");
     assert.equal(await page.locator("#watchEndsAt").isVisible(), false);
+    assert.equal(await page.locator("#watchInterval").isVisible(), false);
+    await page.locator("#watchEndsAtDetails summary").click();
     const watchRow = await page.evaluate(() => {
-      const input = document.getElementById("watchInterval").getBoundingClientRect(), summary = document.querySelector("#watchEndsAtDetails summary").getBoundingClientRect();
-      return Math.abs(input.top - summary.top) < 10 && input.right < summary.left;
+      const input = document.getElementById("watchInterval").getBoundingClientRect(), end = document.querySelector("#watchEndsAt").getBoundingClientRect();
+      return Math.abs(input.top - end.top) < 1 && input.right < end.left;
     });
     assert.equal(watchRow, true);
-    await page.locator("#watchEndsAtDetails summary").click(); await page.locator("#watchEndsAt").fill("2027-01-20T18:00");
+    await page.locator("#watchEndsAt").fill("2027-01-20T18:00");
     state.plans.push({ id: "00000000-0000-0000-0000-000000000001", name: "간결한 일정", kind: "watch", intervalSeconds: 60, config: state.config, enabled: false, status: { state: "stopped" } });
     await page.evaluate(() => refreshPlans());
     assert.ok(await page.locator("#executionPlanList .execution-plan").evaluate(el => el.getBoundingClientRect().height) < 85);

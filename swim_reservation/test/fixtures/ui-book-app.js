@@ -63,6 +63,7 @@ export async function mockBookApp(page, count = 2) {
   });
   await page.goto("https://app.test/");
   await page.waitForFunction(expected => document.querySelector("#bookingProfileSelect1").options.length === expected, count + 1);
+  await page.waitForFunction(() => availabilityContext === `${elements.startDate.value}/${Number(elements.nights.value)}`);
   return state;
 }
 

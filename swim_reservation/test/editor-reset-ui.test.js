@@ -104,6 +104,7 @@ test("PC·폰의 일정 입력은 등록 성공·탭 이동 시 초기화하고 
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="watch"]').click();
     await cleared();
+    await page.locator("#watchEndsAtDetails summary").click();
     await page.locator("#watchInterval").fill("120");
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="priority"]').click();

@@ -26,13 +26,12 @@
       <button type="button" data-workspace-tab="book">예약자 정보</button>
       <button type="button" data-workspace-tab="people">예약 조회</button>
       <button type="button" data-workspace-tab="monthly">월별 예약 현황</button>
-      <button type="button" data-workspace-tab="logs">실행 로그</button>
+      <button type="button" data-workspace-tab="logs">로그</button>
     </nav>
     </div>
     <p id="workspaceMessage" role="status"></p>
 
-    <section id="bookingBookCard" class="card" hidden>
-      <h2>예약자 정보</h2>
+    <section id="bookingBookCard" class="card" aria-label="예약자 정보" hidden>
       <p>예약자 정보를 최대 20명까지 저장합니다. 저장한 사람은 예약 모드의 선택 목록과 예약 조회에 함께 사용합니다. 수정해도 이미 등록한 일정의 정보는 바뀌지 않습니다.</p>
       <div id="bookingBookList"></div>
       <div class="section-actions"><button id="bookNewButton" type="button" class="secondary">+ 예약자 추가</button></div>
@@ -49,8 +48,7 @@
       <p id="bookingBookMessage" role="status"></p>
     </section>
 
-    <section id="lookupCard" class="card" hidden>
-      <h2>예약 조회</h2>
+    <section id="lookupCard" class="card" aria-label="예약 조회" hidden>
       <p>예약자 정보에 저장한 모든 사람의 예약을 조회합니다.</p>
       <p id="lookupMessage" role="status"></p>
       <div id="savedLookupArea"></div>
@@ -60,7 +58,7 @@
     <section id="planCard" class="card">
       <div class="plan-registration"><label>일정 이름<input id="planName" placeholder="예: 가족 캠핑"></label><button id="addPlanButton" class="secondary" type="button" aria-label="현재 설정으로 일정 등록">일정 등록</button></div>
       <div id="planEditNotice" class="section-actions" hidden><span>기존 일정 수정 중 · 저장 후 시작을 눌러야 실행됩니다.</span><button id="cancelPlanEdit" class="secondary" type="button">수정 취소</button></div>
-      <div class="watch-settings-row"><label id="watchIntervalField">조회 간격 (초)<input id="watchInterval" type="number" min="60" max="3600" value="60"></label><details id="watchEndsAtDetails"><summary>취소 객실 조회 종료일</summary><label id="watchEndsAtField">종료 날짜·시각 (선택)<input id="watchEndsAt" type="datetime-local" step="1"><small id="watchDeadlineHint">비워두면 숙박 시작일 00시에 감시를 종료합니다. 당일 감시를 원하면 마감을 직접 지정하세요.</small></label></details></div>
+      <div class="watch-settings-row"><details id="watchEndsAtDetails" class="booking-details"><summary>조회 간격·취소 객실 조회 종료일</summary><div class="watch-settings-fields"><label id="watchIntervalField">조회 간격 (초)<input id="watchInterval" type="number" min="60" max="3600" value="60"></label><label id="watchEndsAtField">종료 날짜·시각 (선택)<input id="watchEndsAt" type="datetime-local" step="1"><small id="watchDeadlineHint">비워두면 숙박 시작일 00시에 감시를 종료합니다. 당일 감시를 원하면 마감을 직접 지정하세요.</small></label></div></details></div>
       <label id="watchProfileField" hidden>취소 자리를 예약할 예약자<select id="watchProfileSelect"></select></label>
       <p id="watchHelp" hidden>예약 방식이나 객실 순위 없이 체크한 객실 중 날짜·박수 조건에 맞는 자리가 나오면 선택한 예약자 한 명으로 객실 하나를 즉시 예약합니다. 조회 사이에 마감될 수 있으며 불확실한 제출 결과는 자동 재시도하지 않습니다.</p>
       <p id="planMessage" role="status"></p>
@@ -78,8 +76,7 @@
           <select id="bookingMode"><option value="priority">단독 예약</option><option value="multiple">다중 예약</option><option value="profiles-parallel">다인 예약</option></select>
         </div>
       </div>
-      <details id="triggerDetails" hidden><summary>예약 실행일</summary><label>예약 실행 시각<input id="triggerAt" type="datetime-local" step="1"></label></details>
-      <details id="reservationConnectionDetails"><summary>예약 링크·연결 정보 보기</summary><div class="grid two"><div class="generated"><span>날짜 확인 숫자</span><strong id="epochValue">—</strong></div><div class="generated"><span>예약 오픈 일시</span><strong id="openAtValue">—</strong></div></div><label>예약 페이지 링크<input id="reservationUrl" readonly></label></details>
+      <details id="reservationConnectionDetails" class="booking-details"><summary>예약 실행일·예약 정보</summary><div id="triggerDetails" hidden><label>예약 실행 시각<input id="triggerAt" type="datetime-local" step="1"></label></div><div class="grid two"><div class="generated"><span>날짜 확인 숫자</span><strong id="epochValue">—</strong></div><div class="generated"><span>예약 오픈 일시</span><strong id="openAtValue">—</strong></div></div><div class="booking-link-field"><span>예약 페이지 링크</span><a id="reservationUrl" target="_blank" rel="noopener noreferrer" aria-disabled="true">숙박 날짜를 먼저 선택해 주세요.</a></div></details>
     </section>
 
     <section class="card">
@@ -143,8 +140,8 @@
       <p id="executionBatchMessage" role="status"></p>
     </section>
 
-    <section id="logCard" class="card status-card" hidden>
-      <div class="section-title"><span>6</span><div><h2>실행 로그</h2><p>최근 실행 과정과 오류를 HA App 데이터 영역에 저장합니다.</p></div></div>
+    <section id="logCard" class="card status-card" aria-label="로그" hidden>
+      <p class="log-help">최근 실행 과정과 오류를 HA App 데이터 영역에 저장합니다.</p>
       <div id="logList" class="log-list"><p>로그를 불러오는 중입니다.</p></div>
       <div class="section-actions log-actions">
         <button id="refreshLogsButton" class="secondary" type="button" aria-label="로그 새로고침">새로 고침</button>
