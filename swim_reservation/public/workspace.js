@@ -193,7 +193,7 @@ function refreshLookupSiteSelector() {
   select.value = Number(previous) <= lookupProfilesDraft.length && previous ? previous : "1";
 }
 
-function planMessage(text) { document.getElementById("planMessage").textContent = text; }
+function planMessage(text) { document.getElementById("planMessage").textContent = shortRoomText(text); }
 function renderPlanEditMode() {
   const button = document.getElementById("addPlanButton");
   button.textContent = editingPlan ? "수정 저장" : workspaceTab === "watch" ? "감시 일정 등록" : "예약 일정 등록";
@@ -277,14 +277,14 @@ async function refreshPlans() {
       info.textContent = `${entry.kind === "watch" ? `취소 자리 감시 (${entry.intervalSeconds}초) · 조건 일치 시 객실 하나 예약` : `${entry.kind === "now" ? "즉시 예약" : `예약 대기 ${entry.config.triggerAt.replace("T", " ")}`} · ${modes[entry.config.bookingMode]}`} · ${entry.enabled ? "진행 중" : "중지/종료"}`;
       if (entry.kind === "watch") info.textContent += ` · 마감 ${(entry.watchDeadlineAt || entry.watchEndsAt || `${entry.config.startDate}T00:00:00`).replace("T", " ")} (${entry.watchEndsAt ? "직접 지정" : "기본"})`;
       const status = document.createElement("p");
-      status.textContent = `${entry.status.message || "설정 완료"}${entry.status.lastCheckedAt ? ` · 마지막 확인 ${new Date(entry.status.lastCheckedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}` : ""}`;
+      status.textContent = shortRoomText(`${entry.status.message || "설정 완료"}${entry.status.lastCheckedAt ? ` · 마지막 확인 ${new Date(entry.status.lastCheckedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}` : ""}`);
       const targets = document.createElement("div");
       targets.className = "plan-profile-targets";
       const profiles = entry.config.profiles || [entry.config.profile1 || entry.config.profile || {}];
       profiles.forEach((profile, index) => {
         const line = document.createElement("p");
         const candidates = entry.config.bookingMode === "profiles-parallel" && entry.kind !== "watch" ? profile.roomPriority || [] : entry.config.roomPriority;
-        const names = candidates.filter(room => room.enabled).map(room => String(room.name).split("_")[0].trim()).join(entry.kind === "watch" || entry.config.bookingMode === "multiple" ? ", " : " → ");
+        const names = candidates.filter(room => room.enabled).map(room => shortRoomText(room.name)).join(entry.kind === "watch" || entry.config.bookingMode === "multiple" ? ", " : " → ");
         line.textContent = `${profile.reserverName || `예약자 ${index + 1}`} : ${names || "선택된 객실 없음"}`;
         targets.append(line);
       });

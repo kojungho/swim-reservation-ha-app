@@ -1,4 +1,6 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
+// Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
+function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, ""); }
 const elements = Object.fromEntries([
   "startDate", "triggerAt", "nights", "bookingMode", "epochValue", "openAtValue", "reservationUrl", "roomList", "roomSectionTitle", "roomSectionHelp", "reserverName",
   "depositorName", "phone", "birthDate", "extraProfiles", "addProfileButton", "saveProfilesButton", "siteProfileSelect", "profilePriorities", "profileModeHelp", "multipleProfileField", "multipleProfileSelect",
@@ -26,6 +28,7 @@ let autoLookupCompletedKey = "";
 let autoLookupRunning = false;
 let lastAutoLookupAttempt = 0;
 let currentLogText = "";
+let rawDiagnosticText = "";
 let monthlyController = null;
 let monthlyRequest = 0;
 let monthlyResult = null;
@@ -153,7 +156,7 @@ function bindEvents() {
     await refreshSiteTime(true);
     if (!updateImmediateBookingVisibility()) throw new Error("미래 시각 예약과 취소 자리 감시는 여러 일정 진행에서 등록한 뒤 시작하세요. 서버 시간도 확인해 주세요.");
     const date = elements.startDate.value;
-    const selectedRooms = elements.bookingMode.value === "profiles-parallel" ? readConfig().profiles.map((profile, index) => `예약자 ${index + 1}: ${(profile.roomPriority || []).filter(room => room.enabled).map(room => room.name).join(" → ") || "선택 없음"}`) : rooms.filter((room) => room.enabled).map((room) => room.name);
+    const selectedRooms = elements.bookingMode.value === "profiles-parallel" ? readConfig().profiles.map((profile, index) => `예약자 ${index + 1}: ${(profile.roomPriority || []).filter(room => room.enabled).map(room => shortRoomText(room.name)).join(" → ") || "선택 없음"}`) : rooms.filter((room) => room.enabled).map((room) => shortRoomText(room.name));
     const multiple = elements.bookingMode.value === "multiple";
     const modeText = elements.bookingMode.value === "profiles-parallel" ? `예약자 ${extraProfiles.length + 1}명 동시 예약 · 각자 우선순위` : multiple ? `여러 객실 동시 예약 (${selectedRooms.length}개) · ${elements.multipleProfileSelect.selectedOptions[0]?.textContent}`
       : `1개 예약 · ${elements.multipleProfileSelect.selectedOptions[0]?.textContent || "선택한 한 명"} · 우선순위 방식`;
@@ -353,7 +356,7 @@ function renderMonthlyAvailability(result) {
   const opening = result.opensAt ? new Date(`${result.opensAt}+09:00`).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false }) : "미확인";
   const captured = new Date(result.capturedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false });
   const captureLabel = result.month < today.slice(0, 7) ? "사이트 조회 안 함" : result.capturedAt ? `최근 확인 ${captured}` : "현황 확인 대기";
-  elements.monthlyStatus.textContent = `${result.month} · ${opened} · 예약 오픈 ${opening} · ${result.progressText || ""} · ${captureLabel}. ${result.message || ""}`;
+  elements.monthlyStatus.textContent = shortRoomText(`${result.month} · ${opened} · 예약 오픈 ${opening} · ${result.progressText || ""} · ${captureLabel}. ${result.message || ""}`);
   const days = result.days || [];
   const table = document.createElement("table");
   table.className = "monthly-calendar";
@@ -390,8 +393,8 @@ function renderMonthlyAvailability(result) {
         const badges = (past ? [] : day.rooms).map(room => {
           const status = labels[room.status] ? room.status : "unknown";
           const [mark, label] = labels[status];
-          const name = String(room.name).split("_")[0].trim() || room.name;
-          return `<span class="monthly-room-row" title="${escapeHtml(`${room.name} · ${label}`)}"><span class="monthly-room-mark ${status}" aria-label="${label}">${mark}</span><span class="monthly-room-name">${escapeHtml(name)}</span></span>`;
+          const name = shortRoomText(room.name);
+          return `<span class="monthly-room-row" title="${escapeHtml(`${name} · ${label}`)}"><span class="monthly-room-mark ${status}" aria-label="${label}">${mark}</span><span class="monthly-room-name">${escapeHtml(name)}</span></span>`;
         }).join("");
         const states = { queued: "대기 중", checking: "조회 중", error: "조회 실패", partial: "일부 확인 불가", done: "확인됨" };
         button.innerHTML = `<span class="monthly-day-number">${Number(day.date.slice(-2))}</span><span class="monthly-day-rooms">${past ? '<span class="monthly-cell unknown">지난 날짜</span>' : badges || '<span class="monthly-cell unknown">미확인</span>'}</span><span class="monthly-day-state ${past ? "past" : day.queryState || "done"}">${past ? "조회 제외" : states[day.queryState] || "확인됨"}</span>`;
@@ -595,9 +598,9 @@ function renderHistory(entries) {
       ? entry.profilePriorities?.length ? entry.profilePriorities.map(profile => {
         const label = `예약자 ${profile.index + 1}${profile.reserverName ? ` · ${profile.reserverName}` : ""}`;
         const priority = profile.enabledRooms?.length ? profile.enabledRooms.map((name, index) => `${index + 1}순위 ${name}`).join(" → ") : "선택된 객실 없음";
-        return `<div class="history-profile-priority"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(priority)}</span></div>`;
+        return `<div class="history-profile-priority"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(shortRoomText(priority))}</span></div>`;
       }).join("") : "예약자별 우선순위 정보를 확인할 수 없습니다. 설정을 불러와 확인해 주세요."
-      : `${multiple && entry.multipleProfileName ? `<strong>예약자 · ${escapeHtml(entry.multipleProfileName)}</strong><br>` : ""}${escapeHtml(roomsText)}`;
+      : `${multiple && entry.multipleProfileName ? `<strong>예약자 · ${escapeHtml(entry.multipleProfileName)}</strong><br>` : ""}${escapeHtml(shortRoomText(roomsText))}`;
     row.innerHTML = `
       <div class="history-key"><strong>${escapeHtml(entry.startDate)} · ${entry.nights}박</strong><small>${entry.bookingMode === "profiles-parallel" ? `예약자 ${entry.profileCount || 1}명 동시 우선순위 예약` : multiple ? `동시 ${entry.enabledRooms.length}개 예약` : (entry.profileCount || (entry.useSecondProfile ? 2 : 1)) > 1 ? `예약자 ${entry.profileCount || 2}명 순차 예약` : "1개 우선순위 예약"} · ${escapeHtml(savedAt)} 저장</small></div>
       <div class="history-rooms">${roomSummary}</div>
@@ -871,7 +874,7 @@ async function loadReservations() {
   if (result.lookupErrors?.length) {
     const warning = document.createElement("p");
     warning.className = "error";
-    warning.textContent = result.lookupErrors.map(item => `${item.profileLabel}: ${item.message}`).join(" · ");
+    warning.textContent = shortRoomText(result.lookupErrors.map(item => `${item.profileLabel}: ${item.message}`).join(" · "));
     elements.reservationList.prepend(warning);
     if (!result.reservations?.length) elements.reservationList.querySelector(".reservation-empty")?.remove();
   }
@@ -890,7 +893,7 @@ function renderStatus(status) {
   elements.statusBadge.className = `badge ${state}`;
   elements.statusBadge.textContent = STATE_LABELS[state] || state;
   renderPlanBadge();
-  elements.statusText.textContent = status.message || "상태 정보가 없습니다.";
+  elements.statusText.textContent = shortRoomText(status.message || "상태 정보가 없습니다.");
   elements.statusText.hidden = state === "idle";
   elements.statusDetails.hidden = state === "idle";
   const details = [];
@@ -905,13 +908,14 @@ function renderStatus(status) {
   if (status.updatedAt) details.push(["최근 갱신", new Date(status.updatedAt).toLocaleString("ko-KR")]);
   elements.statusDetails.replaceChildren(...details.flatMap(([term, value]) => {
     const dt = document.createElement("dt"); dt.textContent = term;
-    const dd = document.createElement("dd"); dd.textContent = value;
+    const dd = document.createElement("dd"); dd.textContent = shortRoomText(value);
     return [dt, dd];
   }));
   renderProfileStatuses(status.profileStatuses || []);
   const diagnosticText = status.diagnostics ? JSON.stringify(status.diagnostics, null, 2) : "";
   elements.diagnosticsPanel.hidden = !diagnosticText;
-  elements.diagnosticsPreview.textContent = diagnosticText;
+  rawDiagnosticText = diagnosticText;
+  elements.diagnosticsPreview.textContent = shortRoomText(diagnosticText);
 }
 
 function renderProfileStatuses(statuses) {
@@ -919,24 +923,24 @@ function renderProfileStatuses(statuses) {
   elements.profileStatusList.replaceChildren(...statuses.map((status) => {
     const row = document.createElement("div");
     row.className = "profile-status-row";
-    row.innerHTML = `<strong>${escapeHtml(status.label || `예약자 ${Number(status.index) + 1}`)}</strong><span>${escapeHtml(status.message || status.state || "대기")}${status.room ? ` · ${escapeHtml(status.room)}` : ""}</span>`;
+    row.innerHTML = `<strong>${escapeHtml(status.label || `예약자 ${Number(status.index) + 1}`)}</strong><span>${escapeHtml(shortRoomText(status.message || status.state || "대기"))}${status.room ? ` · ${escapeHtml(shortRoomText(status.room))}` : ""}</span>`;
     return row;
   }));
 }
 
 async function copyDiagnostics() {
-  const text = elements.diagnosticsPreview.textContent;
+  const text = rawDiagnosticText;
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
   } catch {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(elements.diagnosticsPreview);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    const input = document.createElement("textarea");
+    input.value = text;
+    input.style.cssText = "position:fixed;left:-9999px;top:0";
+    document.body.append(input);
+    input.select();
     document.execCommand("copy");
-    selection.removeAllRanges();
+    input.remove();
   }
   showMessage("진단 정보를 복사했습니다. 이 대화에 그대로 붙여 넣어 주세요.");
 }
@@ -980,14 +984,14 @@ function renderReservations(reservations) {
     const row = document.createElement("div");
     row.className = "reservation-row";
     row.innerHTML = `
-      <div><strong>${escapeHtml(reservation.profileLabel ? `${reservation.profileLabel} · ${reservation.room}` : reservation.room)}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span></div>
+      <div><strong>${escapeHtml(reservation.profileLabel ? `${reservation.profileLabel} · ${shortRoomText(reservation.room)}` : shortRoomText(reservation.room))}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span></div>
       <div><span>결제 금액</span><strong>${escapeHtml(reservation.total)}</strong></div>
       <div><span>예약 상태</span><strong>${escapeHtml(reservation.status)}</strong></div>
       ${reservation.cancelable ? '<button type="button" class="reservation-cancel-button danger">예약 취소</button>' : '<span class="cancel-disabled">사이트에서 취소 불가</span>'}`;
     const cancelButton = row.querySelector(".reservation-cancel-button");
     cancelButton?.addEventListener("click", () => perform(async () => {
       const approved = window.confirm(
-        `${reservation.room}\n${reservation.stayDate} · ${reservation.nights}\n결제 금액 ${reservation.total}\n\n이 예약을 실제로 취소할까요? 취소한 예약은 자동으로 복구할 수 없습니다.`
+        `${shortRoomText(reservation.room)}\n${reservation.stayDate} · ${reservation.nights}\n결제 금액 ${reservation.total}\n\n이 예약을 실제로 취소할까요? 취소한 예약은 자동으로 복구할 수 없습니다.`
       );
       if (!approved) return;
       const result = await request(`reservations/${encodeURIComponent(reservation.id)}/cancel`, {
@@ -1073,7 +1077,7 @@ async function refreshLogs() {
     const row = document.createElement("div");
     row.className = `log-row ${entry.level || "info"}`;
     const time = new Date(entry.timestamp).toLocaleString("ko-KR");
-    row.innerHTML = `<time>${escapeHtml(time)}</time><strong>${entry.level === "error" ? "오류" : "정보"}</strong><span>${escapeHtml(entry.message || entry.event || "")}</span>`;
+    row.innerHTML = `<time>${escapeHtml(time)}</time><strong>${entry.level === "error" ? "오류" : "정보"}</strong><span>${escapeHtml(shortRoomText(entry.message || entry.event || ""))}</span>`;
     elements.logList.append(row);
   }
 }
@@ -1114,8 +1118,8 @@ async function saveLogs() {
 }
 
 function showMessage(message, error = false, successLabel = "저장 완료") {
-  document.getElementById("workspaceMessage").textContent = message;
-  elements.statusText.textContent = message;
+  document.getElementById("workspaceMessage").textContent = shortRoomText(message);
+  elements.statusText.textContent = shortRoomText(message);
   elements.statusBadge.textContent = error ? "확인 필요" : successLabel;
   elements.statusBadge.className = `badge ${error ? "failed" : "success"}`;
 }

@@ -60,7 +60,7 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
     assert.equal(await page.locator("#monthlyDialog").evaluate(el => el.scrollWidth <= el.clientWidth), true);
     assert.deepEqual(await page.locator('[data-date="2026-12-01"] .monthly-room-name').allTextContents(), ["해", "달", "샘"]);
     assert.deepEqual(await page.locator('[data-date="2026-12-01"] .monthly-room-mark').allTextContents(), ["가", "완", "대"]);
-    assert.match(await page.locator('[data-date="2026-12-01"] .monthly-room-row').last().getAttribute("title"), /샘_산맥존 · 예약 대기/);
+    assert.match(await page.locator('[data-date="2026-12-01"] .monthly-room-row').last().getAttribute("title"), /샘 · 예약 대기/);
     await page.evaluate(() => {
       const names = ["해", "달", "별", "빛", "강", "산", "들", "숲", "샘", "온", "숨", "꿈", "솔", "결"].map((name, index) => `${name}_${index < 8 ? "하늘존" : "산맥존"}`);
       renderMonthlyAvailability({ ...monthlyResult, roomNames: names, days: monthlyResult.days.map(day => ({ ...day, rooms: names.map((name, index) => ({ name, status: ["available", "booked", "pending", "unavailable", "unknown"][index % 5] })) })) });
