@@ -46,12 +46,13 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
       return route.fulfill({ json: result });
     });
     await page.goto("https://app.test/");
-    await page.locator(".workspace-tabs .active").waitFor();
+    await page.locator(".workspace-tabs .active").waitFor({ state: "attached" });
     assert.equal(await page.locator("#addProfileButton").isVisible(), false);
     assert.equal(await page.locator("#firstBookingProfileFields").isVisible(), true);
     await page.locator("#planName").fill("첫 일정");
     await page.locator("#addPlanButton").click();
     await page.locator("#planList .plan-entry").waitFor();
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="multiple"]').click();
     assert.equal(await page.locator("#addProfileButton").isVisible(), false);
     assert.equal(await page.locator("#roomList .room-drag-handle").count(), 0);
@@ -69,6 +70,7 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
     await page.locator("#planList .plan-entry").first().getByRole("button", { name: "중지", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#planList .plan-entry").innerText.includes("중지/종료"));
     assert.equal(plans[1].enabled, true);
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="watch"]').click();
     assert.equal(await page.locator("#watchHelp").isVisible(), true);
     assert.equal(await page.locator("#bookingMode").isVisible(), false);
@@ -90,6 +92,7 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
     assert.match(await page.locator("#planList .plan-entry").nth(2).innerText(), /마감 2026-10-07 18:00 \(직접 지정\)/);
     await page.locator("#planList .plan-entry").nth(2).getByRole("button", { name: "설정 불러오기", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#watchEndsAt").value === "2026-10-07T18:00");
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="people"]').click();
     await page.waitForFunction(() => !document.querySelector("#reservationList").hidden);
     assert.equal(lookups, 1);
@@ -98,6 +101,7 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
     assert.equal(await page.locator("#startDate").isVisible(), false);
     assert.equal(await page.locator("#lookupProfileList input").count(), 2);
     assert.doesNotMatch(await page.locator("#lookupCard").innerText(), /입금자명 입력|생년월일 입력/);
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="profiles-parallel"]').click();
     assert.equal(await page.locator("#watchEndsAt").inputValue(), "");
     assert.equal(await page.locator("#watchEndsAt").isVisible(), false);
@@ -108,6 +112,7 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
       const rooms = document.querySelector("#profilePriorities").closest("section");
       return Boolean(profile.compareDocumentPosition(rooms) & Node.DOCUMENT_POSITION_FOLLOWING);
     }), true);
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="monthly"]').click();
     await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
     assert.deepEqual(months, ["2026-10"]);

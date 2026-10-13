@@ -28,6 +28,7 @@ test("중지된 감시 일정 수정은 등록 대신 수정 저장·취소만 �
     await page.locator("#cancelPlanEdit").click();
     assert.equal(state.plans[0].name, "감시 변경"); assert.equal(await page.locator("#planName").inputValue(), "");
     await page.locator("#planList").getByRole("button", { name: "수정", exact: true }).click();
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="priority"]').click();
     assert.equal(await page.locator("#planEditNotice").isVisible(), false);
     assert.equal(state.writes.some(path => path === "/api/plans" || path.endsWith("/start")), false);

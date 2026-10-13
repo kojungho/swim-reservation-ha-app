@@ -18,7 +18,9 @@
       <div id="statusBadge" class="badge idle">불러오는 중</div>
     </header>
 
-    <nav class="workspace-tabs" aria-label="예약 도우미 페이지">
+    <div class="workspace-menu-floating">
+    <button id="workspaceMenuButton" type="button" aria-expanded="false" aria-controls="workspaceMenu" aria-label="메뉴 열기"><span class="menu-bars" aria-hidden="true"><span></span><span></span><span></span></span><span id="workspaceMenuLabel">1개 예약·우선순위</span><span aria-hidden="true">▾</span></button>
+    <nav id="workspaceMenu" class="workspace-tabs" aria-label="예약 도우미 페이지" hidden>
       <button type="button" data-workspace-tab="priority">1개 예약·우선순위</button>
       <button type="button" data-workspace-tab="multiple">여러 객실 동시</button>
       <button type="button" data-workspace-tab="profiles-parallel">예약자별 동시</button>
@@ -28,6 +30,7 @@
       <button type="button" data-workspace-tab="monthly">월별 예약 현황</button>
       <button type="button" data-workspace-tab="logs">실행 로그</button>
     </nav>
+    </div>
     <p id="workspaceMessage" role="status"></p>
 
     <section id="bookingBookCard" class="card" hidden>

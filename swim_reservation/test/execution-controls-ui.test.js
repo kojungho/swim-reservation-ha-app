@@ -40,7 +40,7 @@ test("PC·폰에서 일정 목록을 실행 영역 아래에 두고 미래 예�
       return route.fulfill({ json: result });
     });
     await page.goto("https://app.test/");
-    await page.locator(".workspace-tabs .active").waitFor();
+    await page.locator(".workspace-tabs .active").waitFor({ state: "attached" });
     await page.waitForFunction(() => document.querySelector("#siteTimeMeta").textContent.includes("정상"));
     assert.equal(await page.locator("#startButton").count(), 0);
     assert.equal(await page.evaluate(() => document.querySelector("#runNowButton").closest("section").nextElementSibling.id), "planCard");
@@ -53,6 +53,7 @@ test("PC·폰에서 일정 목록을 실행 영역 아래에 두고 미래 예�
     await page.locator("#planList .plan-entry").first().getByRole("button", { name: "시작", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#planMessage").textContent.includes("시작 완료"));
     assert.equal(starts.length, 1);
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="watch"]').click();
     assert.equal(await page.locator("#runNowButton").isVisible(), false);
     await page.locator("#planName").fill("취소 자리 일정");
@@ -63,6 +64,7 @@ test("PC·폰에서 일정 목록을 실행 영역 아래에 두고 미래 예�
     await page.locator("#planList .plan-entry").nth(1).getByRole("button", { name: "시작", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("#planMessage").textContent.includes("취소 자리 일정: 시작 완료"));
     assert.equal(starts.length, 2);
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="priority"]').click();
     await page.locator("#startDate").fill("2026-12-20");
     await page.locator("#triggerAt").fill("2026-10-12T09:00");

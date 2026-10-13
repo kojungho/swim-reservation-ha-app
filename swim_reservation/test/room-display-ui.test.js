@@ -24,6 +24,7 @@ test("객실 목록은 원래 이름 유지, 다른 화면은 구역명 생략, 
     const after = await floating.boundingBox();
     assert.ok(Math.abs(before.y - after.y) < 1);
     for (const tab of ["people", "monthly", "logs", "book"]) {
+      await page.locator("#workspaceMenuButton").click();
       await page.locator(`[data-workspace-tab="${tab}"]`).click();
       assert.equal(await floating.isVisible(), true);
     }

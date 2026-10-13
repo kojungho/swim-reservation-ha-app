@@ -37,7 +37,7 @@ test("320·390·768·1280px의 모든 탭에서 입력과 버튼이 붙거나 �
           const rect = el.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0 && getComputedStyle(el).visibility !== "hidden";
         }).map(el => ({ rect: el.getBoundingClientRect(), label: el.id || el.getAttribute("aria-label") || el.textContent.trim().slice(0, 30) }));
-        const buttons = visible("button:not(.info-button):not(.room-drag-handle):not(.monthly-day):not(.site-map-floating)");
+        const buttons = visible("button:not(.info-button):not(.room-drag-handle):not(.monthly-day):not(.site-map-floating):not(#workspaceMenuButton)");
         const inputs = visible("input:not([type=checkbox]),select");
         function spacing(first, second, min) {
           const a = first.rect, b = second.rect;
@@ -57,6 +57,7 @@ test("320·390·768·1280px의 모든 탭에서 입력과 버튼이 붙거나 �
       assert.deepEqual(issues, [], `${width}px ${tab}`);
     }
     for (const tab of ["priority", "multiple", "profiles-parallel", "watch", "book", "people", "monthly", "logs"]) {
+      await page.locator("#workspaceMenuButton").click();
       await page.locator(`[data-workspace-tab="${tab}"]`).click();
       if (tab === "profiles-parallel") { await page.locator("#addProfileButton").click(); await page.locator("#bookingProfileSelect2").selectOption("0"); }
       if (tab === "people") {
@@ -88,6 +89,7 @@ test("320·390·768·1280px의 모든 탭에서 입력과 버튼이 붙거나 �
       await checkLayout(tab);
       if (tab === "priority" && [390, 1280].includes(width)) await page.locator("#planCard").screenshot({ path: `/tmp/swim-profiles.6W9Acs/plan-registration-${width}.png` });
     }
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="priority"]').click();
     await page.locator("#reservationConnectionDetails").evaluate(el => { el.open = true; });
     await checkLayout("연결 정보 펼침");

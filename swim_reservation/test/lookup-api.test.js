@@ -59,12 +59,14 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
       page.on("pageerror", error => errors.push(error.message));
       await page.goto(api.baseUrl);
       await page.waitForFunction(() => document.querySelector("#bookingProfileSelect1").options.length === 3);
-      await page.locator(".workspace-tabs .active").waitFor();
+      await page.locator(".workspace-tabs .active").waitFor({ state: "attached" });
       assert.equal(await page.locator("#reserverName").inputValue(), "");
       await page.locator("#bookingProfileSelect1").selectOption("1");
       assert.equal(await page.locator("#reserverName").inputValue(), "둘째");
+      await page.locator("#workspaceMenuButton").click();
       await page.locator('[data-workspace-tab="book"]').click();
       assert.equal(await page.locator("#bookingBookList .booking-book-row").count(), 2);
+      await page.locator("#workspaceMenuButton").click();
       await page.locator('[data-workspace-tab="profiles-parallel"]').click();
       assert.equal(await page.locator("#reserverName").inputValue(), "");
       assert.deepEqual(errors, []);

@@ -38,6 +38,7 @@ test("PC·휴대폰 도움말은 선택한 모드를 펼치고 예약 설정을 
     assert.equal(layout.iconWidth, 20);
     assert.equal(layout.iconHeight, 20);
     for (const mode of ["priority", "multiple", "profiles-parallel", "watch"]) {
+      await page.locator("#workspaceMenuButton").click();
       await page.locator(`[data-workspace-tab="${mode}"]`).click();
       await page.getByRole("button", { name: "예약 모드별 사용 방법", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "예약 모드별 사용 방법", exact: true });
@@ -53,6 +54,7 @@ test("PC·휴대폰 도움말은 선택한 모드를 펼치고 예약 설정을 
       assert.equal(await page.locator("#bookingHelpButton").evaluate(el => el === document.activeElement), true);
     }
     for (const tab of ["book", "people", "logs"]) {
+      await page.locator("#workspaceMenuButton").click();
       await page.locator(`[data-workspace-tab="${tab}"]`).click();
       assert.equal(await page.locator("header #bookingHelpButton").isVisible(), true);
     }

@@ -43,6 +43,10 @@ function initializeWorkspace() {
   }));
   document.getElementById("loadLookupProfilesButton").addEventListener("click", () => perform(async () => { await loadLookupProfiles(); await loadReservations(); }));
   document.querySelectorAll("[data-workspace-tab]").forEach(button => button.addEventListener("click", () => switchWorkspaceTab(button.dataset.workspaceTab)));
+  const menuButton = document.getElementById("workspaceMenuButton");
+  menuButton.addEventListener("click", () => setWorkspaceMenuOpen(menuButton.getAttribute("aria-expanded") !== "true"));
+  document.addEventListener("click", event => { if (!event.target.closest(".workspace-menu-floating")) setWorkspaceMenuOpen(false); });
+  document.addEventListener("keydown", event => { if (event.key === "Escape" && menuButton.getAttribute("aria-expanded") === "true") { setWorkspaceMenuOpen(false); menuButton.focus(); } });
   document.getElementById("addPlanButton").addEventListener("click", () => registerPlan(workspaceTab === "watch" ? "watch" : "scheduled", false).catch(error => planMessage(error.message)));
   document.getElementById("cancelPlanEdit").addEventListener("click", () => { resetPlanEditor(); planMessage("수정을 취소했습니다. 저장된 일정은 변경되지 않았습니다."); });
   document.getElementById("watchEndsAt").addEventListener("input", updateWatchDeadlineHint);
@@ -60,6 +64,11 @@ function initializeWorkspace() {
 
 function seoulCurrentMonth() {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit" }).format(new Date());
+}
+function setWorkspaceMenuOpen(open) {
+  document.getElementById("workspaceMenu").hidden = !open;
+  document.getElementById("workspaceMenuButton").setAttribute("aria-expanded", String(open));
+  document.getElementById("workspaceMenuButton").setAttribute("aria-label", `${open ? "메뉴 닫기" : "메뉴 열기"} · ${document.getElementById("workspaceMenuLabel").textContent}`);
 }
 
 function seoulToday() {
@@ -82,7 +91,10 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
     const selected = button.dataset.workspaceTab === tab;
     button.classList.toggle("active", selected);
     button.setAttribute("aria-pressed", String(selected));
+    if (selected) { button.setAttribute("aria-current", "page"); document.getElementById("workspaceMenuLabel").textContent = button.textContent; }
+    else button.removeAttribute("aria-current");
   });
+  setWorkspaceMenuOpen(false);
   const booking = modes.includes(tab) || tab === "watch";
   const profilePage = elements.reserverName.closest("section");
   for (const section of document.querySelectorAll("main.shell > section.card")) section.hidden = !booking;

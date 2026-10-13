@@ -22,6 +22,7 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     assert.equal(await page.locator("#roomList .drag-bars").count(), await page.locator("#roomList .room-row").count());
     assert.ok(await page.locator("#roomList .room-row").first().evaluate(row => row.getBoundingClientRect().height) <= 50);
     for (const tab of ["priority", "multiple", "profiles-parallel", "watch"]) {
+      await page.locator("#workspaceMenuButton").click();
       await page.locator('[data-workspace-tab="' + tab + '"]').click();
       await page.evaluate(() => renderInspection([{ name: "해_하늘존", available: true, status: "available" }, { name: "달_하늘존", available: false, status: "booked" }]));
       const list = tab === "profiles-parallel" ? page.locator("#profilePriorities") : page.locator("#roomList");
@@ -30,12 +31,14 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
       assert.equal(await page.locator("#inspectResult").count(), 0);
       assert.doesNotMatch(await page.locator("body").innerText(), /객실 확인 결과/);
     }
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="priority"]').click();
     await page.locator("#bookingProfileSelect1").selectOption("0");
     await page.locator("#roomList input[type=checkbox]").first().check();
     await page.locator("#planName").fill("보존할 일정");
     await page.locator("#addPlanButton").click();
     await page.locator("#planList .plan-entry").waitFor();
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="book"]').click();
     assert.equal(await page.locator("#bookingBookList .booking-book-row").count(), 2);
     async function fillBook(number) {
@@ -63,6 +66,7 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     assert.equal(state.book.length, 0);
     assert.equal(state.plans[0].config.profiles[0].reserverName, testGuest(1).reserverName);
     assert.equal(state.lookupBook.length, 0);
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="watch"]').click();
     assert.equal(await page.locator("#bookingProfileSelect1 option").count(), 1);
     await page.locator("#watchSelectAll").click();
@@ -70,6 +74,7 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     await page.locator("#watchDeselectAll").click();
     assert.equal(await page.locator("#roomList input:checked").count(), 0);
     const before = state.logsRead;
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="logs"]').click();
     await page.waitForFunction(() => document.querySelector("#logList").textContent.includes("저장된 실행 로그"));
     assert.ok(state.logsRead > before);

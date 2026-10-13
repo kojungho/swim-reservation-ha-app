@@ -47,6 +47,7 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
     assert.equal(await page.locator("header").evaluate(el => el.scrollWidth <= el.clientWidth), true);
     assert.deepEqual(queries, []);
     assert.deepEqual(dayQueries, []);
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="monthly"]').click();
     await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
     assert.equal(await page.locator("#monthlyMonth").inputValue(), "2026-12");
@@ -75,6 +76,7 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
     await page.locator('[data-date="2026-12-20"]').click();
     await page.waitForFunction(() => !document.querySelector("#monthlyDialog").open && document.activeElement.id === "startDate");
     assert.equal(await page.locator("#startDate").inputValue(), "2026-12-20");
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="monthly"]').click();
     await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
     await page.locator("#monthlyNextButton").click();
@@ -104,6 +106,7 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
     await page.clock.setFixedTime(new Date("2026-12-14T15:00:00Z"));
     missingCurrentMonth = true;
     const beforeCurrent = dayQueries.length;
+    await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="monthly"]').click();
     await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료"));
     assert.equal(await page.locator("#monthlyContent .monthly-day.past").count(), 14);
