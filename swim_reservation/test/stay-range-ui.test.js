@@ -27,6 +27,11 @@ test("PC·폰의 입실/퇴실 달력은 연말 범위·자동 박수·색상·�
     assert.equal(await page.locator("#checkoutDate").inputValue(), "2027-01-02");
     assert.equal(await page.locator("#nights").inputValue(), "2"); assert.equal(await page.locator("#nights").isVisible(), false);
     assert.equal(await page.locator("#stayNightsDisplay").textContent(), "2박");
+    const checkinBox = await page.locator("#startDate").boundingBox(), checkoutBox = await page.locator("#checkoutDate").boundingBox();
+    assert.ok(Math.abs(checkinBox.width - checkoutBox.width) < 1);
+    assert.ok(Math.abs(checkinBox.y - checkoutBox.y) < 1);
+    await page.locator("#startDate").evaluate(input => input.closest("section").scrollIntoView({ block: "start" }));
+    await page.locator("#startDate").locator("..").locator("..").screenshot({ path: `/tmp/swim-profiles.6W9Acs/stay-fields-${width}.png` });
     await page.locator("#checkoutDate").click();
     assert.equal(await page.locator('.date-picker-day[data-date="2027-01-01"]').getAttribute("class"), "date-picker-day in-range");
     assert.match(await page.locator('.date-picker-day[data-date="2027-01-02"]').getAttribute("class"), /range-end/);
