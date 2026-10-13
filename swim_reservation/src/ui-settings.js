@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 export const DEFAULT_UI_SETTINGS = {
   fonts: { title: 28, heading: 18, body: 14, field: 16, button: 13, room: 14, status: 12, calendar: 12, list: 14, log: 12 },
-  serverTime: true, reservationInfo: true, safety: true, watchInfo: true,
+  serverTime: true, reservationInfo: true, safety: true, watchInfo: true, stayRange: false,
   menuCorner: "top-right", mapCorner: "bottom-right", menuSpacing: 6
 };
 export function normalizeUiSettings(input = {}) {
@@ -16,7 +16,7 @@ export function normalizeUiSettings(input = {}) {
       result.fonts[key] = value;
     }
   }
-  for (const key of ["serverTime", "reservationInfo", "safety", "watchInfo"]) {
+  for (const key of ["serverTime", "reservationInfo", "safety", "watchInfo", "stayRange"]) {
     if (input[key] !== undefined) { if (typeof input[key] !== "boolean") throw new Error("표시 설정을 확인해 주세요."); result[key] = input[key]; }
   }
   for (const key of ["menuCorner", "mapCorner"]) {

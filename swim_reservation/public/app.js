@@ -169,7 +169,13 @@ function bindEvents() {
   });
   elements.triggerAt.addEventListener("input", updateImmediateBookingVisibility);
   elements.triggerAt.addEventListener("change", updateImmediateBookingVisibility);
-  elements.nights.addEventListener("change", () => scheduleAvailabilityCheck());
+  elements.nights.addEventListener("change", () => { updateStayFields(); scheduleAvailabilityCheck(); });
+  document.getElementById("checkoutDate").addEventListener("change", event => {
+    const nights = (Date.parse(`${event.target.value}T00:00:00Z`) - Date.parse(`${elements.startDate.value}T00:00:00Z`)) / 86400000;
+    if (!Number.isInteger(nights) || nights < 1 || nights > 6) { updateStayFields(true); showMessage("퇴실일은 입실일 다음 날부터 최대 6박까지 선택할 수 있습니다.", true); return; }
+    elements.nights.value = String(nights);
+    elements.nights.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   elements.bookingMode.addEventListener("change", () => {
     renderRooms();
     if (workspaceTab !== "watch") switchWorkspaceTab(elements.bookingMode.value, { keepEditor: true });
@@ -489,6 +495,7 @@ function loadConfig(config) {
   renderRooms();
   updateBookingProfileVisibility();
   updateGeneratedValues();
+  updateStayFields(true);
 }
 
 function readConfig() {
@@ -808,7 +815,7 @@ function updateGeneratedValues() {
     elements.openAtValue.textContent = "—";
     elements.reservationUrl.removeAttribute("href");
     elements.reservationUrl.setAttribute("aria-disabled", "true");
-    elements.reservationUrl.textContent = "숙박 날짜를 먼저 선택해 주세요.";
+    elements.reservationUrl.textContent = "입실일을 먼저 선택해 주세요.";
     return;
   }
   const epoch = Math.floor(Date.parse(`${date}T00:00:00+09:00`) / 1000);
@@ -893,6 +900,7 @@ function updateImmediateBookingVisibility() {
   document.getElementById("triggerDetails").hidden = workspaceTab === "watch" || allowed || !elements.triggerAt.value;
   elements.triggerAt.closest("label").hidden = workspaceTab === "watch" || allowed;
   applyUiVisibility();
+  updateStayFields();
   return allowed;
 }
 
@@ -968,7 +976,7 @@ function renderStatus(status) {
   elements.statusText.hidden = state === "idle";
   elements.statusDetails.hidden = state === "idle";
   const details = [];
-  if (status.startDate) details.push(["숙박 시작 날짜", status.startDate]);
+  if (status.startDate) details.push(["입실일", status.startDate]);
   if (status.prepareAt) details.push(["브라우저 준비 시각", new Date(status.prepareAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })]);
   if (status.targetAt) details.push(["예약 요청 시작 시각", new Date(status.targetAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })]);
   if (status.selectedRoom) details.push(["선택된 객실", status.selectedRoom]);
@@ -1227,7 +1235,7 @@ function escapeHtml(value) {
 function initializeDatePicker() {
   const dialog = document.getElementById("datePickerDialog");
   const get = name => document.getElementById(`datePicker${name}`);
-  let target = null, month = "", selected = "";
+  let target = null, month = "", selected = "", rangeMode = false, rangeStart = "", rangeEnd = "", rangePhase = "start";
   const eligible = input => input instanceof HTMLInputElement && ["date", "datetime-local", "month"].includes(input.type) && !input.disabled && !input.readOnly;
   const shift = delta => {
     const [year, number] = month.split("-").map(Number);
@@ -1243,6 +1251,18 @@ function initializeDatePicker() {
     get("Days").hidden = target.type === "month";
     get("TimeField").hidden = target.type !== "datetime-local";
     get("Error").textContent = "";
+    get("Range").hidden = !rangeMode;
+    if (rangeMode) {
+      get("Title").textContent = rangePhase === "start" ? "입실일 선택" : "퇴실일 선택";
+      for (const [key, label, value] of [["Checkin", "입실일", rangeStart], ["Checkout", "퇴실일", rangeEnd]]) {
+        const date = document.createElement("strong"); date.textContent = value || "선택";
+        get(key).replaceChildren(document.createTextNode(label), date);
+      }
+      get("Checkin").setAttribute("aria-pressed", String(rangePhase === "start"));
+      get("Checkout").setAttribute("aria-pressed", String(rangePhase === "end"));
+      get("Checkout").disabled = !rangeStart;
+      get("Nights").textContent = rangeStart && rangeEnd ? `${(Date.parse(rangeEnd) - Date.parse(rangeStart)) / 86400000}박` : "—";
+    }
     get("Apply").disabled = target.type !== "month" && !selected;
     get("Days").replaceChildren();
     if (target.type === "month") return;
@@ -1258,8 +1278,31 @@ function initializeDatePicker() {
       button.type = "button"; button.className = "date-picker-day"; button.textContent = day;
       button.dataset.date = value; button.setAttribute("aria-label", `${year}년 ${number}월 ${day}일`);
       button.setAttribute("aria-pressed", String(value === selected));
+      if (rangeMode) {
+        button.setAttribute("aria-pressed", String(value === rangeStart || value === rangeEnd));
+        button.classList.toggle("range-start", value === rangeStart);
+        button.classList.toggle("range-end", value === rangeEnd);
+        button.classList.toggle("in-range", Boolean(rangeStart && rangeEnd && value > rangeStart && value < rangeEnd));
+      }
       button.disabled = Boolean(target.min && value < target.min.slice(0, 10) || target.max && value > target.max.slice(0, 10));
+      if (rangeMode && rangePhase === "end") button.disabled ||= value <= rangeStart || value > stayEndDate(rangeStart, 6);
       button.addEventListener("click", () => {
+        if (rangeMode) {
+          if (rangePhase === "start") { rangeStart = value; rangeEnd = ""; rangePhase = "end"; render(); get("Checkout").focus(); return; }
+          rangeEnd = value;
+          const nights = (Date.parse(`${rangeEnd}T00:00:00Z`) - Date.parse(`${rangeStart}T00:00:00Z`)) / 86400000;
+          if (!Number.isInteger(nights) || nights < 1 || nights > 6) return;
+          elements.nights.value = String(nights);
+          const previous = elements.startDate.value;
+          elements.startDate.value = rangeStart;
+          if (previous !== rangeStart) {
+            elements.startDate.dispatchEvent(new Event("input", { bubbles: true }));
+            elements.startDate.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          elements.nights.dispatchEvent(new Event("input", { bubbles: true }));
+          elements.nights.dispatchEvent(new Event("change", { bubbles: true }));
+          updateStayFields(); dialog.close(); return;
+        }
         selected = value;
         if (target.type === "date") { get("Apply").disabled = false; get("Apply").click(); }
         else { render(); get("Days").querySelector(`[data-date="${value}"]`).focus(); }
@@ -1270,6 +1313,10 @@ function initializeDatePicker() {
   function open(input) {
     if (dialog.open) return;
     target = input;
+    rangeMode = uiSettings.stayRange && ["startDate", "checkoutDate"].includes(input.id);
+    rangeStart = elements.startDate.value;
+    rangeEnd = document.getElementById("checkoutDate").value;
+    rangePhase = input.id === "checkoutDate" && rangeStart ? "end" : "start";
     const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
     selected = input.type === "month" ? "" : input.value.slice(0, 10);
     month = (input.value || today).slice(0, 7);
@@ -1290,6 +1337,8 @@ function initializeDatePicker() {
   get("Prev").addEventListener("click", () => { month = shift(-1); render(); });
   get("Next").addEventListener("click", () => { month = shift(1); render(); });
   get("Cancel").addEventListener("click", () => dialog.close());
+  get("Checkin").addEventListener("click", () => { rangePhase = "start"; render(); });
+  get("Checkout").addEventListener("click", () => { if (rangeStart) { rangePhase = "end"; render(); } });
   get("Apply").addEventListener("click", () => {
     let value = target.type === "month" ? month : selected;
     if (target.type === "datetime-local") {

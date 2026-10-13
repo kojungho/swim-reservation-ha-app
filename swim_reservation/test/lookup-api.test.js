@@ -80,7 +80,7 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
   const migrated = await api("lookup-profiles");
   await t.test("실제 API로 설정·사진 6개 저장과 선택·전체 삭제를 확인하고 예약 데이터는 변경하지 않는다", async () => {
     const settingsBefore = await api("ui-settings");
-    const settings = { ...settingsBefore, serverTime: false, menuCorner: "bottom-left", mapCorner: "bottom-left", fonts: { ...settingsBefore.fonts, room: 18 } };
+    const settings = { ...settingsBefore, serverTime: false, stayRange: true, menuCorner: "bottom-left", mapCorner: "bottom-left", fonts: { ...settingsBefore.fonts, room: 18 } };
     assert.deepEqual(await api("ui-settings", "PUT", settings), settings);
     assert.deepEqual(await api("ui-settings"), settings);
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7XcAAAAASUVORK5CYII=", "base64");

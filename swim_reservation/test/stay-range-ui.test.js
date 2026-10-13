@@ -1,0 +1,56 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { chromium } from "playwright-core";
+import { mockBookApp } from "./fixtures/ui-book-app.js";
+import { DEFAULT_UI_SETTINGS } from "../src/ui-settings.js";
+const executablePath = [process.env.CHROMIUM_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
+
+test("PC·폰의 입실/퇴실 달력은 연말 범위·자동 박수·색상·취소·6박 제한·기존 방식 전환과 저장을 지원한다", { skip: !executablePath }, async t => {
+  const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
+  for (const width of [320, 390, 1280]) {
+    const page = await browser.newPage({ viewport: { width, height: 844 } }), state = await mockBookApp(page);
+    let settings = structuredClone(DEFAULT_UI_SETTINGS);
+    await page.route("https://app.test/api/ui-settings", route => { if (route.request().method() === "PUT") settings = route.request().postDataJSON(); return route.fulfill({ json: settings }); });
+    assert.equal(await page.locator("#checkoutField").isVisible(), false);
+    await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="settings"]').click();
+    await page.locator("#setting-stayRange").check(); await page.locator("#settingsSave").click();
+    await page.waitForFunction(() => document.getElementById("settingsMessage").textContent.includes("저장했습니다")); assert.equal(settings.stayRange, true);
+    await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="priority"]').click();
+    await page.locator("#startDate").fill("2026-12-30"); await page.locator("#startDate").click();
+    await page.locator('.date-picker-day[data-date="2026-12-31"]').click();
+    assert.equal(await page.locator("#datePickerDialog").isVisible(), true);
+    assert.equal(await page.locator("#startDate").inputValue(), "2026-12-30");
+    await page.locator("#datePickerNext").click(); await page.locator('.date-picker-day[data-date="2027-01-02"]').click();
+    assert.equal(await page.locator("#datePickerDialog").isVisible(), false);
+    assert.equal(await page.locator("#startDate").inputValue(), "2026-12-31");
+    assert.equal(await page.locator("#checkoutDate").inputValue(), "2027-01-02");
+    assert.equal(await page.locator("#nights").inputValue(), "2"); assert.equal(await page.locator("#nights").isVisible(), false);
+    assert.equal(await page.locator("#stayNightsDisplay").textContent(), "2박");
+    await page.locator("#checkoutDate").click();
+    assert.equal(await page.locator('.date-picker-day[data-date="2027-01-01"]').getAttribute("class"), "date-picker-day in-range");
+    assert.match(await page.locator('.date-picker-day[data-date="2027-01-02"]').getAttribute("class"), /range-end/);
+    assert.equal(await page.locator('.date-picker-day[data-date="2027-01-07"]').isDisabled(), true);
+    await page.locator("#datePickerDialog").screenshot({ path: `/tmp/swim-profiles.6W9Acs/stay-range-${width}.png` });
+    await page.locator("#datePickerCheckin").click(); await page.locator('.date-picker-day[data-date="2027-01-04"]').click(); await page.locator("#datePickerCancel").click();
+    assert.equal(await page.locator("#startDate").inputValue(), "2026-12-31"); assert.equal(await page.locator("#nights").inputValue(), "2");
+    await page.locator("#checkoutDate").fill("2026-12-31");
+    assert.equal(await page.locator("#checkoutDate").inputValue(), "2027-01-02"); assert.equal(await page.locator("#nights").inputValue(), "2");
+    await page.locator("#startDate").fill("2027-01-01");
+    assert.equal(await page.locator("#stayOpeningDate").textContent(), "2026-11-01"); assert.equal(await page.locator("#stayOpeningDate").isVisible(), true);
+    assert.equal(await page.locator("#stayOpeningDate").getAttribute("title"), "예약 오픈일 2026-11-01");
+    await page.locator("#startDate").fill("2026-10-20"); assert.equal(await page.locator("#stayOpeningDate").isVisible(), false);
+    const frozen = await page.evaluate(() => readConfig());
+    await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="settings"]').click();
+    await page.evaluate(config => loadConfig(config), frozen); await page.locator("#setting-stayRange").uncheck();
+    assert.equal(await page.locator("#nights").inputValue(), "2"); assert.equal(await page.locator("#startDate").inputValue(), "2026-10-20");
+    await page.locator("#setting-stayRange").check(); await page.locator("#settingsSave").click();
+    await page.reload(); await page.waitForFunction(() => document.getElementById("bookingProfileSelect1").options.length === 3);
+    assert.equal(await page.locator("#checkoutField").isVisible(), true); assert.equal(await page.locator("#nights").isVisible(), false);
+    assert.equal(await page.locator("#checkoutDate").inputValue(), "2026-12-21");
+    await page.evaluate(() => loadConfig({ ...readConfig(), startDate: "2028-02-28", nights: 2 }));
+    assert.equal(await page.locator("#checkoutDate").inputValue(), "2028-03-01");
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    assert.deepEqual(state.errors, []); assert.equal(state.planCalls.length, 0); await page.close();
+  }
+});

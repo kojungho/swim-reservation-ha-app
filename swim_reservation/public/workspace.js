@@ -121,7 +121,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   elements.triggerAt.closest("label").hidden = tab === "watch";
   document.getElementById("reservationConnectionDetails").hidden = tab === "watch";
   elements.startDate.closest("section").querySelector("h2").textContent = tab === "watch" ? "숙박 조건" : "예약 날짜와 시각";
-  elements.startDate.closest("section").querySelector(".section-title p").textContent = tab === "watch" ? "감시할 숙박 시작 날짜와 박수를 지정하세요. 조건에 맞는 자리를 발견하면 바로 예약을 시도합니다." : "숙박 날짜·박수와 최종 예약을 제출할 시각을 지정하세요. 예약 모드는 상단 탭에서 선택합니다.";
+  elements.startDate.closest("section").querySelector(".section-title p").textContent = tab === "watch" ? "감시할 입실일과 숙박 기간을 지정하세요. 조건에 맞는 자리를 발견하면 바로 예약을 시도합니다." : "입실일·숙박 기간과 최종 예약을 제출할 시각을 지정하세요. 예약 모드는 상단 메뉴에서 선택합니다.";
   document.getElementById("addPlanButton").textContent = "일정 등록";
   document.getElementById("addPlanButton").setAttribute("aria-label", tab === "watch" ? "현재 조건으로 취소 대기 등록" : "현재 설정으로 일정 등록");
   renderPlanEditMode();
@@ -211,7 +211,7 @@ function renderPlanEditMode() {
 
 function updateWatchDeadlineHint() {
   const custom = document.getElementById("watchEndsAt").value;
-  document.getElementById("watchDeadlineHint").textContent = custom ? `직접 지정한 ${custom.replace("T", " ")}에 종료합니다 (한국 시간). 숙박 시작일 기본 마감보다 우선합니다.` : `기본 마감: ${elements.startDate.value ? `${elements.startDate.value} 00:00:00` : "숙박 시작일 00시"}. 당일 감시는 하지 않습니다. 당일 예약을 원하면 마감을 직접 지정하세요.`;
+  document.getElementById("watchDeadlineHint").textContent = custom ? `직접 지정한 ${custom.replace("T", " ")}에 종료합니다 (한국 시간). 입실일 기본 마감보다 우선합니다.` : `기본 마감: ${elements.startDate.value ? `${elements.startDate.value} 00:00:00` : "입실일 00시"}. 당일 감시는 하지 않습니다. 당일 예약을 원하면 마감을 직접 지정하세요.`;
 }
 
 function resetPlanEditor(tab = workspaceTab) {

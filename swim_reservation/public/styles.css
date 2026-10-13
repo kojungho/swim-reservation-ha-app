@@ -470,6 +470,17 @@ button.info-button { font-size: calc(var(--font-button) * 1.3); }
 .site-map-heading button { font-size: calc(var(--font-button) * 1.8); }
 .log-list, .log-row, .log-row span, .log-row strong, #diagnosticsPreview, .status-details { font-size: var(--font-log); }
 #statusDetails { font-size: var(--font-log); }
+.stay-label-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+#stayOpeningDate { font-size: var(--font-status); font-weight: 500; color: var(--green-dark); }
+#stayNightsDisplay { font-size: var(--font-status); font-weight: 750; color: var(--green-dark); }
+.stay-range-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.stay-range-summary button { display: grid; gap: 4px; flex: 1; font-size: min(var(--font-button), 4vw); }
+.stay-range-summary button strong { white-space: nowrap; }
+.stay-range-summary output { flex: 0 0 auto; font-size: var(--font-status); }
+.stay-range-summary button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--green); }
+.date-picker-days .date-picker-day.in-range { background: #cfeadb; border-radius: 0; color: var(--green-dark); }
+.date-picker-days .date-picker-day.range-start, .date-picker-days .date-picker-day.range-end { background: var(--green); color: white; }
+.date-picker-days .date-picker-day.range-start:disabled, .date-picker-days .date-picker-day.range-end:disabled { opacity: 1; }
 @media (max-width: 600px) {
   .app-title-row h1 { font-size: min(var(--font-title), 6.5vw); }
   .header-meta { flex-wrap: wrap; }

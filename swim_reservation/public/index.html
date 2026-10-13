@@ -66,18 +66,19 @@
     </section>
 
     <section class="card">
-      <div class="section-title"><span>1</span><div><h2>예약 날짜와 시각</h2><p>숙박 시작 날짜를 고르면 링크 숫자와 예약 오픈 시각이 자동 계산됩니다.</p></div></div>
+      <div class="section-title"><span>1</span><div><h2>예약 날짜와 시각</h2><p>입실일을 고르면 예약 링크와 예약 오픈일이 자동 계산됩니다.</p></div></div>
       <div class="grid two stay-fields">
-        <label>숙박 시작 날짜<input id="startDate" type="date"></label>
-        <label>박수
+        <label><span class="stay-label-line"><span>입실일</span><small id="stayOpeningDate" hidden></small></span><input id="startDate" type="date"></label>
+        <label id="nightsField">박수
           <select id="nights"><option value="1">1박</option><option value="2">2박</option><option value="3">3박</option><option value="4">4박</option><option value="5">5박</option><option value="6">6박</option></select>
         </label>
+        <label id="checkoutField" hidden><span class="stay-label-line"><span>퇴실일</span><output id="stayNightsDisplay" hidden>—</output></span><input id="checkoutDate" type="date"></label>
         <div class="booking-mode-field">
           <div class="booking-mode-label"><label for="bookingMode">예약 방식</label></div>
           <select id="bookingMode"><option value="priority">단독 예약</option><option value="multiple">다중 예약</option><option value="profiles-parallel">다인 예약</option></select>
         </div>
       </div>
-      <details id="reservationConnectionDetails" class="booking-details"><summary>예약 실행일·예약 정보</summary><div id="triggerDetails" hidden><label>예약 실행 시각<input id="triggerAt" type="datetime-local" step="1"></label></div><div class="grid two"><div class="generated"><span>날짜 확인 숫자</span><strong id="epochValue">—</strong></div><div class="generated"><span>예약 오픈 일시</span><strong id="openAtValue">—</strong></div></div><div class="booking-link-field"><span>예약 페이지 링크</span><a id="reservationUrl" target="_blank" rel="noopener noreferrer" aria-disabled="true">숙박 날짜를 먼저 선택해 주세요.</a></div></details>
+      <details id="reservationConnectionDetails" class="booking-details"><summary>예약 실행일·예약 정보</summary><div id="triggerDetails" hidden><label>예약 실행 시각<input id="triggerAt" type="datetime-local" step="1"></label></div><div class="grid two"><div class="generated"><span>날짜 확인 숫자</span><strong id="epochValue">—</strong></div><div class="generated"><span>예약 오픈일</span><strong id="openAtValue">—</strong></div></div><div class="booking-link-field"><span>예약 페이지 링크</span><a id="reservationUrl" target="_blank" rel="noopener noreferrer" aria-disabled="true">입실일을 먼저 선택해 주세요.</a></div></details>
     </section>
 
     <section class="card">
@@ -109,7 +110,7 @@
     </section>
 
     <section id="historyCard" class="card status-card">
-      <div class="section-title"><span>4</span><div><h2>저장 이력</h2><p>숙박 시작 날짜와 박수별로 저장된 설정을 불러오거나 삭제할 수 있습니다.</p></div></div>
+      <div class="section-title"><span>4</span><div><h2>저장 이력</h2><p>입실일과 박수별로 저장된 설정을 불러오거나 삭제할 수 있습니다.</p></div></div>
       <div id="historyList" class="history-list"><p class="history-empty">저장 이력을 불러오는 중입니다.</p></div>
       <div class="section-actions" hidden><button id="saveButton" class="secondary">설정 저장</button></div>
     </section>
@@ -214,6 +215,7 @@
   <button id="siteMapButton" class="site-map-floating" type="button" aria-label="사이트 위치" title="사이트 위치"><span class="site-map-icon" aria-hidden="true">🗺️</span><span class="site-map-label">사이트 위치</span></button>
   <dialog id="datePickerDialog" class="date-picker-dialog" aria-labelledby="datePickerTitle">
     <h2 id="datePickerTitle">날짜 선택</h2>
+    <div id="datePickerRange" class="stay-range-summary" hidden><button type="button" id="datePickerCheckin" class="secondary">입실일</button><button type="button" id="datePickerCheckout" class="secondary">퇴실일</button><output id="datePickerNights">—</output></div>
     <div class="date-picker-heading">
       <button id="datePickerPrev" type="button" class="secondary" aria-label="이전 달">‹</button>
       <strong id="datePickerMonth" aria-live="polite"></strong>

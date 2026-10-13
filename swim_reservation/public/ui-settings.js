@@ -1,6 +1,6 @@
 const uiDefaults = {
   fonts: { title: 28, heading: 18, body: 14, field: 16, button: 13, room: 14, status: 12, calendar: 12, list: 14, log: 12 },
-  serverTime: true, reservationInfo: true, safety: true, watchInfo: true,
+  serverTime: true, reservationInfo: true, safety: true, watchInfo: true, stayRange: false,
   menuCorner: "top-right", mapCorner: "bottom-right", menuSpacing: 6
 };
 let uiSettings = structuredClone(uiDefaults);
@@ -35,7 +35,8 @@ async function initializeUiSettings() {
     ["serverTime", "서버 시간", "상단의 서버 시간 시계를 표시합니다. 꺼도 서버 시간 동기화와 예약 실행은 유지됩니다."],
     ["reservationInfo", "예약 실행일·정보", "예약 화면의 실행일과 예약 링크 등 상세 정보를 표시합니다. 숨겨도 등록된 예약 시각과 설정은 유지됩니다."],
     ["safety", "안전 안내", "화면 아래의 안전한 운영 안내를 표시합니다. 인터넷에 App 포트를 직접 공개하지 말고 Home Assistant Ingress를 사용하세요."],
-    ["watchInfo", "취소 대기 설정", "취소 대기의 조회 간격과 취소 객실 조회 종료일을 표시합니다. 숨겨도 입력한 간격과 종료 조건은 유지됩니다."]
+    ["watchInfo", "취소 대기 설정", "취소 대기의 조회 간격과 취소 객실 조회 종료일을 표시합니다. 숨겨도 입력한 간격과 종료 조건은 유지됩니다."],
+    ["stayRange", "입실·퇴실 선택", "켜면 달력에서 입실일과 퇴실일을 선택하고 박수가 자동 계산됩니다. 끄면 기존 입실일·박수 선택 방식을 사용합니다. 최대 6박이며 퇴실일에는 숙박하지 않습니다. 기존 일정과 박수는 변경되지 않습니다."]
   ]) {
     const input = document.createElement("input"); input.type = "checkbox"; input.id = `setting-${key}`;
     input.addEventListener("change", () => { uiSettings[key] = input.checked; applyUiSettings(); });
@@ -90,7 +91,7 @@ async function initializeUiSettings() {
 
 function renderUiSettings() {
   for (const key of Object.keys(fontNames)) document.getElementById(`font-${key}`).value = uiSettings.fonts[key];
-  for (const key of ["serverTime", "reservationInfo", "safety", "watchInfo"]) document.getElementById(`setting-${key}`).checked = uiSettings[key];
+  for (const key of ["serverTime", "reservationInfo", "safety", "watchInfo", "stayRange"]) document.getElementById(`setting-${key}`).checked = uiSettings[key];
   for (const key of ["menuCorner", "mapCorner", "menuSpacing"]) document.getElementById(`setting-${key}`).value = uiSettings[key];
 }
 
@@ -115,6 +116,30 @@ function applyUiSettings() {
   const width = map.getBoundingClientRect().width || 48;
   menu.style.setProperty("--paired-width", `${width + 8}px`);
   applyUiVisibility();
+  updateStayFields();
+}
+
+function stayEndDate(start, nights) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return "";
+  const value = new Date(`${start}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + Number(nights));
+  return value.toISOString().slice(0, 10);
+}
+
+function updateStayFields(force = false) {
+  const checkout = document.getElementById("checkoutDate");
+  const end = stayEndDate(elements.startDate.value, Number(elements.nights.value) || 1);
+  if (force || checkout.dataset.derived !== end) { checkout.value = end; checkout.dataset.derived = end; }
+  document.getElementById("checkoutField").hidden = !uiSettings.stayRange;
+  document.getElementById("nightsField").hidden = uiSettings.stayRange;
+  document.getElementById("stayNightsDisplay").hidden = !uiSettings.stayRange;
+  document.getElementById("stayNightsDisplay").textContent = elements.startDate.value ? `${elements.nights.value}박` : "—";
+  const opening = bookingOpenIso(elements.startDate.value);
+  const badge = document.getElementById("stayOpeningDate");
+  badge.hidden = !opening || !(Date.parse(`${opening}+09:00`) > currentSiteTime());
+  badge.textContent = opening ? opening.slice(0, 10) : "";
+  badge.title = opening ? `예약 오픈일 ${opening.slice(0, 10)}` : "";
+  badge.setAttribute("aria-label", badge.title);
 }
 
 function setMonthlyLoading(loading) {
