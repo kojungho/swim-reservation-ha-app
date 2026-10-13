@@ -71,7 +71,7 @@ test("다른 날짜와 모드의 일정은 독립 설정·상태로 동시에 �
   assert.equal(manager.get(first).scheduler.armed, false);
   assert.equal(manager.get(second).scheduler.armed, true);
 });
-test("취소 자리 감시는 박수와 날짜 설정으로 조회하고 가능 객실이 나오면 한 번 예약 후 종료한다", async t => {
+test("취소 대기는 박수와 날짜 설정으로 조회하고 가능 객실이 나오면 한 번 예약 후 종료한다", async t => {
   let available = false, inspected;
   const { manager, calls } = await fixture(t, async input => { inspected = input; return available ? found : found.map(room => ({ ...room, available: false, status: "booked" })); });
   const id = await manager.add({ kind: "watch", intervalSeconds: 1, config: config() });
@@ -127,7 +127,7 @@ test("조회 실패·오픈 전·다른 박수 불가에서는 예약하지 않�
   assert.equal((await manager.get(id).store.getStatus()).stage, "watch-read-error");
   assert.equal(matchWatchRooms(config(), found.map(room => ({ ...room, available: true, status: "unavailable" }))), false);
 });
-test("취소 자리 감시는 다른 객실이 마감이어도 한 객실만 가능하면 시작하고 미확인·예약 대기는 제외한다", () => {
+test("취소 대기는 다른 객실이 마감이어도 한 객실만 가능하면 시작하고 미확인·예약 대기는 제외한다", () => {
   assert.equal(matchWatchRooms(config("multiple"), found), true);
   assert.equal(matchWatchRooms(config("multiple"), found.map(room => ({ ...room, status: "available", available: true }))), true);
   assert.equal(matchWatchRooms(config(), found.map(room => ({ ...room, status: "pending", available: true }))), false);

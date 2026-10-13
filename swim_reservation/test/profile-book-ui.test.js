@@ -79,7 +79,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="profiles-parallel"]').click();
     for (let person = 2; person <= 5; person++) await page.locator("#addProfileButton").click();
-    assert.equal(await page.locator("#addProfileButton").isDisabled(), true);
+    assert.equal(await page.locator("#addProfileButton").isDisabled(), false);
     await page.locator("#bookingProfileSelect5").selectOption("2");
     assert.equal(await page.locator("#reserverName5").inputValue(), guest.reserverName);
     await page.locator("#extraProfiles .second-profile-panel").nth(1).getByRole("button", { name: "예약자 제외", exact: true }).click();

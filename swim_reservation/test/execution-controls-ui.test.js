@@ -78,10 +78,16 @@ test("PC·폰에서 일정 목록을 실행 영역 아래에 두고 미래 예�
     await page.locator("#triggerAt").evaluate((input, value) => { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); }, "2026-10-12T11:00");
     assert.equal(await page.locator("#runNowButton").isVisible(), false);
     now = Date.parse("2026-10-12T11:00:00+09:00");
+    await page.locator("#serverTimeButton").click();
     await page.locator("#siteTimeSyncButton").click();
+    await page.waitForFunction(() => !busy);
+    await page.locator("#serverTimeClose").click();
     await page.locator("#runNowButton").waitFor({ state: "visible" });
     synced = false;
+    await page.locator("#serverTimeButton").click();
     await page.locator("#siteTimeSyncButton").click();
+    await page.waitForFunction(() => !busy);
+    await page.locator("#serverTimeClose").click();
     await page.locator("#runNowButton").waitFor({ state: "hidden" });
     // Even dispatching a hidden button cannot bypass the execution-time check.
     await page.locator("#runNowButton").evaluate(button => button.click());
@@ -89,7 +95,10 @@ test("PC·폰에서 일정 목록을 실행 영역 아래에 두고 미래 예�
     assert.equal(plans.length, 2);
     assert.equal(starts.length, 2);
     synced = true;
+    await page.locator("#serverTimeButton").click();
     await page.locator("#siteTimeSyncButton").click();
+    await page.waitForFunction(() => !busy);
+    await page.locator("#serverTimeClose").click();
     await page.locator("#runNowButton").waitFor({ state: "visible" });
     await page.locator("#startDate").fill("2027-01-20");
     await page.locator("#triggerAt").evaluate((input, value) => { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); }, "2026-10-12T09:00");

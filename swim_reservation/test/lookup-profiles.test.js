@@ -9,7 +9,8 @@ const booking = { reserverName: "예약 이름", depositorName: "입금 이름",
 test("조회 정보는 이름·전화번호만 저장하며 입금자·생년월일·객실 순위를 포함하지 않는다", () => {
   assert.deepEqual(normalizeLookupProfiles([booking]), [{ reserverName: "예약 이름", phone: "01012345678" }]);
   assert.throws(() => normalizeLookupProfiles([{ reserverName: "이름", phone: "123" }]), /휴대폰/);
-  assert.throws(() => normalizeLookupProfiles(Array(6).fill(booking)), /최대 5명/);
+  assert.equal(normalizeLookupProfiles(Array(20).fill(booking)).length, 20);
+  assert.throws(() => normalizeLookupProfiles(Array(21).fill(booking)), /최대 20명/);
 });
 test("조회 정보와 예약용 정보는 저장·재시작·빈 목록 보존까지 독립이며 기존 정보는 한 번만 복사한다", async t => {
   const data = await mkdtemp(path.join(os.tmpdir(), "swim-lookup-test-"));

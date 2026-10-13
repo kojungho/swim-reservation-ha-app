@@ -13,7 +13,7 @@ function sample() {
     profiles: Array.from({ length: 5 }, (_, i) => ({ reserverName: `예약자${i+1}`, depositorName: `입금자${i+1}`, phone: `0101234567${i}`, birthDate: "19900101" })) });
 }
 
-test("5명 설정·이력 복원 및 6명 입력 거부", async t => {
+test("기존 5명 설정·이력 복원과 확대된 입력 제한을 검증한다", async t => {
   const config = sample();
   assert.deepEqual(validateConfig(config), []);
   const dir = await mkdtemp(path.join(tmpdir(), "swim-profiles-"));
@@ -24,9 +24,11 @@ test("5명 설정·이력 복원 및 6명 입력 거부", async t => {
   assert.equal((await store.listHistory())[0].profileCount, 5);
   assert.deepEqual((await store.loadHistory("2026-12-04__1")).config.profiles, config.profiles);
   config.profiles.push(config.profiles[0]);
-  assert.match(validateConfig(normalizeConfig(config)).join(","), /1~5명/);
+  assert.deepEqual(validateConfig(normalizeConfig(config)), []);
+  config.profiles = Array(21).fill(config.profiles[0]);
+  assert.match(validateConfig(normalizeConfig(config)).join(","), /1~20명/);
   config.profiles = [];
-  assert.match(validateConfig(normalizeConfig(config)).join(","), /1~5명/);
+  assert.match(validateConfig(normalizeConfig(config)).join(","), /1~20명/);
 });
 
 test("다섯 예약자는 독립 정보로 순차 실행하고 중간 실패 시 이후 실행을 멈춘다", async () => {

@@ -59,10 +59,10 @@ function closeBookEditor() {
 function updateBookEditor() {
   const locked = busy || bookingBookWriting;
   for (const id of ["bookReserverName", "bookDepositorName", "bookPhone", "bookBirthDate", "bookCancelButton"]) document.getElementById(id).disabled = locked;
-  document.getElementById("bookNewButton").disabled = locked || !bookingBookLoaded || bookingBook.length >= 5;
+  document.getElementById("bookNewButton").disabled = locked || !bookingBookLoaded || bookingBook.length >= 20;
   for (const button of document.querySelectorAll("#bookingBookList button")) button.disabled = locked;
   const draft = Object.fromEntries(bookingIdentityKeys.map((key, index) => [key, document.getElementById(["bookReserverName", "bookDepositorName", "bookPhone", "bookBirthDate"][index]).value]));
-  document.getElementById("bookAddButton").disabled = busy || bookingBookWriting || !bookingBookLoaded || !completeBookingIdentity(draft) || !editingBookIdentity && bookingBook.length >= 5;
+  document.getElementById("bookAddButton").disabled = busy || bookingBookWriting || !bookingBookLoaded || !completeBookingIdentity(draft) || !editingBookIdentity && bookingBook.length >= 20;
   document.getElementById("bookAddButton").textContent = editingBookIdentity ? "수정 저장" : "예약자 저장";
 }
 async function writeBookingBook(next) {
@@ -79,7 +79,7 @@ async function writeBookingBook(next) {
 async function appendBookingIdentity(profile) {
   if (!completeBookingIdentity(profile)) throw new Error("예약자명·입금자명·휴대폰 번호·생년월일을 모두 확인하세요.");
   if (matchingBookIndex(profile) >= 0) throw new Error("이미 저장된 예약자입니다. 선택 목록에서 선택하세요.");
-  if (bookingBook.length >= 5) throw new Error("예약자는 최대 5명입니다. 예약자 정보 탭에서 사용하지 않는 사람을 삭제하세요.");
+  if (bookingBook.length >= 20) throw new Error("예약자는 최대 20명입니다. 예약자 정보 탭에서 사용하지 않는 사람을 삭제하세요.");
   await writeBookingBook([...bookingBook, bookingIdentity(profile)]);
 }
 async function saveBookingActor(index) {
@@ -121,7 +121,7 @@ function renderBookingProfileSelectors() {
     select.replaceChildren(empty, ...bookingBook.map((saved, bookIndex) => new Option(`${saved.reserverName} · ${saved.phone}`, String(bookIndex))));
     select.value = selected >= 0 ? String(selected) : "";
     const save = index === 0 ? elements.saveProfilesButton : document.getElementById(`saveBookingActor${index + 1}`);
-    save.disabled = busy || bookingBookWriting || !bookingBookLoaded || selected >= 0 || !completeBookingIdentity(profile) || bookingBook.length >= 5;
+    save.disabled = busy || bookingBookWriting || !bookingBookLoaded || selected >= 0 || !completeBookingIdentity(profile) || bookingBook.length >= 20;
   });
 }
 function renderBookingBook() {
@@ -131,7 +131,7 @@ function renderBookingBook() {
   bookingBook.forEach((profile, index) => {
     const row = document.createElement("div");
     row.className = "booking-book-row";
-    row.dataset.guestColor = String(index);
+    applyGuestColor(row, index);
     const name = document.createElement("span");
     name.textContent = `${profile.reserverName} · ${profile.phone} · 입금자 ${profile.depositorName}`;
     const remove = document.createElement("button");
@@ -154,6 +154,6 @@ function renderBookingBook() {
     row.append(name, actions);
     list.append(row);
   });
-  document.getElementById("bookNewButton").disabled = bookingBook.length >= 5;
+  document.getElementById("bookNewButton").disabled = bookingBook.length >= 20;
   updateBookEditor();
 }

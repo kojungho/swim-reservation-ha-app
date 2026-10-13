@@ -1,4 +1,6 @@
 export const SEOUL_OFFSET = "+09:00";
+export const MAX_SAVED_PROFILES = 20;
+export function parallelProfileLimit(config) { return Math.max(1, new Set((config.roomPriority || []).map(room => room.name).filter(Boolean)).size); }
 export const BASE_URL = "https://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim";
 
 export const ROOM_NAMES = [
@@ -48,7 +50,7 @@ export function normalizeConfig(input = {}) {
     nights: Number(input.nights),
     bookingMode: ["multiple", "profiles-parallel"].includes(input.bookingMode) ? input.bookingMode : "priority",
     multipleProfileIndex: Number(input.multipleProfileIndex ?? 0),
-    editorProfileIndex: Math.max(0, Math.min(4, Math.trunc(Number(input.editorProfileIndex ?? input.multipleProfileIndex ?? 0) || 0))),
+    editorProfileIndex: Math.max(0, Math.min(MAX_SAVED_PROFILES - 1, Math.trunc(Number(input.editorProfileIndex ?? input.multipleProfileIndex ?? 0) || 0))),
     roomPriority: ordered,
     profile: profile1,
     profile1,
@@ -73,7 +75,8 @@ export function validateConfig(config, { futureTrigger = false, nowMs = Date.now
   if (config.bookingMode !== "profiles-parallel" && !config.roomPriority.some((room) => room.enabled)) errors.push("예약할 객실");
   if (config.bookingMode === "multiple" && config.roomPriority.filter((room) => room.enabled).length > 5) errors.push("동시 예약 객실은 최대 5개");
   const profiles = getProfiles(config);
-  if (profiles.length < 1 || profiles.length > 5) errors.push("예약자는 1~5명까지 등록 가능");
+  const profileLimit = config.bookingMode === "profiles-parallel" ? parallelProfileLimit(config) : MAX_SAVED_PROFILES;
+  if (profiles.length < 1 || profiles.length > profileLimit) errors.push(`예약자는 1~${profileLimit}명까지 등록 가능${config.bookingMode === "profiles-parallel" ? " (객실 수 기준)" : ""}`);
   profiles.forEach((profile, index) => validateProfile(profile, `예약자 ${index + 1}`, errors));
   if (config.bookingMode === "multiple" && (!Number.isInteger(config.multipleProfileIndex) || !profiles[config.multipleProfileIndex])) errors.push("다중 예약에 사용할 예약자");
   if (config.bookingMode === "profiles-parallel") profiles.forEach((profile, index) => {

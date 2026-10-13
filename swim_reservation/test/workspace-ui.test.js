@@ -81,6 +81,8 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
     assert.equal(await page.locator("#bookingMode").isVisible(), false);
     assert.equal(await page.locator("#triggerAt").isVisible(), false);
     assert.equal(await page.locator("#watchProfileSelect").isVisible(), false);
+    assert.equal(await page.locator("#watchEndsAt").isVisible(), false);
+    await page.locator("#watchEndsAtDetails summary").click();
     assert.equal(await page.locator("#watchEndsAt").isVisible(), true);
     await page.locator("#watchEndsAt").fill("2026-10-07T18:00");
     assert.equal(await page.locator("#bookingProfileSelect1").isVisible(), true);

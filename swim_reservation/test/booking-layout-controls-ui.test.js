@@ -43,6 +43,7 @@ test("예약 가능 체크·조건 변경·전체 선택·PC 2열·예약자 도
     await page.locator("#startDate").fill("2026-12-21");
     assert.equal(await page.locator("#triggerAt").isVisible(), false);
     await page.locator("#startDate").fill("2027-01-20");
+    await page.locator("#triggerDetails summary").click();
     assert.equal(await page.locator("#triggerAt").isVisible(), true);
     await page.locator("#triggerAt").click();
     assert.equal(await page.locator("#datePickerTime").isVisible(), true);

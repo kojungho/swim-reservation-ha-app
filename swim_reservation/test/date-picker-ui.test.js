@@ -28,6 +28,7 @@ test("공통 달력은 좌우 월 이동·날짜·초 단위 시각·월 범위�
     assert.equal(await page.locator("#datePickerDialog").isVisible(), false);
     assert.equal(await page.locator("#startDate").inputValue(), "2027-01-08");
     assert.equal(await page.locator("#triggerAt").inputValue(), "2026-11-01T00:00");
+    await page.locator("#triggerDetails summary").click();
     await page.locator("#triggerAt").fill("2026-11-01T03:04:05");
     await page.locator("#triggerAt").click();
     await page.locator("#datePickerNext").click();

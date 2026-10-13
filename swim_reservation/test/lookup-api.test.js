@@ -130,4 +130,12 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
   await stop(); api = await boot();
   assert.deepEqual((await api("profiles")).profiles, []);
   assert.deepEqual((await api("lookup-profiles")).profiles, []);
+  const twentyPeople = Array.from({ length: 20 }, (_, index) => ({ reserverName: `예약자${index + 1}`, depositorName: `입금자${index + 1}`, phone: `01012345${String(index).padStart(3, "0")}`, birthDate: "19900101" }));
+  await api("profiles", "PUT", { profiles: twentyPeople, selectedIndex: 19 });
+  assert.equal((await api("profiles")).profiles.length, 20);
+  const tooMany = await fetch(new URL("api/profiles", api.baseUrl), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profiles: [...twentyPeople, twentyPeople[0]] }) });
+  assert.equal(tooMany.status, 400); await tooMany.text();
+  await stop(); api = await boot();
+  assert.equal((await api("profiles")).profiles.length, 20);
+  assert.equal((await api("config")).editorProfileIndex, 19);
 });

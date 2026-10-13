@@ -1,5 +1,5 @@
 export function normalizeLookupProfiles(input) {
-  if (!Array.isArray(input) || input.length > 5) throw new Error("조회 대상은 최대 5명까지 저장할 수 있습니다.");
+  if (!Array.isArray(input) || input.length > 20) throw new Error("조회 대상은 최대 20명까지 사용할 수 있습니다.");
   return input.map((profile, index) => {
     profile ||= {};
     const reserverName = String(profile.reserverName || "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 80);

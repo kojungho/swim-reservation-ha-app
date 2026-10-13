@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { defaultConfig, normalizeConfig, normalizeProfile } from "../../src/config.js";
 
-export const testGuest = (number = 1) => ({ reserverName: `저장예약자${number}`, depositorName: `입금자${number}`, phone: `0101234567${number}`, birthDate: "19900101" });
+export const testGuest = (number = 1) => ({ reserverName: `저장예약자${number}`, depositorName: `입금자${number}`, phone: number < 10 ? `0101234567${number}` : `010123456${String(number).padStart(2, "0")}`, birthDate: "19900101" });
 export async function mockBookApp(page, count = 2) {
   const state = { book: Array.from({ length: count }, (_, index) => testGuest(index + 1)), lookupBook: [], plans: [], planCalls: [], dialogs: [], writes: [], errors: [], rejectBook: false, logsRead: 0 };
   if (state.book.length) state.book[0].roomPriority = [{ name: "달_하늘존", enabled: true }];

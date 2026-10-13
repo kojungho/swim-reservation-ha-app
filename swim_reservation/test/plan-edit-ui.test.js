@@ -16,7 +16,7 @@ test("중지된 감시 일정 수정은 등록 대신 수정 저장·취소만 �
     await page.locator("#planList").getByRole("button", { name: "수정", exact: true }).click();
     await page.locator("#planEditNotice").waitFor();
     assert.equal(await page.locator("#addPlanButton").textContent(), "수정 저장");
-    assert.equal(await page.getByRole("button", { name: "현재 조건으로 취소 자리 감시 등록", exact: true }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "현재 조건으로 취소 대기 등록", exact: true }).count(), 0);
     await page.locator("#planName").fill("감시 변경");
     await page.locator("#watchInterval").fill("120");
     await page.locator("#addPlanButton").click();

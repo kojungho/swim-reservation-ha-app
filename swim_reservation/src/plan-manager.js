@@ -59,7 +59,7 @@ export class PlanManager {
       if (legacyWatch || legacySingle) {
         const old = await plan.store.getStatus();
         if (old.state === "running") await plan.store.updateStatus({ state: "failed", stage: "review-required", message: "기존 감시 실행 결과를 예약확인에서 확인하세요. 자동 재제출하지 않습니다." });
-        else if (!["success", "failed"].includes(old.state)) await plan.store.updateStatus({ state: "stopped", stage: "stopped", message: legacySingle ? "1개 예약 모드가 한 명의 예약으로 변경되었습니다. 예약자를 확인한 후 시작하세요." : "취소 자리 감시가 순위 없는 한 객실 예약으로 변경되었습니다. 예약자와 체크한 객실을 확인한 후 시작하세요." });
+        else if (!["success", "failed"].includes(old.state)) await plan.store.updateStatus({ state: "stopped", stage: "stopped", message: legacySingle ? "1개 예약 모드가 한 명의 예약으로 변경되었습니다. 예약자를 확인한 후 시작하세요." : "취소 대기가 순위 없는 한 객실 예약으로 변경되었습니다. 예약자와 체크한 객실을 확인한 후 시작하세요." });
       }
       if (!plan.enabled) continue;
       const status = await plan.store.getStatus();
@@ -142,7 +142,7 @@ export class PlanManager {
       plan.enabled = true;
       await this.persist();
       this.schedule(plan, plan.kind === "watch" ? 1 : 1000);
-      await this.log("info", "plan-start", `${plan.name}: ${plan.kind === "watch" ? "취소 자리 감시" : plan.kind === "now" ? "즉시 예약" : "예약 대기"} 시작`);
+      await this.log("info", "plan-start", `${plan.name}: ${plan.kind === "watch" ? "취소 대기" : plan.kind === "now" ? "즉시 예약" : "예약 대기"} 시작`);
     });
   }
   async stop(id) {

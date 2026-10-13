@@ -124,7 +124,7 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/api/profiles" && request.method === "PUT") {
       if (scheduler.running || scheduler.preparing) return json(response, 409, { error: "예약 실행 또는 준비 중에는 예약자 저장을 변경할 수 없습니다." });
       const input = await readJsonBody(request);
-      if (!Array.isArray(input.profiles) || input.profiles.length > 5) return json(response, 400, { error: "예약자는 최대 5명까지 저장할 수 있습니다." });
+      if (!Array.isArray(input.profiles) || input.profiles.length > 20) return json(response, 400, { error: "예약자는 최대 20명까지 저장할 수 있습니다." });
       const profiles = input.profiles.map(normalizeProfile);
       const errors = [];
       profiles.forEach((profile, index) => validateProfile(profile, `예약자 ${index + 1}`, errors));

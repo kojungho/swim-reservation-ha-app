@@ -36,7 +36,7 @@ export class Store {
   async getSavedProfiles() {
     return this.profileOperation(async () => {
       const saved = await readJson(this.profilesPath, null);
-      const profiles = (saved ?? getProfiles(await this.getConfig())).slice(0, 5).map(normalizeProfile)
+      const profiles = (saved ?? getProfiles(await this.getConfig())).slice(0, 20).map(normalizeProfile)
         .filter(profile => [profile.reserverName, profile.depositorName, profile.phone, profile.birthDate].some(Boolean));
       // Migrate legacy settings once, including a truly empty new-install book.
       if (saved === null) await atomicWrite(this.profilesPath, profiles);
@@ -45,6 +45,7 @@ export class Store {
   }
 
   async saveProfiles(profiles) {
+    if (!Array.isArray(profiles) || profiles.length > 20) throw new Error("예약자는 최대 20명까지 저장할 수 있습니다.");
     return this.profileOperation(async () => {
       const normalized = profiles.map(normalizeProfile);
       await atomicWrite(this.profilesPath, normalized);

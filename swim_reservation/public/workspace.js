@@ -110,16 +110,16 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   document.getElementById("watchHelp").hidden = tab !== "watch";
   document.getElementById("watchInterval").closest("label").hidden = tab !== "watch";
   document.getElementById("watchEndsAtField").hidden = tab !== "watch";
+  document.querySelector(".watch-settings-row").hidden = tab !== "watch";
   document.getElementById("watchProfileField").hidden = true;
   renderRoomSelectionControls();
   elements.bookingMode.closest(".booking-mode-field").hidden = true;
   elements.triggerAt.closest("label").hidden = tab === "watch";
   document.getElementById("reservationConnectionDetails").hidden = tab === "watch";
-  elements.siteClock.closest(".site-time-panel").hidden = tab === "watch";
   elements.startDate.closest("section").querySelector("h2").textContent = tab === "watch" ? "숙박 조건" : "예약 날짜와 시각";
   elements.startDate.closest("section").querySelector(".section-title p").textContent = tab === "watch" ? "감시할 숙박 시작 날짜와 박수를 지정하세요. 조건에 맞는 자리를 발견하면 바로 예약을 시도합니다." : "숙박 날짜·박수와 최종 예약을 제출할 시각을 지정하세요. 예약 모드는 상단 탭에서 선택합니다.";
   document.getElementById("addPlanButton").textContent = "일정 등록";
-  document.getElementById("addPlanButton").setAttribute("aria-label", tab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 일정 등록");
+  document.getElementById("addPlanButton").setAttribute("aria-label", tab === "watch" ? "현재 조건으로 취소 대기 등록" : "현재 설정으로 일정 등록");
   renderPlanEditMode();
   updateImmediateBookingVisibility();
   if (tab === "monthly") {
@@ -153,9 +153,9 @@ function updateBookingProfileVisibility() {
   firstPanel.dataset.guestColor = !one ? "0" : "";
   document.getElementById("excludeFirstProfile").hidden = one || !extraProfiles.length;
   document.getElementById("firstBookingProfileFields").hidden = one && index !== 0;
-  [...elements.extraProfiles.children].forEach((panel, extraIndex) => { panel.hidden = one && index !== extraIndex + 1; panel.dataset.guestColor = String(extraIndex + 1); panel.querySelector(".profile-panel-actions button").hidden = one; });
+  [...elements.extraProfiles.children].forEach((panel, extraIndex) => { panel.hidden = one && index !== extraIndex + 1; applyGuestColor(panel, extraIndex + 1); panel.querySelector(".profile-panel-actions button").hidden = one; });
   elements.addProfileButton.hidden = one;
-  elements.profileModeHelp.textContent = workspaceTab === "profiles-parallel" ? "저장된 예약자를 사람별로 선택하거나 직접 입력하세요. 필요한 사람만 추가하며 최대 5명까지 각자의 객실 하나를 동시에 예약합니다. 새 사람은 예약자 저장으로 목록에 추가할 수 있습니다." : "저장된 예약자를 한 명 선택하거나 직접 입력하세요. 새 사람은 예약자 저장으로 목록에 추가할 수 있습니다. 목록은 자동으로 표시되지만 선택 전에는 정보를 입력하지 않습니다.";
+  elements.profileModeHelp.textContent = workspaceTab === "profiles-parallel" ? `예약자 저장 목록에서 사람별로 선택하거나 직접 입력하세요. 객실 수 기준 최대 ${bookingGuestLimit()}명까지 각자의 객실 하나를 동시에 예약합니다. 인원·후보가 많으면 준비 시간과 메모리 사용량이 늘 수 있습니다.` : "저장된 예약자를 한 명 선택하거나 직접 입력하세요. 새 사람은 예약자 저장으로 목록에 추가할 수 있습니다. 목록은 자동으로 표시되지만 선택 전에는 정보를 입력하지 않습니다.";
 }
 
 
@@ -200,7 +200,7 @@ function planMessage(text) { document.getElementById("planMessage").textContent 
 function renderPlanEditMode() {
   const button = document.getElementById("addPlanButton");
   button.textContent = editingPlan ? "수정 저장" : "일정 등록";
-  button.setAttribute("aria-label", editingPlan ? "기존 일정 수정 저장" : workspaceTab === "watch" ? "현재 조건으로 취소 자리 감시 등록" : "현재 설정으로 일정 등록");
+  button.setAttribute("aria-label", editingPlan ? "기존 일정 수정 저장" : workspaceTab === "watch" ? "현재 조건으로 취소 대기 등록" : "현재 설정으로 일정 등록");
   document.getElementById("planEditNotice").hidden = !editingPlan;
   updateImmediateBookingVisibility();
 }
@@ -211,6 +211,8 @@ function updateWatchDeadlineHint() {
 }
 
 function resetPlanEditor(tab = workspaceTab) {
+  document.getElementById("triggerDetails").open = false;
+  document.getElementById("watchEndsAtDetails").open = false;
   editorGeneration++;
   editingPlan = null;
   renderPlanEditMode();
@@ -283,7 +285,7 @@ async function refreshPlans() {
       const title = document.createElement("strong");
       title.textContent = `${entry.name} · ${entry.config.startDate} / ${entry.config.nights}박`;
       const info = document.createElement("p");
-      info.textContent = `${entry.kind === "watch" ? `취소 자리 감시 (${entry.intervalSeconds}초) · 조건 일치 시 객실 하나 예약` : `${entry.kind === "now" ? "즉시 예약" : `예약 대기 ${entry.config.triggerAt.replace("T", " ")}`} · ${modes[entry.config.bookingMode]}`} · ${entry.enabled ? "진행 중" : "중지/종료"}`;
+      info.textContent = `${entry.kind === "watch" ? `취소 대기 (${entry.intervalSeconds}초) · 조건 일치 시 객실 하나 예약` : `${entry.kind === "now" ? "즉시 예약" : `예약 대기 ${entry.config.triggerAt.replace("T", " ")}`} · ${modes[entry.config.bookingMode]}`} · ${entry.enabled ? "진행 중" : "중지/종료"}`;
       if (entry.kind === "watch") info.textContent += ` · 마감 ${(entry.watchDeadlineAt || entry.watchEndsAt || `${entry.config.startDate}T00:00:00`).replace("T", " ")} (${entry.watchEndsAt ? "직접 지정" : "기본"})`;
       const status = document.createElement("p");
       status.textContent = shortRoomText(`${entry.status.message || "설정 완료"}${entry.status.lastCheckedAt ? ` · 마지막 확인 ${new Date(entry.status.lastCheckedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}` : ""}`);
@@ -403,7 +405,7 @@ function renderExecutionPlans() {
   document.getElementById("deleteSelectedPlans").disabled = blocked || !planEntries.some(entry => selectedExecutionPlans.has(entry.id) && planCanDeleteSelected(entry));
 }
 
-function bookingModeName(entry) { return entry.kind === "watch" ? "취소 자리 감시" : ({ priority: "단독 예약", multiple: "다중 예약", "profiles-parallel": "다인 예약" })[entry.config?.bookingMode] || "단독 예약"; }
+function bookingModeName(entry) { return entry.kind === "watch" ? "취소 대기" : ({ priority: "단독 예약", multiple: "다중 예약", "profiles-parallel": "다인 예약" })[entry.config?.bookingMode] || "단독 예약"; }
 function planCanDeleteSelected(entry) { return !planIsActive(entry) && ["idle", "stopped"].includes(entry.status?.state || "idle"); }
 async function deleteSelectedPlans() {
   if (busy || planBatchPending) return;
