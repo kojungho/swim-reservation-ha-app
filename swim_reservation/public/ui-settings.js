@@ -137,7 +137,7 @@ function updateStayFields(force = false) {
   const opening = bookingOpenIso(elements.startDate.value);
   const badge = document.getElementById("stayOpeningDate");
   badge.hidden = !opening || !(Date.parse(`${opening}+09:00`) > currentSiteTime());
-  badge.textContent = opening ? opening.slice(0, 10) : "";
+  badge.textContent = opening ? `예약 오픈일 ${opening.slice(0, 10)}` : "";
   badge.title = opening ? `예약 오픈일 ${opening.slice(0, 10)}` : "";
   badge.setAttribute("aria-label", badge.title);
 }

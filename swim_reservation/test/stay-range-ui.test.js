@@ -42,7 +42,10 @@ test("PC·폰의 입실/퇴실 달력은 연말 범위·자동 박수·색상·�
     await page.locator("#checkoutDate").fill("2026-12-31");
     assert.equal(await page.locator("#checkoutDate").inputValue(), "2027-01-02"); assert.equal(await page.locator("#nights").inputValue(), "2");
     await page.locator("#startDate").fill("2027-01-01");
-    assert.equal(await page.locator("#stayOpeningDate").textContent(), "2026-11-01"); assert.equal(await page.locator("#stayOpeningDate").isVisible(), true);
+    assert.equal(await page.locator("#stayOpeningDate").textContent(), "예약 오픈일 2026-11-01"); assert.equal(await page.locator("#stayOpeningDate").isVisible(), true);
+    const openingStartBox = await page.locator("#startDate").boundingBox(), openingEndBox = await page.locator("#checkoutDate").boundingBox();
+    assert.ok(Math.abs(openingStartBox.y - openingEndBox.y) < 1, "오픈일 설명이 줄바꿈되어도 날짜 입력은 같은 줄에 배치");
+    await page.locator("#startDate").locator("..").locator("..").screenshot({ path: `/tmp/swim-profiles.6W9Acs/open-date-label-${width}.png` });
     assert.equal(await page.locator("#stayOpeningDate").getAttribute("title"), "예약 오픈일 2026-11-01");
     await page.locator("#startDate").fill("2026-10-20"); assert.equal(await page.locator("#stayOpeningDate").isVisible(), false);
     const frozen = await page.evaluate(() => readConfig());
