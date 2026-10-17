@@ -28,7 +28,7 @@
 .workspace-menu-floating[data-corner$="left"].floating-paired { margin-left: var(--paired-width); }
 .workspace-menu-floating[data-corner$="right"].floating-paired { margin-right: var(--paired-width); }
 .workspace-menu-floating.floating-paired { max-width: calc(100vw - 28px - var(--paired-width)); }
-.site-map-floating.floating-paired { min-height: 46px !important; height: 46px; }
+.site-map-floating.floating-paired { min-height: var(--floating-size, 46px) !important; height: var(--floating-size, 46px); }
 .workspace-menu-floating[data-corner] .workspace-tabs { position: absolute; top: 100%; right: 0; gap: var(--menu-gap); padding: var(--menu-padding); width: 220px; max-width: calc(100vw - 28px); }
 .workspace-menu-floating[data-corner$="left"] .workspace-tabs { left: 0; right: auto; }
 .workspace-menu-floating[data-corner^="bottom"] .workspace-tabs { top: auto; bottom: calc(100% + 8px); margin-top: 0; }
@@ -312,11 +312,15 @@ button.monthly-day:focus-visible { outline: 2px solid var(--green); outline-offs
 }
 .site-map-floating { position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 30; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid rgba(255,255,255,.7); border-radius: 999px; box-shadow: 0 5px 18px rgba(20,60,40,.24); padding: 12px 16px; }
 .site-map-floating:focus-visible { outline: 3px solid #f3bd49; outline-offset: 3px; }
-.site-map-icon { font-size: 21px; line-height: 1; }
+.site-map-icon { width: 22px; height: 22px; flex: 0 0 22px; }
+#workspaceMenuButton, .site-map-floating, .scroll-top-floating { box-sizing: border-box; height: var(--floating-size, 46px); min-height: var(--floating-size, 46px); }
+.site-map-floating { padding: 0 14px; white-space: nowrap; }
+.scroll-top-floating { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom) + var(--scroll-top-lift, 0px)); z-index: 35; width: var(--floating-size, 46px); padding: 10px; display: flex; align-items: center; justify-content: center; border-radius: 50%; box-shadow: 0 5px 18px rgba(20,60,40,.24); }
+.scroll-top-floating svg { width: 24px; height: 24px; }
+.scroll-top-floating:focus-visible { outline: 3px solid #f3bd49; outline-offset: 3px; }
 @media (max-width: 600px) {
-  .site-map-floating { width: 48px; height: 48px; padding: 0; }
-  .site-map-label { display: none; }
-  .site-map-icon { font-size: 24px; }
+  .site-map-floating { width: auto; padding: 0 12px; }
+  .site-map-icon { display: none; }
 }
 .booking-book-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; margin-top: 10px; font-size: 14px; }
 .booking-book-row button { flex-shrink: 0; padding: 8px 12px; }

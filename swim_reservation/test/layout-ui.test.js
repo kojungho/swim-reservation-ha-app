@@ -37,7 +37,7 @@ test("320·390·768·1280px의 모든 탭에서 입력과 버튼이 붙거나 �
           const rect = el.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0 && getComputedStyle(el).visibility !== "hidden";
         }).map(el => ({ rect: el.getBoundingClientRect(), label: el.id || el.getAttribute("aria-label") || el.textContent.trim().slice(0, 30) }));
-        const buttons = visible("button:not(.info-button):not(.room-drag-handle):not(.monthly-day):not(.site-map-floating):not(#workspaceMenuButton)");
+        const buttons = visible("button:not(.info-button):not(.room-drag-handle):not(.monthly-day):not(.site-map-floating):not(.scroll-top-floating):not(#workspaceMenuButton)");
         const inputs = visible("input:not([type=checkbox]),select");
         function spacing(first, second, min) {
           const a = first.rect, b = second.rect;

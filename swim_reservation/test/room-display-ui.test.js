@@ -16,8 +16,9 @@ test("객실 목록은 원래 이름 유지, 다른 화면은 구역명 생략, 
     });
     for (const id of ["statusText", "statusDetails", "profileStatusList", "reservationList"]) assert.doesNotMatch(await page.locator(`#${id}`).textContent(), /하늘존|산맥존/);
     const floating = page.locator("#siteMapButton");
-    assert.equal(await floating.getAttribute("aria-label"), "사이트 위치");
-    assert.equal(await floating.locator(".site-map-label").isVisible(), width > 600);
+    assert.equal(await floating.getAttribute("aria-label"), "캠핑장 배치도");
+    assert.equal(await floating.locator(".site-map-label").isVisible(), true);
+    assert.equal(await floating.locator(".site-map-icon").isVisible(), width > 600);
     assert.equal(await floating.evaluate(el => getComputedStyle(el).position), "fixed");
     const before = await floating.boundingBox();
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));

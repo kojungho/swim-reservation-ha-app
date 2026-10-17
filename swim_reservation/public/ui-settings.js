@@ -1,7 +1,7 @@
 const uiDefaults = {
   fonts: { title: 28, heading: 18, body: 14, field: 16, button: 13, room: 14, status: 12, calendar: 12, list: 14, log: 12 },
   serverTime: true, reservationInfo: true, safety: true, watchInfo: true, stayRange: false,
-  menuCorner: "top-right", mapCorner: "bottom-right", menuSpacing: 6
+  menuCorner: "top-right", mapCorner: "bottom-right", menuSpacing: 6, mapIcon: true, floatingSize: 46
 };
 let uiSettings = structuredClone(uiDefaults);
 let galleryEntries = [], galleryActiveId = null, galleryBusy = false;
@@ -48,6 +48,7 @@ async function initializeUiSettings() {
   }
   const displays = section("표시");
   for (const [key, name, description] of [
+    ["mapIcon", "배치도 아이콘", "배치도 버튼의 아이콘을 켜거나 끕니다. 모바일에서는 이 설정과 관계없이 ‘배치도’ 글자만 표시합니다."],
     ["serverTime", "서버 시간", "상단의 서버 시간 시계를 표시합니다. 꺼도 서버 시간 동기화와 예약 실행은 유지됩니다."],
     ["reservationInfo", "예약 실행일·정보", "예약 화면의 실행일과 예약 링크 등 상세 정보를 표시합니다. 숨겨도 등록된 예약 시각과 설정은 유지됩니다."],
     ["safety", "안전 안내", "화면 아래의 안전한 운영 안내를 표시합니다. 인터넷에 App 포트를 직접 공개하지 말고 Home Assistant Ingress를 사용하세요."],
@@ -59,7 +60,7 @@ async function initializeUiSettings() {
     row(displays, name, description, input);
   }
   const positions = section("버튼 위치");
-  for (const [key, name] of [["menuCorner", "메뉴"], ["mapCorner", "사이트 위치"]]) {
+  for (const [key, name] of [["menuCorner", "메뉴"], ["mapCorner", "배치도"]]) {
     const select = document.createElement("select"); select.id = `setting-${key}`;
     for (const [value, label] of [["top-left", "상단 왼쪽"], ["top-right", "상단 오른쪽"], ["bottom-left", "하단 왼쪽"], ["bottom-right", "하단 오른쪽"]]) select.add(new Option(label, value));
     select.addEventListener("change", () => { uiSettings[key] = select.value; applyUiSettings(); });
@@ -69,6 +70,9 @@ async function initializeUiSettings() {
   spacing.required = true;
   spacing.addEventListener("input", () => { if (spacing.checkValidity() && spacing.value) { uiSettings.menuSpacing = Number(spacing.value); applyUiSettings(); } });
   row(positions, "메뉴 간격", "펼친 메뉴의 항목 간격과 안쪽 여백을 함께 조절합니다. 0~16 사이이며 작은 값은 메뉴가 더 촘촘해집니다.", spacing);
+  const size = document.createElement("input"); size.type = "number"; size.id = "setting-floatingSize"; size.min = "44"; size.max = "64"; size.step = "1"; size.required = true;
+  size.addEventListener("input", () => { if (size.checkValidity() && size.value) { uiSettings.floatingSize = Number(size.value); applyUiSettings(); } });
+  row(positions, "플로팅 크기 (px)", "메뉴·배치도·맨 위로 버튼의 높이를 44~64px로 조절합니다. 글자 크기는 글자 크기 설정을 따릅니다.", size);
   document.getElementById("settingsSave").addEventListener("click", async event => {
     if (![...controls.querySelectorAll("input")].every(input => input.reportValidity())) return;
     event.target.disabled = true;
@@ -107,8 +111,8 @@ async function initializeUiSettings() {
 
 function renderUiSettings() {
   for (const key of Object.keys(fontNames)) document.getElementById(`font-${key}`).value = uiSettings.fonts[key];
-  for (const key of ["serverTime", "reservationInfo", "safety", "watchInfo", "stayRange"]) document.getElementById(`setting-${key}`).checked = uiSettings[key];
-  for (const key of ["menuCorner", "mapCorner", "menuSpacing"]) document.getElementById(`setting-${key}`).value = uiSettings[key];
+  for (const key of ["serverTime", "reservationInfo", "safety", "watchInfo", "stayRange", "mapIcon"]) document.getElementById(`setting-${key}`).checked = uiSettings[key];
+  for (const key of ["menuCorner", "mapCorner", "menuSpacing", "floatingSize"]) document.getElementById(`setting-${key}`).value = uiSettings[key];
 }
 
 function applyUiVisibility() {
@@ -119,6 +123,8 @@ function applyUiVisibility() {
 }
 
 function applyUiSettings() {
+  document.documentElement.style.setProperty("--floating-size", `${uiSettings.floatingSize}px`);
+  document.querySelector(".site-map-icon").toggleAttribute("hidden", !uiSettings.mapIcon);
   for (const [key, value] of Object.entries(uiSettings.fonts)) document.documentElement.style.setProperty(`--font-${key}`, `${value}px`);
   document.documentElement.style.setProperty("--menu-gap", `${uiSettings.menuSpacing}px`);
   document.documentElement.style.setProperty("--menu-padding", `${4 + uiSettings.menuSpacing}px`);
@@ -131,9 +137,26 @@ function applyUiSettings() {
   menu.classList.toggle("floating-paired", same);
   const width = map.getBoundingClientRect().width || 48;
   menu.style.setProperty("--paired-width", `${width + 8}px`);
+  updateScrollTopButton();
   applyUiVisibility();
   updateStayFields();
 }
+
+function updateScrollTopButton() {
+  const button = document.getElementById("scrollTopButton");
+  if (!button) return;
+  button.hidden = window.scrollY < 240;
+  if (button.hidden) return;
+  button.style.removeProperty("--scroll-top-lift");
+  const target = button.getBoundingClientRect();
+  const overlaps = [document.getElementById("siteMapButton"), document.getElementById("workspaceMenuButton")].some(el => {
+    const rect = el.getBoundingClientRect();
+    return rect.left < target.right + 8 && rect.right > target.left - 8 && rect.top < target.bottom + 8 && rect.bottom > target.top - 8;
+  });
+  if (overlaps) button.style.setProperty("--scroll-top-lift", `${uiSettings.floatingSize + 12}px`);
+}
+window.addEventListener("scroll", updateScrollTopButton, { passive: true });
+document.getElementById("scrollTopButton").addEventListener("click", () => window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" }));
 
 function stayEndDate(start, nights) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return "";

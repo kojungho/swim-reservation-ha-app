@@ -167,7 +167,7 @@
     </aside>
   </main>
   <dialog id="siteMapDialog" class="site-map-dialog">
-    <div class="site-map-heading"><strong>사이트 위치</strong><button id="siteMapCloseButton" type="button" aria-label="닫기">×</button></div>
+    <div class="site-map-heading"><strong>캠핑장 배치도</strong><button id="siteMapCloseButton" type="button" aria-label="닫기">×</button></div>
     <div class="site-map-upload">
       <button id="siteMapUploadButton" class="secondary" type="button">사진 선택·등록</button>
       <input id="siteMapFile" type="file" accept="image/*" hidden>
@@ -216,7 +216,8 @@
     <div class="monthly-footer"><a id="monthlySourceLink" class="button secondary" href="https://newpension.logosweb.or.kr/reservation/reservation2.php?id=swim" target="_blank" rel="noopener noreferrer">원본 사이트 이동</a><details class="monthly-prefetch"><summary>조회 간격 설정</summary><p id="monthlyStatus" role="status" aria-live="polite"></p><p id="monthlyCacheHelp">이번 달에서 3개월 뒤인 달만 서버에서 미리 조회합니다. 그 이후 달은 열었을 때 조회합니다.</p><div class="section-actions"><label>자동 조회 간격<select id="monthlyCacheInterval"><option value="0">자동 조회 끄기</option><option value="10">10분</option><option value="30">30분</option><option value="60" selected>1시간</option><option value="180">3시간</option><option value="360">6시간</option><option value="1440">하루</option></select></label><button id="monthlyCacheSave" class="secondary" type="button">설정 저장</button></div><p id="monthlyCacheMessage" role="status"></p></details></div>
   </dialog>
   <dialog id="planDetailsDialog" class="booking-help-dialog" aria-labelledby="planDetailsTitle"><div class="booking-help-heading"><h2 id="planDetailsTitle">일정 상세</h2><button id="planDetailsClose" type="button" class="secondary">닫기</button></div><div id="planList" class="history-list"></div><p id="planDetailsMessage" role="status"></p></dialog>
-  <button id="siteMapButton" class="site-map-floating" type="button" aria-label="사이트 위치" title="사이트 위치"><span class="site-map-icon" aria-hidden="true">🗺️</span><span class="site-map-label">사이트 위치</span></button>
+  <button id="siteMapButton" class="site-map-floating" type="button" aria-label="캠핑장 배치도" title="캠핑장 배치도"><svg class="site-map-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2Z M9 3v16 M15 5v16"/></svg><span class="site-map-label">배치도</span></button>
+  <button id="scrollTopButton" class="scroll-top-floating" type="button" aria-label="맨 위로" title="맨 위로" hidden><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14 M6 12l6-6 6 6 M12 6v14"/></svg></button>
   <dialog id="datePickerDialog" class="date-picker-dialog" aria-labelledby="datePickerTitle">
     <h2 id="datePickerTitle">날짜 선택</h2>
     <div id="datePickerRange" class="stay-range-summary" hidden><button type="button" id="datePickerCheckin" class="secondary">입실일</button><button type="button" id="datePickerCheckout" class="secondary">퇴실일</button><output id="datePickerNights">—</output></div>
