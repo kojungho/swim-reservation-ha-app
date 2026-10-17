@@ -52,7 +52,7 @@ test("예약 오픈 전에는 즉시 예약을 실행하지 않는다", async ()
   assert.deepEqual(calls, []);
 });
 
-test("저장된 order_ok4 완료 진단은 App 재시작 시 성공 상태로 보정한다", async () => {
+test("완료 URL과 취소 버튼만으로 실패를 성공으로 바꾸지 않는다", async () => {
   const statuses = [];
   const store = {
     getStatus: async () => ({
@@ -70,10 +70,7 @@ test("저장된 order_ok4 완료 진단은 App 재시작 시 성공 상태로 �
 
   await scheduler.restore();
 
-  assert.equal(statuses[0].state, "success");
-  assert.equal(statuses[0].stage, "complete");
-  assert.deepEqual(statuses[0].succeededRooms, ["숨_산맥존"]);
-  assert.deepEqual(statuses[0].failedRooms, []);
+  assert.deepEqual(statuses, []);
 });
 
 test("예약 오픈 판단은 로컬 시계가 아니라 동기화된 사이트 서버 시간을 사용한다", async () => {

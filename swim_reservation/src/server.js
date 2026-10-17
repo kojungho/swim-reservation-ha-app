@@ -223,7 +223,8 @@ const server = http.createServer(async (request, response) => {
       const profileIndex = input.profileIndex ?? 0;
       const profile = input.profile ? normalizeLookupProfiles([input.profile])[0] : Number.isInteger(profileIndex) && (await store.getSavedProfiles())[profileIndex];
       if (!profile) return json(response, 400, { error: "예약자를 확인해 주세요." });
-      const result = await reservationManager.cancel(profile, cancelMatch[1]);
+      if (!input.expected?.room || !input.expected?.stayDate || !input.expected?.nights) return json(response, 400, { error: "예약 내역을 다시 조회한 뒤 취소해 주세요." });
+      const result = await reservationManager.cancel(profile, cancelMatch[1], input.expected);
       return json(response, 200, {
         ok: true,
         canceled: { ...result.canceled, profileIndex, profileLabel: profile.reserverName },

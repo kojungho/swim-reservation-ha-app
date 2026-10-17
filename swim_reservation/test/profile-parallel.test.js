@@ -135,6 +135,8 @@ test("준비된 5명은 함께 제출하고 확실한 마감만 다음 순위 �
   assert.equal(calls.includes("0-1"), true);
   assert.equal(calls.includes("1-1"), false);
   assert.equal(statuses.at(-1).profileStatuses[1].state, "결과 확인 필요");
+  assert.equal(statuses.at(-1).profileStatuses[1].room, "객실1-1");
+  assert.match(statuses.at(-1).profileStatuses[1].details.message, /제출 결과 알 수 없음/);
   assert.equal(statuses.at(-1).stage, "profiles-parallel-partial");
 });
 

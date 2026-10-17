@@ -44,6 +44,7 @@ test("준비된 실행은 마지막 예약하기만 누르고 완료 화면을 �
   engine.page = { waitForLoadState: async () => { calls.push("loaded"); } };
   engine.assertReservationDate = async () => { calls.push("date-ok"); };
   engine.detectPage = async () => calls.includes("final-submit") ? "success" : "personal";
+  engine.verifyCompletion = async () => { calls.push("receipt-verified"); };
   engine.fillPersonalInfo = async () => { calls.push("personal-refreshed"); };
   engine.clickAction = async () => { calls.push("final-submit"); };
   engine.close = async () => { calls.push("closed"); };
@@ -64,6 +65,7 @@ test("최종 결과가 객실 마감이면 다음 우선순위로 처음부터 �
   engine.page = { waitForLoadState: async () => {} };
   engine.assertReservationDate = async () => {};
   engine.detectPage = async () => results.shift();
+  engine.verifyCompletion = async () => {};
   engine.fillPersonalInfo = async () => {};
   engine.acceptTerms = async () => {};
   engine.clickAction = async () => { calls.push("submit"); };
@@ -100,6 +102,21 @@ test("여러 객실 모드는 독립 세션의 최종 제출을 동시에 시작
 
   assert.equal(statuses.some((status) => status.stage === "multiple-final-submit"), true);
   assert.equal(statuses.some((status) => status.stage === "multiple-complete" && status.state === "success"), true);
+});
+
+test("최종 제출 후 입력 화면이 유지되면 재제출하지 않는다", async () => {
+  let submits = 0;
+  const engine = new ReservationEngine({ store: { updateStatus: async () => {} } });
+  engine.page = { waitForLoadState: async () => {} };
+  engine.ensurePage = async () => {};
+  engine.assertReservationDate = async () => {};
+  engine.detectPage = async () => "personal";
+  engine.fillPersonalInfo = async () => {};
+  engine.clickAction = async () => { submits++; };
+  engine.collectDiagnostics = async () => ({});
+  engine.close = async () => {};
+  await assert.rejects(() => engine.runSingle(config, { prepared: true }), /중복 제출하지 않습니다/);
+  assert.equal(submits, 1);
 });
 
 test("여러 객실 사전 준비는 체크한 예약 가능 객실마다 독립 세션을 만든다", async () => {

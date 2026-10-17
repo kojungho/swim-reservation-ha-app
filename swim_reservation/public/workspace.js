@@ -304,6 +304,12 @@ async function refreshPlans() {
         targets.append(line);
       });
       detail.append(title, info, targets, status);
+      for (const result of entry.status.profileStatuses || []) {
+        const line = document.createElement("p");
+        const http = result.details?.navigation?.status;
+        line.textContent = shortRoomText(`${result.room || result.label || `예약자 ${Number(result.index) + 1}`} · ${result.state || ""} · ${result.message || ""}${http ? ` · HTTP ${http}` : ""}${result.details?.page ? ` · ${result.details.page}` : ""}`);
+        detail.append(line);
+      }
       const controls = document.createElement("div");
       controls.className = "section-actions";
       for (const [action, label] of [["start", "시작"], ["stop", "중지"], ["edit", "수정"], ["load", "설정 불러오기"], ["delete", "삭제"]]) {

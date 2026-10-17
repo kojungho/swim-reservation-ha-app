@@ -1083,7 +1083,7 @@ function renderReservations(reservations, { container = elements.reservationList
       );
       if (!approved) return;
       const result = await request(`reservations/${encodeURIComponent(reservation.id)}/cancel`, {
-        method: "POST", body: JSON.stringify({ confirmed: true, profileIndex, profile: reservation.profile || bookingIdentity(profile) })
+        method: "POST", body: JSON.stringify({ confirmed: true, profileIndex, profile: reservation.profile || bookingIdentity(profile), expected: { room: reservation.room, stayDate: reservation.stayDate, nights: reservation.nights } })
       });
       await reload();
       showMessage(`${reservation.room} 예약 취소가 완료되었습니다.`, false, "예약 취소 완료");

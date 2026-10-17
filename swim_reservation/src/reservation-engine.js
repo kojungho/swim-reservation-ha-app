@@ -2,6 +2,8 @@ import { chromium } from "playwright-core";
 import { reservationUrl, startEpoch, getProfiles } from "./config.js";
 import { fillPersonalFields } from "./personal-fields.js";
 import { readPageDiagnostics } from "./page-diagnostics.js";
+import { readReservationRows, readReceiptIdentity, sameReservationStay } from "./reservation-records.js";
+import { reservationErrorDetails, safeReservationUrl } from "./reservation-errors.js";
 
 const NAVIGATION_TIMEOUT = 20_000;
 
@@ -23,6 +25,7 @@ export class ReservationEngine {
     this.selectedRoom = null;
     this.childSessions = [];
     this.prioritySessions = [];
+    this.navigationFailure = null;
   }
 
   async prepare(config) {
@@ -89,6 +92,7 @@ export class ReservationEngine {
   }
 
   async runSingle(config, { prepared = false, allowFallback = true, beforeSubmit } = {}) {
+    let submitted = false;
     try {
       await this.ensurePage();
       const attemptedRooms = new Set();
@@ -98,6 +102,7 @@ export class ReservationEngine {
         await this.fillPersonalInfo(config);
         await this.store.updateStatus({ stage: "final-submit", message: "지정 시각에 최종 예약하기를 전송합니다." });
         if (beforeSubmit) await beforeSubmit();
+        submitted = true;
         await this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit);
       } else {
         await this.startRoomAttempt(config, attemptedRooms);
@@ -108,6 +113,8 @@ export class ReservationEngine {
         await this.assertReservationDate(config);
         const result = await this.detectPage();
         if (result === "success") {
+          if (!submitted) throw new Error("최종 제출 없이 완료 화면이 나타나 결과 확인이 필요합니다.");
+          await this.verifyCompletion(config);
           await this.store.updateStatus({ state: "success", stage: "complete", message: "사이트에서 예약 완료 화면을 확인했습니다." });
           return { room: this.selectedRoom };
         }
@@ -125,12 +132,15 @@ export class ReservationEngine {
             message: `${this.selectedRoom || "선택 객실"} 예약이 마감되어 다음 우선순위 객실을 시도합니다.`
           });
           await this.startRoomAttempt(config, attemptedRooms);
+          submitted = false;
           continue;
         }
         if (result === "personal") {
+          if (submitted) throw new Error("최종 제출 후 예약자 입력 화면이 유지되어 결과 확인이 필요합니다. 중복 제출하지 않습니다.");
           await this.fillPersonalInfo(config);
           await this.store.updateStatus({ stage: "final-submit", message: "예약자 정보를 입력하고 최종 예약을 전송합니다." });
           if (beforeSubmit) await beforeSubmit();
+          submitted = true;
           await this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit);
           continue;
         }
@@ -149,11 +159,14 @@ export class ReservationEngine {
         throw error;
       }
       const diagnostics = error.diagnostics || await this.collectDiagnostics();
+      error.diagnostics = diagnostics;
+      error.room ||= this.selectedRoom;
+      error.details = reservationErrorDetails(error, { room: error.room, stage: submitted ? "final-submit" : "preparing", submitted, page: safeReservationUrl(this.page?.url?.()), navigation: this.navigationFailure });
       await this.store.updateStatus({
         state: "failed",
         stage: "reservation-error",
         message: userErrorMessage(error),
-        technicalMessage: error.message || String(error),
+        technicalMessage: JSON.stringify(error.details),
         diagnostics
       });
       throw error;
@@ -173,6 +186,23 @@ export class ReservationEngine {
     this.page = await this.context.newPage();
     this.page.setDefaultTimeout(10_000);
     this.page.on("dialog", (dialog) => dialog.accept().catch(() => {}));
+    this.navigationFailure = null;
+    this.page.on("response", response => {
+      if (response.request().isNavigationRequest() && response.status() >= 400) this.navigationFailure = { status: response.status(), url: safeReservationUrl(response.url()) };
+    });
+    this.page.on("requestfailed", request => {
+      if (request.isNavigationRequest()) this.navigationFailure = { ...this.navigationFailure, url: safeReservationUrl(request.url()), error: request.failure()?.errorText };
+    });
+  }
+
+  async verifyCompletion(config) {
+    const rows = await this.page.evaluate(readReservationRows);
+    const identity = await this.page.evaluate(readReceiptIdentity, getProfiles(config)[0]);
+    if (!identity.nameMatches || !identity.phoneMatches || !rows.some(row => row.id && sameReservationStay(row, { room: this.selectedRoom, startDate: config.startDate, nights: config.nights }))) {
+      const error = new Error("완료 화면의 예약자·객실·입실일·박수를 일치 확인하지 못했습니다. 예약 조회로 확인해 주세요. 중복 제출하지 않습니다.");
+      error.code = "COMPLETION_UNVERIFIED";
+      throw error;
+    }
   }
 
   async ensureBrowser() {
@@ -256,7 +286,7 @@ export class ReservationEngine {
   async submitCurrentStep() {
     const currentUrl = this.page.url();
     await Promise.all([
-      this.page.waitForURL((url) => url.href !== currentUrl, { timeout: NAVIGATION_TIMEOUT }),
+      this.page.waitForURL((url) => url.href !== currentUrl, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT }),
       this.page.locator('img[onclick*="click_go"], input[type="image"], input[type="submit"]').last().click()
     ]);
   }
@@ -272,7 +302,6 @@ export class ReservationEngine {
       const personal = /예약자(명| 이름)?/.test(text) && /(입금자|휴대폰|생년월일)/.test(text);
       const finalResult = /order_ok3\.php$/i.test(location.pathname);
       if (finalResult && /(이미|동시).*예약|예약.*(불가|마감|실패|완료되지|취소)|객실.*(없습니다|마감)/.test(text)) return "retryable";
-      if (/예약(이 | )?(완료|되었습니다)|예약번호/.test(text) && !personal) return "success";
       if (/환불|취소.*규정|이용.*약관/.test(text) || document.querySelector('input[type="checkbox"]')) return "terms";
       if (personal) return "personal";
       return "unknown";
@@ -354,7 +383,7 @@ export class ReservationEngine {
     if (!chosen) throw new Error(`다음 버튼을 찾지 못했습니다: ${words.join("/")}`);
     const remaining = beforeSubmit ? await beforeSubmit() : null;
     await Promise.all([
-      this.page.waitForURL((url) => url.href !== currentUrl, { timeout: NAVIGATION_TIMEOUT }),
+      this.page.waitForURL((url) => url.href !== currentUrl, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT }),
       chosen.click(remaining === null ? undefined : { timeout: Math.max(1, Math.min(NAVIGATION_TIMEOUT, remaining)), noWaitAfter: true })
     ]);
   }
@@ -534,6 +563,8 @@ export class ReservationEngine {
               await update();
               return { profileIndex: entry.index, room: profileStatuses[entry.index].room };
             } catch (error) {
+              error.room ||= session.room || session.status.selectedRoom;
+              error.details ||= reservationErrorDetails(error, { room: error.room });
               if (!["ROOM_UNAVAILABLE", "NO_AVAILABLE_ROOM"].includes(error.code)) throw error;
             }
           }
@@ -541,7 +572,7 @@ export class ReservationEngine {
           error.code = "NO_AVAILABLE_ROOM";
           throw error;
         } catch (error) {
-          profileStatuses[entry.index] = { ...profileStatuses[entry.index], state: ["ROOM_UNAVAILABLE", "NO_AVAILABLE_ROOM"].includes(error.code) ? "예약 실패" : "결과 확인 필요", message: userErrorMessage(error) };
+          profileStatuses[entry.index] = { ...profileStatuses[entry.index], room: error.room || profileStatuses[entry.index].room, details: error.details, state: ["ROOM_UNAVAILABLE", "NO_AVAILABLE_ROOM"].includes(error.code) ? "예약 실패" : "결과 확인 필요", message: error.details?.message || userErrorMessage(error) };
           await update();
           throw error;
         }
@@ -613,6 +644,8 @@ export class ReservationEngine {
         state: "success",
         stage: "multiple-complete",
         selectedRooms: succeeded,
+        succeededRooms: succeeded,
+        failedRooms: [],
         message: `${succeeded.length}개 객실의 예약 완료 화면을 모두 확인했습니다.`
       });
       return;
@@ -623,6 +656,8 @@ export class ReservationEngine {
       selectedRooms: sessions.map((session) => session.room),
       succeededRooms: succeeded,
       failedRooms: failed.map(({ room }) => room),
+      profileStatuses: failed.map(({ room, error }, index) => ({ index, room, state: "결과 확인 필요", message: reservationErrorDetails(error).message, details: error.details || reservationErrorDetails(error, { room }) })),
+      technicalMessage: JSON.stringify(failed.map(({ room, error }) => error.details || reservationErrorDetails(error, { room }))),
       diagnostics: failed.find(({ error }) => error?.diagnostics)?.error.diagnostics || null,
       message: `동시 예약 결과: 성공 ${succeeded.length}개${succeeded.length ? ` (${succeeded.join(", ")})` : ""}, 실패 ${failed.length}개 (${failed.map(({ room }) => room).join(", ")}).`
     });
