@@ -182,7 +182,7 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, { ok: true, config: { ...saved, editorProfiles: getProfiles(input), editorProfileIndex: input.multipleProfileIndex || 0, reservationUrl: reservationUrl(saved.startDate) } });
     }
     if (url.pathname === "/api/status" && request.method === "GET") {
-      return json(response, 200, await store.getStatus());
+      return json(response, 200, { ...await store.getStatus(), appVersion: appVersion.current });
     }
     if (url.pathname === "/api/logs" && request.method === "GET") {
       return json(response, 200, { ok: true, entries: await store.listLogs(url.searchParams.get("limit")) });
@@ -232,15 +232,18 @@ const server = http.createServer(async (request, response) => {
     }
     const cancelMatch = /^\/api\/reservations\/(\d+)\/cancel$/.exec(url.pathname);
     if (cancelMatch && request.method === "POST") {
-      await store.recordLog("info", "cancel-received", "예약 취소 · 서버 요청 접수", { reservationId: cancelMatch[1] });
-      const rejectCancel = async (status, message) => { await store.recordLog("error", "cancel-rejected", `예약 취소 · 요청 거절: ${message}`, { reservationId: cancelMatch[1], httpStatus: status }); return json(response, status, { ok: false, error: message }); };
+      const versions = { clientVersion: String(request.headers["x-swim-client-version"] || "unknown").slice(0, 30).replace(/[^\w.-]/g, ""), serverVersion: appVersion.current };
+      await store.recordLog("info", "cancel-received", "예약 취소 · 서버 요청 접수", { reservationId: cancelMatch[1], ...versions });
+      const rejectCancel = async (status, message, code, details = {}) => { await store.recordLog("error", "cancel-rejected", `예약 취소 · 요청 거절: ${message}`, { reservationId: cancelMatch[1], httpStatus: status, code, ...versions, ...details }); return json(response, status, { ok: false, error: message, code }); };
+      if (versions.clientVersion !== "unknown" && versions.clientVersion !== versions.serverVersion) return await rejectCancel(409, "앱이 업데이트되어 현재 화면과 서버 버전이 다릅니다. 도우미 화면을 완전히 닫았다가 다시 열고, 예약 내역을 조회한 뒤 취소해 주세요. 취소는 실행되지 않았습니다.", "CLIENT_VERSION_MISMATCH");
       if (scheduler.running || scheduler.armed || plans.busy) return await rejectCancel(409, "예약 대기 또는 실행 중에는 예약 취소를 사용할 수 없습니다.");
       const input = await readJsonBody(request);
       if (input.confirmed !== true) return await rejectCancel(400, "예약 취소 최종 확인이 필요합니다.");
       const profileIndex = input.profileIndex ?? 0;
       const profile = input.profile ? normalizeLookupProfiles([input.profile])[0] : Number.isInteger(profileIndex) && (await store.getSavedProfiles())[profileIndex];
       if (!profile) return await rejectCancel(400, "예약자를 확인해 주세요.");
-      if (!input.expected?.room || !input.expected?.stayDate || !input.expected?.nights) return await rejectCancel(400, "예약 내역을 다시 조회한 뒤 취소해 주세요.");
+      const missingFields = ["room", "stayDate", "nights"].filter(field => !input.expected?.[field]);
+      if (missingFields.length) return await rejectCancel(400, "취소 대상의 객실·입실일·박수 확인 정보가 누락되었습니다. 이전 화면이 남아 있을 수 있으니 도우미 화면을 완전히 닫았다가 다시 열고 예약 내역을 다시 조회해 주세요. 취소는 실행되지 않았습니다.", "RESERVATION_SNAPSHOT_REQUIRED", { missingFields });
       const result = await reservationManager.cancel(profile, cancelMatch[1], input.expected);
       return json(response, 200, {
         ok: true,

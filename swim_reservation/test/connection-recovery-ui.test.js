@@ -5,6 +5,28 @@ import { chromium } from "playwright-core";
 import { mockBookApp } from "./fixtures/ui-book-app.js";
 const executablePath = [process.env.CHROMIUM_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
 
+test("서버 업데이트는 화면에 안내하고 구버전 화면에서 실제 취소를 보내지 않는다", { skip: !executablePath }, async t => {
+  const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
+  const page = await browser.newPage(); await mockBookApp(page);
+  let canceled = 0;
+  await page.route("**/api/reservations/*/cancel", route => { canceled++; return route.fulfill({ json: { ok: true } }); });
+  await page.route("**/api/status", route => {
+    assert.equal(route.request().headers()["x-swim-client-version"], "2.14.1");
+    return route.fulfill({ json: { state: "idle", appVersion: "2.14.2" } });
+  });
+  await page.evaluate(async () => {
+    nextStatusCheck = 0; await refreshStatus();
+    renderReservations([{ id: "123", room: "솔_산맥존", stayDate: "2026-12-22", nights: "1박", cancelable: true }]);
+    document.querySelector(".reservation-cancel-button").click();
+  });
+  assert.equal(await page.locator("#screenUpdateNotice").isVisible(), true);
+  assert.match(await page.locator("#screenUpdateNotice").textContent(), /화면 2.14.1.*서버 2.14.2/);
+  assert.equal(canceled, 0);
+  await page.route("**/api/status", route => route.fulfill({ json: { state: "idle", appVersion: "2.14.1" } }));
+  await page.evaluate(async () => { nextStatusCheck = 0; await refreshStatus(); });
+  assert.equal(await page.locator("#screenUpdateNotice").isVisible(), false);
+});
+
 test("상태 연결 실패는 기존 결과를 덮지 않고 복구되며 변경 요청은 재전송하지 않는다", { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
   const page = await browser.newPage(), state = await mockBookApp(page);

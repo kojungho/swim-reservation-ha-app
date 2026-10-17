@@ -1,4 +1,6 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
+const CLIENT_VERSION = "2.14.1";
+let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
 function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, "").replace(/(\d+)순위/g, (_, rank) => rankSymbol(Number(rank))); }
 function rankSymbol(rank) { return Number.isInteger(rank) && rank >= 1 && rank <= 20 ? String.fromCodePoint(0x2460 + rank - 1) : `(${rank})`; }
@@ -947,6 +949,10 @@ async function refreshStatus() {
     const status = await request("status", { timeoutMs: 6000 });
     if (!Object.hasOwn(STATE_LABELS, status.state)) throw Object.assign(new Error("정상적인 상태 응답을 확인하지 못했습니다."), { code: "CONNECTION_LOST" });
     statusFailures = 0; nextStatusCheck = 0;
+    serverVersion = status.appVersion || null;
+    const versionMismatch = serverVersion && serverVersion !== CLIENT_VERSION;
+    document.getElementById("screenUpdateNotice").hidden = !versionMismatch;
+    document.getElementById("screenUpdateMessage").textContent = versionMismatch ? `앱이 업데이트되었습니다 (화면 ${CLIENT_VERSION} / 서버 ${serverVersion}). 저장하지 않은 입력을 확인한 뒤 화면을 새로 열어 주세요.` : "";
     document.getElementById("connectionNotice").hidden = true;
     void flushCancelAudit();
     renderStatus(status);
@@ -1118,6 +1124,7 @@ function renderReservations(reservations, { container = elements.reservationList
     const cancelButton = row.querySelector(".reservation-cancel-button");
     cancelButton?.addEventListener("click", () => {
       recordCancelEvent("clicked", reservation.id);
+      if (serverVersion && serverVersion !== CLIENT_VERSION) { showMessage("화면과 서버 버전이 다릅니다. 화면을 새로 열고 예약 내역을 다시 조회한 뒤 취소해 주세요. 취소는 실행되지 않았습니다.", true); return; }
       if (busy) { recordCancelEvent("busy", reservation.id); showMessage("다른 작업을 처리 중입니다. 완료된 뒤 예약 취소를 다시 눌러 주세요.", true); return; }
       return perform(async () => {
       const approved = window.confirm(
@@ -1274,7 +1281,7 @@ async function request(path, options = {}) {
   if (options.signal?.aborted) abort();
   const timer = setTimeout(abort, timeoutMs);
   try {
-    const response = await fetch(API(path), { headers: { "Content-Type": "application/json" }, ...fetchOptions, signal: controller.signal });
+    const response = await fetch(API(path), { ...fetchOptions, headers: { "Content-Type": "application/json", ...fetchOptions.headers, "X-Swim-Client-Version": CLIENT_VERSION }, signal: controller.signal });
     if ([401, 403].includes(response.status)) throw Object.assign(new Error("HA 접속 권한 또는 로그인 세션을 확인하고 앱을 다시 열어 주세요."), { code: "AUTH_REQUIRED" });
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) throw Object.assign(new Error("앱 응답을 확인할 수 없습니다. HA에서 앱을 다시 열어 주세요."), { code: "CONNECTION_LOST" });
