@@ -1,4 +1,5 @@
 import { chromium } from "playwright-core";
+import { randomUUID } from "node:crypto";
 import { reservationUrl, startEpoch, getProfiles } from "./config.js";
 import { fillPersonalFields } from "./personal-fields.js";
 import { readPageDiagnostics } from "./page-diagnostics.js";
@@ -13,7 +14,7 @@ export function chromiumUserAgent(browser) {
 }
 
 export class ReservationEngine {
-  constructor({ store, executablePath = "/usr/bin/chromium", browserProvider = null }) {
+  constructor({ store, executablePath = "/usr/bin/chromium", browserProvider = null, traceContext = {} }) {
     this.store = store;
     this.executablePath = executablePath;
     this.browserProvider = browserProvider;
@@ -26,6 +27,35 @@ export class ReservationEngine {
     this.childSessions = [];
     this.prioritySessions = [];
     this.navigationFailure = null;
+    this.traceContext = { attemptId: randomUUID(), ...traceContext };
+    this.traceWrites = [];
+    this.currentStep = "initializing";
+  }
+
+  recordTrace(step, outcome, extra = {}) {
+    const details = { ...this.traceContext, step, outcome, room: this.selectedRoom || this.traceContext.room || null, page: safeReservationUrl(this.page?.url?.()), ...extra };
+    const labels = { "room-lookup": "객실 조회", "room-select": "객실 선택", "room-submit": "객실 선택 전송", "terms-accept": "약관 동의", "terms-submit": "약관 전송", "personal-fill": "예약자 정보 입력", "final-submit": "최종 예약 제출", "result-page": "결과 화면 확인", "receipt-verify": "예약 완료 대조" };
+    const person = Number.isInteger(details.profileIndex) ? `예약자 ${details.profileIndex + 1}` : "예약";
+    const room = details.room ? ` · ${details.room.replace(/_(하늘존|산맥존)/g, "")}` : "";
+    const result = { start: "시작", complete: "완료", error: "실패", http: "HTTP 응답" }[outcome] || outcome;
+    const message = `${person}${room} · ${labels[step] || step} ${result}${extra.httpStatus ? ` · HTTP ${extra.httpStatus}` : ""}${extra.error?.message ? ` · ${extra.error.message}` : ""}`;
+    // Queue logging without delaying the time-critical final click. Flush when closing.
+    this.traceWrites.push(Promise.resolve().then(() => this.store.recordLog?.(outcome === "error" || extra.httpStatus >= 400 ? "error" : "info", "booking-step", message, details)).catch(() => {}));
+  }
+
+  async traceStep(step, action) {
+    this.currentStep = step;
+    const startedAt = Date.now();
+    this.recordTrace(step, "start");
+    try {
+      const value = await action();
+      this.recordTrace(step, "complete", { elapsedMs: Date.now() - startedAt });
+      return value;
+    } catch (error) {
+      error.step ||= step;
+      this.recordTrace(step, "error", { elapsedMs: Date.now() - startedAt, httpStatus: this.navigationFailure?.status || null, navigation: this.navigationFailure, error: reservationErrorDetails(error) });
+      throw error;
+    }
   }
 
   async prepare(config) {
@@ -36,23 +66,23 @@ export class ReservationEngine {
   async prepareSingle(config) {
     try {
       await this.ensurePage();
-      await this.page.goto(reservationUrl(config.startDate), { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT });
+      await this.traceStep("room-lookup", () => this.page.goto(reservationUrl(config.startDate), { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT }));
       await this.assertReservationDate(config, { required: true });
-      const room = await this.selectRoom(config);
+      const room = await this.traceStep("room-select", () => this.selectRoom(config));
       this.selectedRoom = room;
       await this.store.updateStatus({ stage: "preparing-room", selectedRoom: room, message: `${room}, ${config.nights}박을 미리 선택했습니다.` });
-      await this.submitCurrentStep();
+      await this.traceStep("room-submit", () => this.submitCurrentStep());
 
       await this.page.waitForLoadState("domcontentloaded", { timeout: NAVIGATION_TIMEOUT });
       await this.assertReservationDate(config, { required: true });
       if (await this.detectPage() !== "terms") throw new Error("환불 규정 페이지를 확인하지 못했습니다.");
-      await this.acceptTerms();
-      await this.clickAction(["동의하고", "다음", "예약 진행", "예약하기"], true);
+      await this.traceStep("terms-accept", () => this.acceptTerms());
+      await this.traceStep("terms-submit", () => this.clickAction(["동의하고", "다음", "예약 진행", "예약하기"], true));
 
       await this.page.waitForLoadState("domcontentloaded", { timeout: NAVIGATION_TIMEOUT });
       await this.assertReservationDate(config, { required: true });
       if (await this.detectPage() !== "personal") throw new Error("예약자 정보 입력 페이지를 확인하지 못했습니다.");
-      await this.fillPersonalInfo(config);
+      await this.traceStep("personal-fill", () => this.fillPersonalInfo(config));
       await this.store.updateStatus({
         state: "waiting",
         stage: "final-ready",
@@ -61,6 +91,7 @@ export class ReservationEngine {
       });
     } catch (error) {
       error.diagnostics ||= await this.collectDiagnostics();
+      if (!error.step) this.recordTrace(this.currentStep, "error", { navigation: this.navigationFailure, error: reservationErrorDetails(error) });
       throw error;
     }
   }
@@ -99,11 +130,11 @@ export class ReservationEngine {
       if (prepared) {
         await this.assertReservationDate(config, { required: true });
         if (await this.detectPage() !== "personal") throw new Error("미리 준비한 예약자 정보 페이지가 유지되지 않았습니다.");
-        await this.fillPersonalInfo(config);
+        await this.traceStep("personal-fill", () => this.fillPersonalInfo(config));
         await this.store.updateStatus({ stage: "final-submit", message: "지정 시각에 최종 예약하기를 전송합니다." });
         if (beforeSubmit) await beforeSubmit();
         submitted = true;
-        await this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit);
+        await this.traceStep("final-submit", () => this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit));
       } else {
         await this.startRoomAttempt(config, attemptedRooms);
       }
@@ -111,10 +142,10 @@ export class ReservationEngine {
       for (let step = 0; step < 20; step += 1) {
         await this.page.waitForLoadState("domcontentloaded", { timeout: NAVIGATION_TIMEOUT });
         await this.assertReservationDate(config);
-        const result = await this.detectPage();
+        const result = await this.traceStep("result-page", () => this.detectPage());
         if (result === "success") {
           if (!submitted) throw new Error("최종 제출 없이 완료 화면이 나타나 결과 확인이 필요합니다.");
-          await this.verifyCompletion(config);
+          await this.traceStep("receipt-verify", () => this.verifyCompletion(config));
           await this.store.updateStatus({ state: "success", stage: "complete", message: "사이트에서 예약 완료 화면을 확인했습니다." });
           return { room: this.selectedRoom };
         }
@@ -137,17 +168,17 @@ export class ReservationEngine {
         }
         if (result === "personal") {
           if (submitted) throw new Error("최종 제출 후 예약자 입력 화면이 유지되어 결과 확인이 필요합니다. 중복 제출하지 않습니다.");
-          await this.fillPersonalInfo(config);
+          await this.traceStep("personal-fill", () => this.fillPersonalInfo(config));
           await this.store.updateStatus({ stage: "final-submit", message: "예약자 정보를 입력하고 최종 예약을 전송합니다." });
           if (beforeSubmit) await beforeSubmit();
           submitted = true;
-          await this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit);
+          await this.traceStep("final-submit", () => this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit));
           continue;
         }
         if (result === "terms") {
-          await this.acceptTerms();
+          await this.traceStep("terms-accept", () => this.acceptTerms());
           await this.store.updateStatus({ stage: "terms-accepted", message: "환불·이용 규정에 동의했습니다." });
-          await this.clickAction(["동의하고", "다음", "예약 진행", "예약하기"], true);
+          await this.traceStep("terms-submit", () => this.clickAction(["동의하고", "다음", "예약 진행", "예약하기"], true));
           continue;
         }
         throw new Error(`자동으로 판별하지 못한 예약 화면입니다: ${await this.page.title()}`);
@@ -161,7 +192,8 @@ export class ReservationEngine {
       const diagnostics = error.diagnostics || await this.collectDiagnostics();
       error.diagnostics = diagnostics;
       error.room ||= this.selectedRoom;
-      error.details = reservationErrorDetails(error, { room: error.room, stage: submitted ? "final-submit" : "preparing", submitted, page: safeReservationUrl(this.page?.url?.()), navigation: this.navigationFailure });
+      error.details = reservationErrorDetails(error, { ...this.traceContext, room: error.room, stage: error.step || this.currentStep, submitted, page: safeReservationUrl(this.page?.url?.()), navigation: this.navigationFailure });
+      if (!error.step) this.recordTrace(this.currentStep, "error", { navigation: this.navigationFailure, error: reservationErrorDetails(error) });
       await this.store.updateStatus({
         state: "failed",
         stage: "reservation-error",
@@ -188,7 +220,9 @@ export class ReservationEngine {
     this.page.on("dialog", (dialog) => dialog.accept().catch(() => {}));
     this.navigationFailure = null;
     this.page.on("response", response => {
-      if (response.request().isNavigationRequest() && response.status() >= 400) this.navigationFailure = { status: response.status(), url: safeReservationUrl(response.url()) };
+      if (!response.request().isNavigationRequest() || response.frame() !== this.page?.mainFrame()) return;
+      if (this.currentStep !== "initializing") this.recordTrace(this.currentStep, "http", { httpStatus: response.status(), method: response.request().method(), url: safeReservationUrl(response.url()) });
+      if (response.status() >= 400) this.navigationFailure = { status: response.status(), url: safeReservationUrl(response.url()) };
     });
     this.page.on("requestfailed", request => {
       if (request.isNavigationRequest()) this.navigationFailure = { ...this.navigationFailure, url: safeReservationUrl(request.url()), error: request.failure()?.errorText };
@@ -266,13 +300,16 @@ export class ReservationEngine {
       error.code = "NO_AVAILABLE_ROOM";
       throw error;
     }
+    this.selectedRoom = selected;
+    // Cold starts can skip unavailable candidates; record the actual selected rank.
+    if (!this.traceContext.room) this.traceContext.rank = priorities.findIndex(room => room.name === selected) + 1;
     return selected;
   }
 
   async startRoomAttempt(config, attemptedRooms) {
-    await this.page.goto(reservationUrl(config.startDate), { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT });
+    await this.traceStep("room-lookup", () => this.page.goto(reservationUrl(config.startDate), { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT }));
     await this.assertReservationDate(config, { required: true });
-    const room = await this.selectRoom(config, [...attemptedRooms]);
+    const room = await this.traceStep("room-select", () => this.selectRoom(config, [...attemptedRooms]));
     this.selectedRoom = room;
     await this.store.updateStatus({
       stage: attemptedRooms.size ? "room-reselected" : "room-selected",
@@ -280,7 +317,7 @@ export class ReservationEngine {
       attemptedRooms: [...attemptedRooms],
       message: `${room}, ${config.nights}박을 선택했습니다.`
     });
-    await this.submitCurrentStep();
+    await this.traceStep("room-submit", () => this.submitCurrentStep());
   }
 
   async submitCurrentStep() {
@@ -666,7 +703,8 @@ export class ReservationEngine {
   createChildSession(config, room) {
     const status = {};
     const scopedStore = {
-      updateStatus: async (patch) => Object.assign(status, patch)
+      updateStatus: async (patch) => Object.assign(status, patch),
+      recordLog: (...args) => this.store.recordLog?.(...args)
     };
     const profile = getProfiles(config)[config.multipleProfileIndex ?? 0];
     const childConfig = {
@@ -682,7 +720,7 @@ export class ReservationEngine {
       room,
       status,
       config: childConfig,
-      engine: new ReservationEngine({ store: scopedStore, executablePath: this.executablePath, browserProvider: () => this.ensureBrowser() })
+      engine: new ReservationEngine({ store: scopedStore, executablePath: this.executablePath, browserProvider: () => this.ensureBrowser(), traceContext: { mode: "multiple", room } })
     };
   }
 
@@ -691,7 +729,7 @@ export class ReservationEngine {
     const roomPriority = config.bookingMode === "profiles-parallel" ? profileEntry.profile.roomPriority : config.roomPriority;
     const enabledRooms = roomPriority.filter((item) => item.enabled);
     const rank = room ? enabledRooms.findIndex((item) => item.name === room) + 1 : 1;
-    const scopedStore = { updateStatus: async (patch) => Object.assign(status, patch) };
+    const scopedStore = { updateStatus: async (patch) => Object.assign(status, patch), recordLog: (...args) => this.store.recordLog?.(...args) };
     const childConfig = {
       ...config,
       bookingMode: "priority",
@@ -707,7 +745,7 @@ export class ReservationEngine {
       profileIndex: profileEntry.index,
       status,
       config: childConfig,
-      engine: new ReservationEngine({ store: scopedStore, executablePath: this.executablePath, browserProvider: () => this.ensureBrowser() })
+      engine: new ReservationEngine({ store: scopedStore, executablePath: this.executablePath, browserProvider: () => this.ensureBrowser(), traceContext: { mode: config.bookingMode, profileIndex: profileEntry.index, rank, room } })
     };
   }
 
@@ -716,6 +754,7 @@ export class ReservationEngine {
     const priority = this.prioritySessions.splice(0);
     await Promise.all([...children, ...priority].map((session) => session.engine.close().catch(() => {})));
     await this.closeMainPage();
+    await Promise.all(this.traceWrites.splice(0));
   }
 
   async closeMainPage({ keepBrowser = false } = {}) {
