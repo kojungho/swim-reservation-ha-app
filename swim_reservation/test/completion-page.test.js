@@ -11,6 +11,29 @@ const executablePath = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 ].filter(Boolean).find(existsSync);
 
+test("모의 429 응답 진단은 오류 상세와 로그에 보존하고 개인정보·추가 요청은 남기지 않는다", { skip: !executablePath }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true });
+  try {
+    const logs = []; let documents = 0;
+    const engine = new ReservationEngine({ store: { updateStatus: async () => {}, recordLog: async (...args) => logs.push(args) }, browserProvider: async () => browser });
+    await engine.ensurePage();
+    const body = "<h1>Too many requests</h1><p>Cloudflare secret@example.test 01011112222</p>";
+    await engine.page.route("**/*", route => { if (route.request().resourceType() === "document") documents++; return route.fulfill({ status: 429, headers: { "content-type": "text/html", "content-length": String(Buffer.byteLength(body)), "server": "cloudflare", "retry-after": "30", "set-cookie": "secret=private" }, body }); });
+    engine.assertReservationDate = async () => {};
+    engine.collectDiagnostics = async () => ({});
+    engine.startRoomAttempt = async () => { engine.selectedRoom = "솔_산맥존"; await engine.page.goto("http://example.test/reservation/order_ok3.php?name=secret"); throw new Error("HTTP 429"); };
+    await assert.rejects(() => engine.runSingle({}), error => {
+      assert.equal(error.code, "SITE_RATE_LIMIT");
+      assert.equal(error.details.navigation.rateLimit.serverFamily, "cloudflare");
+      assert.equal(error.details.navigation.rateLimit.retryAfter, "30");
+      return true;
+    });
+    assert.equal(documents, 1);
+    assert.ok(logs.some(item => item[3].step === "site-rate-limit"));
+    assert.ok(!/secret|private|01011112222/.test(JSON.stringify(logs)));
+  } finally { await browser.close(); }
+});
+
 test("order_ok4.php의 예약자 정보 화면을 예약 완료로 판정한다", { skip: !executablePath }, async () => {
   const browser = await chromium.launch({ executablePath, headless: true });
   try {

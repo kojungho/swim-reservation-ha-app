@@ -6,6 +6,7 @@ import { readPageDiagnostics } from "./page-diagnostics.js";
 import { readReservationRows, readReceiptIdentity, sameReservationStay } from "./reservation-records.js";
 import { reservationErrorDetails, safeReservationUrl } from "./reservation-errors.js";
 import { FinalSubmitQueue } from "./final-submit-queue.js";
+import { collectRateLimitDiagnostics, rateLimitHeaders } from "./rate-limit-diagnostics.js";
 
 const NAVIGATION_TIMEOUT = 20_000;
 
@@ -40,7 +41,7 @@ export class ReservationEngine {
     const person = Number.isInteger(details.profileIndex) ? `예약자 ${details.profileIndex + 1}` : "예약";
     const room = details.room ? ` · ${details.room.replace(/_(하늘존|산맥존)/g, "")}` : "";
     const result = { start: "시작", complete: "완료", error: "실패", http: "HTTP 응답" }[outcome] || outcome;
-    const message = `${person}${room} · ${step === "final-delay" ? "최종 제출 간격 대기" : labels[step] || step} ${result}${extra.httpStatus ? ` · HTTP ${extra.httpStatus}` : ""}${extra.error?.message ? ` · ${extra.error.message}` : ""}`;
+    const message = `${person}${room} · ${step === "site-rate-limit" ? "사이트 요청 제한 진단" : step === "final-delay" ? "최종 제출 간격 대기" : labels[step] || step} ${result}${extra.httpStatus ? ` · HTTP ${extra.httpStatus}` : ""}${extra.error?.message ? ` · ${extra.error.message}` : ""}`;
     // Queue logging without delaying the time-critical final click. Flush when closing.
     this.traceWrites.push(Promise.resolve().then(() => this.store.recordLog?.(outcome === "error" || extra.httpStatus >= 400 ? "error" : "info", "booking-step", message, details)).catch(() => {}));
   }
@@ -92,6 +93,7 @@ export class ReservationEngine {
         message: "예약자 정보까지 입력했습니다. 지정 시각에 마지막 예약하기를 누릅니다."
       });
     } catch (error) {
+      await this.rateLimitDiagnostic;
       error.diagnostics ||= await this.collectDiagnostics();
       if (!error.step) this.recordTrace(this.currentStep, "error", { navigation: this.navigationFailure, error: reservationErrorDetails(error) });
       throw error;
@@ -183,6 +185,7 @@ export class ReservationEngine {
       }
       throw new Error("객실 재시도를 포함한 예약 단계가 예상보다 많아 자동 실행을 중지했습니다.");
     } catch (error) {
+      await this.rateLimitDiagnostic;
       if (error.code === "WATCH_DEADLINE") {
         await this.store.updateStatus({ state: "stopped", stage: "expired", message: error.message });
         throw error;
@@ -235,10 +238,21 @@ export class ReservationEngine {
     this.page.setDefaultTimeout(10_000);
     this.page.on("dialog", (dialog) => dialog.accept().catch(() => {}));
     this.navigationFailure = null;
+    this.rateLimitDiagnostic = null;
     this.page.on("response", response => {
       if (!response.request().isNavigationRequest() || response.frame() !== this.page?.mainFrame()) return;
       if (this.currentStep !== "initializing") this.recordTrace(this.currentStep, "http", { httpStatus: response.status(), method: response.request().method(), url: safeReservationUrl(response.url()) });
-      if (response.status() >= 400) this.navigationFailure = { status: response.status(), url: safeReservationUrl(response.url()), retryAfter: response.headers()["retry-after"] || null };
+      if (response.status() >= 400) {
+        const failure = { status: response.status(), url: safeReservationUrl(response.url()), retryAfter: rateLimitHeaders(response.headers()).retryAfter };
+        this.navigationFailure = failure;
+        if (response.status() === 429) {
+          this.rateLimitDiagnostic = collectRateLimitDiagnostics(response).then(diagnostic => {
+            failure.rateLimit = diagnostic;
+            if (this.navigationFailure?.status === 429 && this.navigationFailure.url === failure.url) this.navigationFailure.rateLimit = diagnostic;
+            this.recordTrace("site-rate-limit", "error", { httpStatus: 429, diagnostic });
+          }).catch(() => {});
+        }
+      }
     });
     this.page.on("requestfailed", request => {
       if (request.isNavigationRequest()) this.navigationFailure = { ...this.navigationFailure, url: safeReservationUrl(request.url()), error: request.failure()?.errorText };

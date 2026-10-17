@@ -17,14 +17,13 @@ import { normalizeLookupProfiles } from "./lookup-profiles.js";
 import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./monthly-availability.js";
 import { PlanManager, singleBookingConfig } from "./plan-manager.js";
 import { MonthCache } from "./month-cache.js";
-import { AppVersion } from "./app-version.js";
 import { SubmissionSettings } from "./submission-settings.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
-const appVersion = new AppVersion(JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8")).version);
+const APP_VERSION = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8")).version;
 const cancelEventIds = new Set();
 
 const store = new Store(DATA_DIR);
@@ -79,7 +78,6 @@ monthCache.start();
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
-    if (url.pathname === "/api/app-version" && request.method === "GET") return json(response, 200, await appVersion.info());
     if (url.pathname === "/api/cancel-events" && request.method === "POST") {
       const input = await readJsonBody(request);
       const labels = { clicked: "버튼 클릭", busy: "다른 작업 처리 중으로 화면에서 차단", dismissed: "사용자가 확인창을 닫음", confirmed: "사용자가 취소 확인", "response-ok": "화면에서 완료 응답 수신", "connection-lost": "화면에서 취소 응답 수신 실패", "response-error": "화면에서 취소 오류 응답 수신" };
@@ -193,7 +191,7 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, { ok: true, config: { ...saved, editorProfiles: getProfiles(input), editorProfileIndex: input.multipleProfileIndex || 0, reservationUrl: reservationUrl(saved.startDate) } });
     }
     if (url.pathname === "/api/status" && request.method === "GET") {
-      return json(response, 200, { ...await store.getStatus(), appVersion: appVersion.current });
+      return json(response, 200, { ...await store.getStatus(), appVersion: APP_VERSION });
     }
     if (url.pathname === "/api/logs" && request.method === "GET") {
       return json(response, 200, { ok: true, entries: await store.listLogs(url.searchParams.get("limit")) });
@@ -243,7 +241,7 @@ const server = http.createServer(async (request, response) => {
     }
     const cancelMatch = /^\/api\/reservations\/(\d+)\/cancel$/.exec(url.pathname);
     if (cancelMatch && request.method === "POST") {
-      const versions = { clientVersion: String(request.headers["x-swim-client-version"] || "unknown").slice(0, 30).replace(/[^\w.-]/g, ""), serverVersion: appVersion.current };
+      const versions = { clientVersion: String(request.headers["x-swim-client-version"] || "unknown").slice(0, 30).replace(/[^\w.-]/g, ""), serverVersion: APP_VERSION };
       await store.recordLog("info", "cancel-received", "예약 취소 · 서버 요청 접수", { reservationId: cancelMatch[1], ...versions });
       const rejectCancel = async (status, message, code, details = {}) => { await store.recordLog("error", "cancel-rejected", `예약 취소 · 요청 거절: ${message}`, { reservationId: cancelMatch[1], httpStatus: status, code, ...versions, ...details }); return json(response, status, { ok: false, error: message, code }); };
       if (versions.clientVersion !== "unknown" && versions.clientVersion !== versions.serverVersion) return await rejectCancel(409, "앱이 업데이트되어 현재 화면과 서버 버전이 다릅니다. 도우미 화면을 완전히 닫았다가 다시 열고, 예약 내역을 조회한 뒤 취소해 주세요. 취소는 실행되지 않았습니다.", "CLIENT_VERSION_MISMATCH");

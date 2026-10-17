@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.14.2";
+const CLIENT_VERSION = "2.14.3";
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
 function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, "").replace(/(\d+)순위/g, (_, rank) => rankSymbol(Number(rank))); }
@@ -950,6 +950,7 @@ async function refreshStatus() {
     if (!Object.hasOwn(STATE_LABELS, status.state)) throw Object.assign(new Error("정상적인 상태 응답을 확인하지 못했습니다."), { code: "CONNECTION_LOST" });
     statusFailures = 0; nextStatusCheck = 0;
     serverVersion = status.appVersion || null;
+    document.getElementById("installedAppVersion").textContent = `앱 버전: ${serverVersion || "확인 중"} · 화면 버전: ${CLIENT_VERSION}`;
     const versionMismatch = serverVersion && serverVersion !== CLIENT_VERSION;
     document.getElementById("screenUpdateNotice").hidden = !versionMismatch;
     document.getElementById("screenUpdateMessage").textContent = versionMismatch ? `앱이 업데이트되었습니다 (화면 ${CLIENT_VERSION} / 서버 ${serverVersion}). 저장하지 않은 입력을 확인한 뒤 화면을 새로 열어 주세요.` : "";

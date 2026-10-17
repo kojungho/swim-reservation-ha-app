@@ -29,8 +29,8 @@ test("서버 업데이트는 화면에 안내하고 구버전 화면에서 실�
   let canceled = 0;
   await page.route("**/api/reservations/*/cancel", route => { canceled++; return route.fulfill({ json: { ok: true } }); });
   await page.route("**/api/status", route => {
-    assert.equal(route.request().headers()["x-swim-client-version"], "2.14.2");
-    return route.fulfill({ json: { state: "idle", appVersion: "2.14.3" } });
+    assert.equal(route.request().headers()["x-swim-client-version"], "2.14.3");
+    return route.fulfill({ json: { state: "idle", appVersion: "2.14.4" } });
   });
   await page.evaluate(async () => {
     nextStatusCheck = 0; await refreshStatus();
@@ -38,9 +38,9 @@ test("서버 업데이트는 화면에 안내하고 구버전 화면에서 실�
     document.querySelector(".reservation-cancel-button").click();
   });
   assert.equal(await page.locator("#screenUpdateNotice").isVisible(), true);
-  assert.match(await page.locator("#screenUpdateNotice").textContent(), /화면 2.14.2.*서버 2.14.3/);
+  assert.match(await page.locator("#screenUpdateNotice").textContent(), /화면 2.14.3.*서버 2.14.4/);
   assert.equal(canceled, 0);
-  await page.route("**/api/status", route => route.fulfill({ json: { state: "idle", appVersion: "2.14.2" } }));
+  await page.route("**/api/status", route => route.fulfill({ json: { state: "idle", appVersion: "2.14.3" } }));
   await page.evaluate(async () => { nextStatusCheck = 0; await refreshStatus(); });
   assert.equal(await page.locator("#screenUpdateNotice").isVisible(), false);
 });
@@ -77,16 +77,15 @@ test("상태 요청은 겹치지 않고 로그인 HTML을 정상 상태로 오�
   assert.equal(failed, "CONNECTION_LOST");
 });
 
-test("설정에서 버전을 확인하고 HA 업데이트 화면으로 이동하는 링크를 제공한다", { skip: !executablePath }, async t => {
+test("설정에서 업데이트 버튼은 제거하고 실행·화면 버전만 표시한다", { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
   for (const width of [390, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } }); await mockBookApp(page);
-    await page.route("**/api/app-version", route => route.fulfill({ json: { current: "2.13.1", latest: "2.14.0", updateAvailable: true } }));
+    await page.route("**/api/status", route => route.fulfill({ json: { state: "idle", appVersion: "2.14.3" } }));
+    await page.evaluate(async () => { nextStatusCheck = 0; await refreshStatus(); });
     await page.evaluate(() => switchWorkspaceTab("settings"));
-    await page.locator("#checkAppVersion").click();
-    await page.waitForFunction(() => document.getElementById("appVersionStatus").textContent.includes("업데이트 있음"));
-    assert.equal(await page.locator("#haUpdateLink").getAttribute("href"), "/config/updates");
-    assert.equal(await page.locator("#haUpdateLink").getAttribute("target"), "_top");
+    assert.equal(await page.locator("#checkAppVersion, #haUpdateLink").count(), 0);
+    assert.match(await page.locator("#installedAppVersion").textContent(), /앱 버전: 2.14.3 · 화면 버전: 2.14.3/);
     await page.close();
   }
 });

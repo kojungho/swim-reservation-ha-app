@@ -25,16 +25,6 @@ async function initializeUiSettings() {
     } catch (error) { intervalMessage.textContent = `저장 실패: ${error.message}`; }
     finally { event.target.disabled = false; }
   });
-  document.getElementById("checkAppVersion").addEventListener("click", async event => {
-    event.target.disabled = true;
-    const status = document.getElementById("appVersionStatus");
-    status.textContent = "버전 확인 중…";
-    try {
-      const value = await request("app-version", { timeoutMs: 10_000 });
-      status.textContent = `현재 ${value.current}${value.latest ? ` · 최신 ${value.latest} · ${value.updateAvailable ? "업데이트 있음" : "최신 버전"}` : ` · ${value.error || "최신 버전 확인 불가"}`}`;
-    } catch (error) { status.textContent = error.message; }
-    finally { event.target.disabled = false; }
-  });
   const controls = document.getElementById("settingsControls");
   const help = text => { const button = document.createElement("button"); button.type = "button"; button.className = "info-button"; button.textContent = "ⓘ"; button.dataset.settingsHelp = text; button.setAttribute("aria-label", "항목 설명"); return button; };
   const section = title => {
