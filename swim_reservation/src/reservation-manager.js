@@ -2,12 +2,29 @@ import { chromium } from "playwright-core";
 import { reservationCheckUrl } from "./reservation-check.js";
 import { chromiumUserAgent } from "./reservation-engine.js";
 import { readReservationRows, sameReservationStay } from "./reservation-records.js";
+import { reservationErrorDetails, safeReservationUrl } from "./reservation-errors.js";
 
 const NAVIGATION_TIMEOUT = 20_000;
 
 export class ReservationManager {
-  constructor({ executablePath = "/usr/bin/chromium" } = {}) {
+  constructor({ executablePath = "/usr/bin/chromium", log = async () => {} } = {}) {
     this.executablePath = executablePath;
+    this.log = (...args) => Promise.resolve().then(() => log(...args)).catch(() => {});
+  }
+
+  async cancelStep(step, reservationId, action) {
+    const startedAt = Date.now();
+    await this.log("info", "cancel-step", `예약 취소 · ${step} 시작`, { reservationId: String(reservationId), step, outcome: "start" });
+    try {
+      const result = await action();
+      await this.log("info", "cancel-step", `예약 취소 · ${step} 완료`, { reservationId: String(reservationId), step, outcome: "complete", elapsedMs: Date.now() - startedAt });
+      return result;
+    } catch (error) {
+      const details = reservationErrorDetails(error);
+      await this.log("error", "cancel-step", `예약 취소 · ${step} 실패: ${details.message}`, { reservationId: String(reservationId), step, outcome: "error", elapsedMs: Date.now() - startedAt, error: details });
+      error.message = `예약 취소 · ${step}: ${details.message}`;
+      throw error;
+    }
   }
 
   async list(profile) {
@@ -16,16 +33,21 @@ export class ReservationManager {
 
   async cancel(profile, reservationId, expected = null) {
     return this.withPage(async (page) => {
-      const reservations = await this.load(page, profile);
+      const reservations = await this.cancelStep("대상 재조회", reservationId, () => this.load(page, profile));
       const matches = reservations.filter((item) => item.id === String(reservationId));
       const target = matches.length === 1 ? matches[0] : null;
-      if (!target?.cancelable) throw new Error("취소 가능한 예약을 찾지 못했습니다. 입금 완료 여부와 예약 정보를 확인해 주세요.");
-      if (expected && !sameReservationStay(target, expected)) throw new Error("조회 후 예약 정보가 변경되었습니다. 다시 조회한 뒤 취소해 주세요.");
-      await this.clickCancellation(page, reservationId);
-      const remaining = await this.load(page, profile);
-      if (remaining.some((item) => item.id === String(reservationId))) {
-        throw new Error("사이트에서 예약 취소 완료를 확인하지 못했습니다. 예약 내역을 다시 확인해 주세요.");
-      }
+      await this.cancelStep("대상 대조", reservationId, async () => {
+        if (!matches.length) throw new Error("재조회한 목록에 해당 예약 번호가 없습니다. 예약 조회를 새로 실행해 주세요.");
+        if (matches.length > 1) throw new Error("같은 예약 번호가 여러 번 발견되어 중단했습니다.");
+        if (!target?.cancelable) throw new Error("사이트에서 해당 예약의 취소 버튼을 제공하지 않습니다.");
+        if (expected && !sameReservationStay(target, expected)) throw new Error("조회 후 예약 정보가 변경되었습니다. 다시 조회한 뒤 취소해 주세요.");
+      });
+      await this.cancelStep("원본 취소 버튼 실행", reservationId, () => this.clickCancellation(page, reservationId));
+      const remaining = await this.cancelStep("취소 후 재조회·확인", reservationId, async () => {
+        const rows = await this.load(page, profile);
+        if (rows.some(item => item.id === String(reservationId))) throw new Error("사이트에서 예약 취소 완료를 확인하지 못했습니다. 다시 예약 조회해 주세요. 자동 재시도하지 않습니다.");
+        return rows;
+      });
       return { canceled: target, reservations: remaining };
     });
   }
@@ -46,9 +68,11 @@ export class ReservationManager {
       if (actions.length === 1) actions[0].setAttribute("data-swim-cancel-target", "true");
       return actions.length;
     }, String(reservationId));
-    if (count !== 1) throw new Error("대상 예약의 취소 버튼을 정확히 찾지 못해 취소를 중단했습니다.");
+    if (count !== 1) throw new Error(`대상 예약의 취소 버튼을 정확히 찾지 못했습니다 (${count}개). 취소 요청은 보내지 않았습니다.`);
     const handleDialog = async dialog => {
-      if (dialog.type() === "confirm" && /취소/.test(dialog.message()) && !/전체|모든/.test(dialog.message())) await dialog.accept();
+      const approved = dialog.type() === "confirm" && /취소/.test(dialog.message()) && !/전체|모든/.test(dialog.message());
+      await this.log("info", "cancel-dialog", "예약 취소 · 확인창 처리", { reservationId: String(reservationId), dialogType: dialog.type(), approved });
+      if (approved) await dialog.accept();
       else await dialog.dismiss();
     };
     page.on("dialog", handleDialog);
@@ -57,6 +81,7 @@ export class ReservationManager {
         page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT }),
         page.locator('[data-swim-cancel-target="true"]').click()
       ]);
+      await this.log(response?.ok() ? "info" : "error", "cancel-http", "예약 취소 · 사이트 응답", { reservationId: String(reservationId), httpStatus: response?.status() || null, url: safeReservationUrl(response?.url()) });
       if (!response || !response.ok()) throw new Error(`취소 요청 결과 확인 필요${response ? ` (HTTP ${response.status()})` : ""}. 재조회 후 확인해 주세요. 자동 재시도하지 않습니다.`);
     } finally {
       page.off("dialog", handleDialog);

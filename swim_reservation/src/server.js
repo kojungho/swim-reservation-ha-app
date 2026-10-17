@@ -17,11 +17,14 @@ import { normalizeLookupProfiles } from "./lookup-profiles.js";
 import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./monthly-availability.js";
 import { PlanManager, singleBookingConfig } from "./plan-manager.js";
 import { MonthCache } from "./month-cache.js";
+import { AppVersion } from "./app-version.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
+const appVersion = new AppVersion(JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8")).version);
+const cancelEventIds = new Set();
 
 const store = new Store(DATA_DIR);
 const siteMap = new SiteMap(DATA_DIR, path.join(PUBLIC_DIR, "site-map.png"));
@@ -44,7 +47,7 @@ const plans = new PlanManager({ dataDir: DATA_DIR, timeSync,
   canInspect: () => !scheduler.running && !scheduler.preparing,
   log: (...args) => store.recordLog(...args)
 });
-const reservationManager = new ReservationManager({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
+const reservationManager = new ReservationManager({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", log: (...args) => store.recordLog(...args) });
 const monthCache = new MonthCache({ dataDir: DATA_DIR, now: () => timeSync.now(),
   inspect: (config, signal) => inspections.inspect(config, signal),
   knownRooms: async () => (await store.getConfig()).roomPriority.map(room => room.name),
@@ -73,6 +76,18 @@ monthCache.start();
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+    if (url.pathname === "/api/app-version" && request.method === "GET") return json(response, 200, await appVersion.info());
+    if (url.pathname === "/api/cancel-events" && request.method === "POST") {
+      const input = await readJsonBody(request);
+      const labels = { clicked: "버튼 클릭", busy: "다른 작업 처리 중으로 화면에서 차단", dismissed: "사용자가 확인창을 닫음", confirmed: "사용자가 취소 확인", "response-ok": "화면에서 완료 응답 수신", "connection-lost": "화면에서 취소 응답 수신 실패", "response-error": "화면에서 취소 오류 응답 수신" };
+      if (!Object.hasOwn(labels, input.event) || !/^[a-f0-9-]{36}$/.test(input.id || "") || !/^\d{1,20}$/.test(input.reservationId || "")) return json(response, 400, { error: "잘못된 취소 진단입니다." });
+      if (!cancelEventIds.has(input.id)) {
+        await store.recordLog(["busy", "connection-lost", "response-error"].includes(input.event) ? "error" : "info", "cancel-client", `예약 취소 · ${labels[input.event]}`, { reservationId: input.reservationId, eventId: input.id, outcome: input.event, occurredAt: Number.isFinite(input.occurredAt) ? input.occurredAt : null });
+        cancelEventIds.add(input.id);
+        if (cancelEventIds.size > 200) cancelEventIds.delete(cancelEventIds.values().next().value);
+      }
+      return json(response, 200, { ok: true });
+    }
     if (url.pathname === "/api/ui-settings" && request.method === "GET") return json(response, 200, await uiSettings.read());
     if (url.pathname === "/api/ui-settings" && request.method === "PUT") {
       try { return json(response, 200, await uiSettings.save(await readJsonBody(request))); }
@@ -217,13 +232,15 @@ const server = http.createServer(async (request, response) => {
     }
     const cancelMatch = /^\/api\/reservations\/(\d+)\/cancel$/.exec(url.pathname);
     if (cancelMatch && request.method === "POST") {
-      if (scheduler.running || scheduler.armed || plans.busy) return json(response, 409, { ok: false, error: "예약 대기 또는 실행 중에는 예약 취소를 사용할 수 없습니다." });
+      await store.recordLog("info", "cancel-received", "예약 취소 · 서버 요청 접수", { reservationId: cancelMatch[1] });
+      const rejectCancel = async (status, message) => { await store.recordLog("error", "cancel-rejected", `예약 취소 · 요청 거절: ${message}`, { reservationId: cancelMatch[1], httpStatus: status }); return json(response, status, { ok: false, error: message }); };
+      if (scheduler.running || scheduler.armed || plans.busy) return await rejectCancel(409, "예약 대기 또는 실행 중에는 예약 취소를 사용할 수 없습니다.");
       const input = await readJsonBody(request);
-      if (input.confirmed !== true) return json(response, 400, { ok: false, error: "예약 취소 최종 확인이 필요합니다." });
+      if (input.confirmed !== true) return await rejectCancel(400, "예약 취소 최종 확인이 필요합니다.");
       const profileIndex = input.profileIndex ?? 0;
       const profile = input.profile ? normalizeLookupProfiles([input.profile])[0] : Number.isInteger(profileIndex) && (await store.getSavedProfiles())[profileIndex];
-      if (!profile) return json(response, 400, { error: "예약자를 확인해 주세요." });
-      if (!input.expected?.room || !input.expected?.stayDate || !input.expected?.nights) return json(response, 400, { error: "예약 내역을 다시 조회한 뒤 취소해 주세요." });
+      if (!profile) return await rejectCancel(400, "예약자를 확인해 주세요.");
+      if (!input.expected?.room || !input.expected?.stayDate || !input.expected?.nights) return await rejectCancel(400, "예약 내역을 다시 조회한 뒤 취소해 주세요.");
       const result = await reservationManager.cancel(profile, cancelMatch[1], input.expected);
       return json(response, 200, {
         ok: true,

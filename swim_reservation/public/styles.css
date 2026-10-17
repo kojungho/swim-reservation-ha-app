@@ -490,3 +490,8 @@ button.info-button { font-size: calc(var(--font-button) * 1.3); }
   .monthly-calendar caption .monthly-controls { gap: 6px; }
   .monthly-calendar caption .monthly-controls label { flex-basis: 100px; min-width: 85px; }
 }
+/* Connection health is separate from reservation results and lookup messages. */
+.connection-notice { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; margin-bottom:12px; border-radius:12px; background:#fff4dc; color:#654800; }
+.connection-notice[hidden] { display:none; }
+.connection-notice button { flex-shrink:0; }
+.app-update { margin-bottom:24px; }

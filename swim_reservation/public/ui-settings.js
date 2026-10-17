@@ -9,6 +9,16 @@ const gallerySelection = new Set();
 const fontNames = { title: "앱 제목", heading: "구역 제목", body: "본문·안내", field: "입력칸·항목", button: "버튼·메뉴", room: "객실명", status: "상태 표시", calendar: "달력", list: "일정·조회 내역", log: "로그" };
 
 async function initializeUiSettings() {
+  document.getElementById("checkAppVersion").addEventListener("click", async event => {
+    event.target.disabled = true;
+    const status = document.getElementById("appVersionStatus");
+    status.textContent = "버전 확인 중…";
+    try {
+      const value = await request("app-version", { timeoutMs: 10_000 });
+      status.textContent = `현재 ${value.current}${value.latest ? ` · 최신 ${value.latest} · ${value.updateAvailable ? "업데이트 있음" : "최신 버전"}` : ` · ${value.error || "최신 버전 확인 불가"}`}`;
+    } catch (error) { status.textContent = error.message; }
+    finally { event.target.disabled = false; }
+  });
   const controls = document.getElementById("settingsControls");
   const help = text => { const button = document.createElement("button"); button.type = "button"; button.className = "info-button"; button.textContent = "ⓘ"; button.dataset.settingsHelp = text; button.setAttribute("aria-label", "항목 설명"); return button; };
   const section = title => {

@@ -59,8 +59,30 @@ let siteTimeBase = null;
 let autoLookupCompletedKey = "";
 let autoLookupRunning = false;
 let lastAutoLookupAttempt = 0;
+let autoLookupCooldown = 5000;
 let currentLogText = "";
 let rawDiagnosticText = "";
+let statusRequestInFlight = false, statusFailures = 0, nextStatusCheck = 0;
+let cancelAuditPending = [], cancelAuditFlushing = false, cancelAuditRetryAt = 0;
+try { const saved = JSON.parse(localStorage.getItem("swim-cancel-audit") || "[]"); if (Array.isArray(saved)) cancelAuditPending = saved.slice(-50); } catch { /* Storage can be unavailable in private mode. */ }
+function persistCancelAudit() { try { localStorage.setItem("swim-cancel-audit", JSON.stringify(cancelAuditPending)); } catch {} }
+function recordCancelEvent(event, reservationId) {
+  const id = globalThis.crypto?.randomUUID?.() || Array.from({ length: 36 }, (_, index) => [8, 13, 18, 23].includes(index) ? "-" : Math.floor(Math.random() * 16).toString(16)).join("");
+  cancelAuditPending.push({ id, event, reservationId: String(reservationId), occurredAt: Date.now() });
+  cancelAuditPending = cancelAuditPending.slice(-50); persistCancelAudit(); void flushCancelAudit();
+}
+async function flushCancelAudit() {
+  if (cancelAuditFlushing || !cancelAuditPending.length || Date.now() < cancelAuditRetryAt) return;
+  cancelAuditFlushing = true;
+  try {
+    while (cancelAuditPending.length) {
+      const entry = cancelAuditPending[0];
+      await request("cancel-events", { method: "POST", timeoutMs: 5000, body: JSON.stringify(entry) });
+      cancelAuditPending = cancelAuditPending.filter(item => item.id !== entry.id); persistCancelAudit();
+    }
+  } catch { cancelAuditRetryAt = Date.now() + 30_000; }
+  finally { cancelAuditFlushing = false; }
+}
 let monthlyController = null;
 let monthlyRequest = 0;
 let monthlyResult = null;
@@ -117,6 +139,10 @@ async function init() {
 }
 
 function bindEvents() {
+  const reconnect = () => { nextStatusCheck = 0; void refreshStatus(); };
+  document.getElementById("reconnectButton").addEventListener("click", reconnect);
+  window.addEventListener("online", reconnect);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) reconnect(); });
   initializeDatePicker();
   const timeDialog = document.getElementById("serverTimeDialog");
   document.getElementById("serverTimeButton").addEventListener("click", () => timeDialog.showModal());
@@ -915,26 +941,39 @@ function renderSiteClock() {
 }
 
 async function refreshStatus() {
+  if (statusRequestInFlight || Date.now() < nextStatusCheck) return;
+  statusRequestInFlight = true;
   try {
-    const status = await request("status");
+    const status = await request("status", { timeoutMs: 6000 });
+    if (!Object.hasOwn(STATE_LABELS, status.state)) throw Object.assign(new Error("정상적인 상태 응답을 확인하지 못했습니다."), { code: "CONNECTION_LOST" });
+    statusFailures = 0; nextStatusCheck = 0;
+    document.getElementById("connectionNotice").hidden = true;
+    void flushCancelAudit();
     renderStatus(status);
     void maybeAutoLookupReservations(status);
   } catch (error) {
-    if (!busy) showMessage(`상태 확인 실패: ${error.message}`, true);
+    statusFailures++;
+    nextStatusCheck = Date.now() + Math.min(30_000, 3000 * 2 ** Math.min(statusFailures - 1, 4));
+    document.getElementById("connectionNotice").hidden = false;
+    document.getElementById("connectionMessage").textContent = error.code === "AUTH_REQUIRED" ? error.message : "앱 연결이 잠시 끊겼습니다. 자동으로 다시 연결합니다. 마지막 확인 상태는 유지됩니다.";
+  } finally {
+    statusRequestInFlight = false;
   }
 }
 
 async function maybeAutoLookupReservations(status) {
   if (!["success", "failed"].includes(status.state) || autoLookupRunning) return;
   const key = `${status.state}:${status.stage}:${status.updatedAt}`;
-  if (key === autoLookupCompletedKey || Date.now() - lastAutoLookupAttempt < 5_000) return;
+  if (key === autoLookupCompletedKey || Date.now() - lastAutoLookupAttempt < autoLookupCooldown) return;
   lastAutoLookupAttempt = Date.now();
   autoLookupRunning = true;
   try {
     const result = await loadReservations();
-    if (!result.lookupErrors?.length) autoLookupCompletedKey = key;
+    if (!result.lookupErrors?.length) { autoLookupCompletedKey = key; autoLookupCooldown = 5000; }
+    else autoLookupCooldown = Math.min(60_000, autoLookupCooldown * 2);
     await refreshLogs();
   } catch (error) {
+    autoLookupCooldown = 60_000;
     elements.reservationList.hidden = false;
     elements.reservationList.innerHTML = `<strong>예약확인</strong><p>자동 예약확인 실패: ${escapeHtml(error.message)}</p>`;
   } finally {
@@ -1077,17 +1116,24 @@ function renderReservations(reservations, { container = elements.reservationList
       <div><span>예약 상태</span><strong>${escapeHtml(reservation.status)}</strong></div>
       ${reservation.cancelable ? '<button type="button" class="reservation-cancel-button danger">예약 취소</button>' : '<span class="cancel-disabled">사이트에서 취소 불가</span>'}`;
     const cancelButton = row.querySelector(".reservation-cancel-button");
-    cancelButton?.addEventListener("click", () => perform(async () => {
+    cancelButton?.addEventListener("click", () => {
+      recordCancelEvent("clicked", reservation.id);
+      if (busy) { recordCancelEvent("busy", reservation.id); showMessage("다른 작업을 처리 중입니다. 완료된 뒤 예약 취소를 다시 눌러 주세요.", true); return; }
+      return perform(async () => {
       const approved = window.confirm(
         `${shortRoomText(reservation.room)}\n${reservation.stayDate} · ${reservation.nights}\n결제 금액 ${reservation.total}\n\n이 예약을 실제로 취소할까요? 취소한 예약은 자동으로 복구할 수 없습니다.`
       );
-      if (!approved) return;
+      if (!approved) { recordCancelEvent("dismissed", reservation.id); return; }
+      recordCancelEvent("confirmed", reservation.id);
+      try {
       const result = await request(`reservations/${encodeURIComponent(reservation.id)}/cancel`, {
-        method: "POST", body: JSON.stringify({ confirmed: true, profileIndex, profile: reservation.profile || bookingIdentity(profile), expected: { room: reservation.room, stayDate: reservation.stayDate, nights: reservation.nights } })
+        method: "POST", timeoutMs: 90_000, body: JSON.stringify({ confirmed: true, profileIndex, profile: reservation.profile || bookingIdentity(profile), expected: { room: reservation.room, stayDate: reservation.stayDate, nights: reservation.nights } })
       });
+      recordCancelEvent("response-ok", reservation.id);
       await reload();
       showMessage(`${reservation.room} 예약 취소가 완료되었습니다.`, false, "예약 취소 완료");
-    }));
+      } catch (error) { recordCancelEvent(error.code === "CONNECTION_LOST" ? "connection-lost" : "response-error", reservation.id); throw error; }
+    }); });
     group.append(row);
     }
     container.append(group);
@@ -1221,10 +1267,28 @@ function showMessage(message, error = false, successLabel = "저장 완료") {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(API(path), { headers: { "Content-Type": "application/json" }, ...options });
-  const value = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(value.error || `요청 실패 (${response.status})`), { code: value.code });
-  return value;
+  const { timeoutMs = 120_000, ...fetchOptions } = options;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  options.signal?.addEventListener("abort", abort, { once: true });
+  if (options.signal?.aborted) abort();
+  const timer = setTimeout(abort, timeoutMs);
+  try {
+    const response = await fetch(API(path), { headers: { "Content-Type": "application/json" }, ...fetchOptions, signal: controller.signal });
+    if ([401, 403].includes(response.status)) throw Object.assign(new Error("HA 접속 권한 또는 로그인 세션을 확인하고 앱을 다시 열어 주세요."), { code: "AUTH_REQUIRED" });
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) throw Object.assign(new Error("앱 응답을 확인할 수 없습니다. HA에서 앱을 다시 열어 주세요."), { code: "CONNECTION_LOST" });
+    const value = await response.json();
+    if (!response.ok) throw Object.assign(new Error(value.error || `요청 실패 (${response.status})`), { code: value.code, status: response.status });
+    return value;
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    if (error instanceof TypeError || error instanceof SyntaxError || error.name === "AbortError") {
+      const changing = !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase());
+      throw Object.assign(new Error(changing ? "서버 응답을 확인하지 못했습니다. 처리 결과를 먼저 조회해 주세요. 같은 요청을 자동 재전송하지 않습니다." : "앱 연결이 끊겼거나 응답이 지연되었습니다. 잠시 후 다시 확인해 주세요."), { code: "CONNECTION_LOST" });
+    }
+    throw error;
+  } finally { clearTimeout(timer); options.signal?.removeEventListener("abort", abort); }
 }
 
 function escapeHtml(value) {

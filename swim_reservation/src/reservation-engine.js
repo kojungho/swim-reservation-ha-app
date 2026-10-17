@@ -190,6 +190,7 @@ export class ReservationEngine {
         throw error;
       }
       const diagnostics = error.diagnostics || await this.collectDiagnostics();
+      if (this.navigationFailure?.status === 429) error.code = "SITE_RATE_LIMIT";
       error.diagnostics = diagnostics;
       error.room ||= this.selectedRoom;
       error.details = reservationErrorDetails(error, { ...this.traceContext, room: error.room, stage: error.step || this.currentStep, submitted, page: safeReservationUrl(this.page?.url?.()), navigation: this.navigationFailure });
@@ -222,7 +223,7 @@ export class ReservationEngine {
     this.page.on("response", response => {
       if (!response.request().isNavigationRequest() || response.frame() !== this.page?.mainFrame()) return;
       if (this.currentStep !== "initializing") this.recordTrace(this.currentStep, "http", { httpStatus: response.status(), method: response.request().method(), url: safeReservationUrl(response.url()) });
-      if (response.status() >= 400) this.navigationFailure = { status: response.status(), url: safeReservationUrl(response.url()) };
+      if (response.status() >= 400) this.navigationFailure = { status: response.status(), url: safeReservationUrl(response.url()), retryAfter: response.headers()["retry-after"] || null };
     });
     this.page.on("requestfailed", request => {
       if (request.isNavigationRequest()) this.navigationFailure = { ...this.navigationFailure, url: safeReservationUrl(request.url()), error: request.failure()?.errorText };
@@ -609,7 +610,7 @@ export class ReservationEngine {
           error.code = "NO_AVAILABLE_ROOM";
           throw error;
         } catch (error) {
-          profileStatuses[entry.index] = { ...profileStatuses[entry.index], room: error.room || profileStatuses[entry.index].room, details: error.details, state: ["ROOM_UNAVAILABLE", "NO_AVAILABLE_ROOM"].includes(error.code) ? "예약 실패" : "결과 확인 필요", message: error.details?.message || userErrorMessage(error) };
+          profileStatuses[entry.index] = { ...profileStatuses[entry.index], room: error.room || profileStatuses[entry.index].room, details: error.details, state: ["ROOM_UNAVAILABLE", "NO_AVAILABLE_ROOM"].includes(error.code) ? "예약 실패" : "결과 확인 필요", message: userErrorMessage(error) };
           await update();
           throw error;
         }
@@ -693,7 +694,7 @@ export class ReservationEngine {
       selectedRooms: sessions.map((session) => session.room),
       succeededRooms: succeeded,
       failedRooms: failed.map(({ room }) => room),
-      profileStatuses: failed.map(({ room, error }, index) => ({ index, room, state: "결과 확인 필요", message: reservationErrorDetails(error).message, details: error.details || reservationErrorDetails(error, { room }) })),
+      profileStatuses: failed.map(({ room, error }, index) => ({ index, room, state: "결과 확인 필요", message: userErrorMessage(error), details: error.details || reservationErrorDetails(error, { room }) })),
       technicalMessage: JSON.stringify(failed.map(({ room, error }) => error.details || reservationErrorDetails(error, { room }))),
       diagnostics: failed.find(({ error }) => error?.diagnostics)?.error.diagnostics || null,
       message: `동시 예약 결과: 성공 ${succeeded.length}개${succeeded.length ? ` (${succeeded.join(", ")})` : ""}, 실패 ${failed.length}개 (${failed.map(({ room }) => room).join(", ")}).`
@@ -775,6 +776,7 @@ function activeProfiles(config) {
 }
 
 function userErrorMessage(error) {
+  if (error?.code === "SITE_RATE_LIMIT") return "사이트가 요청을 제한했습니다 (HTTP 429). 예약 내역을 먼저 확인하고 사이트의 재시도 안내를 따라 주세요. 자동 재제출하지 않습니다.";
   const message = error?.message || String(error);
   if (/Target page, context or browser has been closed|locator\.evaluateAll/i.test(message)) {
     return "예약 준비 브라우저 연결이 종료되어 결과 확인이 필요합니다. 예약확인 결과를 확인한 뒤 다시 실행해 주세요.";

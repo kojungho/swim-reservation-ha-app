@@ -119,6 +119,24 @@ test("최종 제출 후 입력 화면이 유지되면 재제출하지 않는다"
   assert.equal(submits, 1);
 });
 
+test("최종 제출 429는 요청 제한으로 안내하고 자동 재제출하지 않는다", async () => {
+  let submits = 0;
+  const statuses = [];
+  const engine = new ReservationEngine({ store: { updateStatus: async patch => statuses.push(patch) } });
+  engine.page = {};
+  engine.ensurePage = async () => {};
+  engine.assertReservationDate = async () => {};
+  engine.detectPage = async () => "personal";
+  engine.fillPersonalInfo = async () => {};
+  engine.clickAction = async () => { submits++; engine.navigationFailure = { status: 429, retryAfter: "60" }; throw new Error("HTTP response failure"); };
+  engine.collectDiagnostics = async () => ({});
+  engine.close = async () => {};
+  await assert.rejects(() => engine.runSingle(config, { prepared: true }), error => error.code === "SITE_RATE_LIMIT");
+  assert.equal(submits, 1);
+  assert.match(statuses.at(-1).message, /HTTP 429.*자동 재제출하지 않습니다/);
+  assert.equal(JSON.parse(statuses.at(-1).technicalMessage).navigation.retryAfter, "60");
+});
+
 test("여러 객실 사전 준비는 체크한 예약 가능 객실마다 독립 세션을 만든다", async () => {
   const prepared = [];
   const statuses = [];

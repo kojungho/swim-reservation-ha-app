@@ -48,7 +48,7 @@ test("재조회한 대상이 변경되거나 중복이면 취소 요청을 보�
   manager.load = async () => [target];
   await assert.rejects(() => manager.cancel({}, "123", { ...target, nights: "2박" }), /변경/);
   manager.load = async () => [target, target];
-  await assert.rejects(() => manager.cancel({}, "123"), /찾지 못/);
+  await assert.rejects(() => manager.cancel({}, "123"), /여러 번/);
 });
 
 test("취소 요청 후 대상이 남거나 확인 페이지가 비정상이면 완료로 처리하지 않는다", async () => {
@@ -103,4 +103,15 @@ test("모의 조회부터 취소·재조회까지 실제 DOM과 연결하고 다
     assert.deepEqual(deleted, ["123"]);
     assert.deepEqual(result.reservations.map(row => row.id), ["456"]);
   } finally { await browser.close(); }
+});
+
+test("취소 진단은 대상 재조회와 대조 실패를 구별하고 개인정보를 기록하지 않는다", async () => {
+  const logs = [];
+  const manager = new ReservationManager({ log: async (level, event, message, details) => logs.push({ level, event, message, details }) });
+  manager.withPage = async action => action({});
+  manager.load = async () => [];
+  manager.clickCancellation = async () => assert.fail("대상이 없으면 취소 금지");
+  await assert.rejects(() => manager.cancel({ reserverName: "비공개", phone: "01011112222" }, "123"), /대상 대조.*예약 번호가 없습니다/);
+  assert.deepEqual(logs.map(log => [log.details.step, log.details.outcome]), [["대상 재조회", "start"], ["대상 재조회", "complete"], ["대상 대조", "start"], ["대상 대조", "error"]]);
+  assert.ok(!JSON.stringify(logs).includes("01011112222"));
 });

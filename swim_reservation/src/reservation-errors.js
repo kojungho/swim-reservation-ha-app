@@ -1,6 +1,7 @@
 export function safeReservationUrl(value) {
   try {
     const url = new URL(String(value));
+    if (!["http:", "https:"].includes(url.protocol)) return "";
     return `${url.origin}${url.pathname}`;
   } catch { return ""; }
 }
