@@ -159,6 +159,7 @@
       <div id="settingsControls"></div>
       <div class="actions"><button id="settingsSave" type="button">저장</button><button id="settingsReset" class="secondary" type="button">기본값</button></div>
       <p id="settingsMessage" role="status" aria-live="polite"></p>
+      <div class="app-update"><h3>예약 제출 간격</h3><p>다인·다중 예약의 최종 제출에 공통 적용합니다. 0초는 지연 미사용, 1초부터는 입력한 간격을 적용합니다. 첫 제출은 즉시 진행하며 변경값은 다음 실행부터 적용됩니다. 간격을 늘려도 예약 성공이나 요청 제한 해제를 보장하지 않습니다.</p><div class="section-actions"><label>최종 제출 간격(초)<input id="finalSubmitInterval" type="number" min="0" max="60" step="1" value="5" required></label><button id="saveFinalSubmitInterval" class="secondary" type="button">제출 간격 저장</button></div><p id="submissionSettingsMessage" role="status" aria-live="polite">기본값 5초 · 0~60초 (0: 미사용)</p></div>
     </section>
     <aside class="notice" id="safetyNotice">
       <strong>안전한 운영을 위해</strong>

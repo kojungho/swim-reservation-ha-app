@@ -5,6 +5,7 @@ import { fillPersonalFields } from "./personal-fields.js";
 import { readPageDiagnostics } from "./page-diagnostics.js";
 import { readReservationRows, readReceiptIdentity, sameReservationStay } from "./reservation-records.js";
 import { reservationErrorDetails, safeReservationUrl } from "./reservation-errors.js";
+import { FinalSubmitQueue } from "./final-submit-queue.js";
 
 const NAVIGATION_TIMEOUT = 20_000;
 
@@ -14,8 +15,9 @@ export function chromiumUserAgent(browser) {
 }
 
 export class ReservationEngine {
-  constructor({ store, executablePath = "/usr/bin/chromium", browserProvider = null, traceContext = {} }) {
+  constructor({ store, executablePath = "/usr/bin/chromium", browserProvider = null, traceContext = {}, getFinalSubmitInterval = async () => 5 }) {
     this.store = store;
+    this.getFinalSubmitInterval = getFinalSubmitInterval;
     this.executablePath = executablePath;
     this.browserProvider = browserProvider;
     this.browser = null;
@@ -38,7 +40,7 @@ export class ReservationEngine {
     const person = Number.isInteger(details.profileIndex) ? `예약자 ${details.profileIndex + 1}` : "예약";
     const room = details.room ? ` · ${details.room.replace(/_(하늘존|산맥존)/g, "")}` : "";
     const result = { start: "시작", complete: "완료", error: "실패", http: "HTTP 응답" }[outcome] || outcome;
-    const message = `${person}${room} · ${labels[step] || step} ${result}${extra.httpStatus ? ` · HTTP ${extra.httpStatus}` : ""}${extra.error?.message ? ` · ${extra.error.message}` : ""}`;
+    const message = `${person}${room} · ${step === "final-delay" ? "최종 제출 간격 대기" : labels[step] || step} ${result}${extra.httpStatus ? ` · HTTP ${extra.httpStatus}` : ""}${extra.error?.message ? ` · ${extra.error.message}` : ""}`;
     // Queue logging without delaying the time-critical final click. Flush when closing.
     this.traceWrites.push(Promise.resolve().then(() => this.store.recordLog?.(outcome === "error" || extra.httpStatus >= 400 ? "error" : "info", "booking-step", message, details)).catch(() => {}));
   }
@@ -132,9 +134,7 @@ export class ReservationEngine {
         if (await this.detectPage() !== "personal") throw new Error("미리 준비한 예약자 정보 페이지가 유지되지 않았습니다.");
         await this.traceStep("personal-fill", () => this.fillPersonalInfo(config));
         await this.store.updateStatus({ stage: "final-submit", message: "지정 시각에 최종 예약하기를 전송합니다." });
-        if (beforeSubmit) await beforeSubmit();
-        submitted = true;
-        await this.traceStep("final-submit", () => this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit));
+        await this.submitFinal(beforeSubmit, () => { submitted = true; });
       } else {
         await this.startRoomAttempt(config, attemptedRooms);
       }
@@ -170,9 +170,7 @@ export class ReservationEngine {
           if (submitted) throw new Error("최종 제출 후 예약자 입력 화면이 유지되어 결과 확인이 필요합니다. 중복 제출하지 않습니다.");
           await this.traceStep("personal-fill", () => this.fillPersonalInfo(config));
           await this.store.updateStatus({ stage: "final-submit", message: "예약자 정보를 입력하고 최종 예약을 전송합니다." });
-          if (beforeSubmit) await beforeSubmit();
-          submitted = true;
-          await this.traceStep("final-submit", () => this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit));
+          await this.submitFinal(beforeSubmit, () => { submitted = true; });
           continue;
         }
         if (result === "terms") {
@@ -206,6 +204,23 @@ export class ReservationEngine {
     } finally {
       await this.close();
     }
+  }
+
+  async createFinalSubmitQueue() {
+    const generation = this.closeGeneration || 0;
+    const queue = new FinalSubmitQueue({ intervalMs: (await this.getFinalSubmitInterval()) * 1000 });
+    if (generation !== (this.closeGeneration || 0)) queue.stop();
+    return queue;
+  }
+
+  async submitFinal(beforeSubmit, markSubmitted) {
+    const submit = async () => {
+      if (beforeSubmit) await beforeSubmit();
+      markSubmitted();
+      try { return await this.traceStep("final-submit", () => this.clickAction(["예약하기", "예약신청", "예약완료", "확인"], true, beforeSubmit)); }
+      catch (error) { if (this.navigationFailure?.status === 429) error.code = "SITE_RATE_LIMIT"; throw error; }
+    };
+    return this.finalSubmitQueue ? this.finalSubmitQueue.run(submit, delayMs => this.recordTrace("final-delay", "start", { delayMs, intervalSeconds: this.finalSubmitQueue.intervalMs / 1000 })) : submit();
   }
 
   async ensurePage() {
@@ -447,7 +462,7 @@ export class ReservationEngine {
       stage: "multiple-final-ready",
       selectedRoom: null,
       selectedRooms: selectedNames,
-      message: `${selectedNames.length}개 객실의 예약자 정보 입력을 마쳤습니다. 지정 시각에 동시에 최종 제출합니다.`
+      message: `${selectedNames.length}개 객실의 예약자 정보 입력을 마쳤습니다. 지정 시각부터 설정한 간격으로 최종 제출합니다.`
     });
   }
 
@@ -573,13 +588,15 @@ export class ReservationEngine {
 
   async runProfilesParallel(config, { prepared = false } = {}) {
     if (!prepared) await this.close();
+    this.ownedFinalSubmitQueue = await this.createFinalSubmitQueue();
+    const intervalSeconds = this.ownedFinalSubmitQueue.intervalMs / 1000;
     const profiles = activeProfiles(config);
     const profileStatuses = profiles.map(entry => ({ index: entry.index, label: entry.label, state: "예약 진행 중" }));
     // Status writes share a file; serialize them, while reservation sessions remain independent.
     let writes = Promise.resolve();
     const update = () => {
       const snapshot = structuredClone(profileStatuses);
-      writes = writes.then(() => this.store.updateStatus({ state: "running", stage: "profiles-parallel-running", profileStatuses: snapshot, message: "예약자별 우선순위로 동시에 예약을 진행합니다." }));
+      writes = writes.then(() => this.store.updateStatus({ state: "running", stage: "profiles-parallel-running", profileStatuses: snapshot, finalSubmitIntervalSeconds: intervalSeconds, message: `예약자별 준비는 동시에, 최종 제출은 ${intervalSeconds}초 간격으로 진행합니다.` }));
       return writes;
     };
     await update();
@@ -596,6 +613,7 @@ export class ReservationEngine {
             profileStatuses[entry.index] = { ...profileStatuses[entry.index], room: session.room, message: session.room ? `${session.rank}순위 시도` : "최신 객실 목록부터 진행" };
             await update();
             try {
+              session.engine.finalSubmitQueue = this.ownedFinalSubmitQueue;
               const result = await session.engine.runSingle(session.config, { prepared: Boolean(prepared && session.room), allowFallback: !session.room });
               profileStatuses[entry.index] = { ...profileStatuses[entry.index], state: "예약 완료", room: result?.room || session.room || session.status.selectedRoom, message: `${session.rank}순위 성공` };
               await update();
@@ -664,11 +682,14 @@ export class ReservationEngine {
   async runMultiple(config, { prepared = false } = {}) {
     if (!prepared || !this.childSessions.length) await this.prepareMultiple(config);
     const sessions = [...this.childSessions];
+    this.ownedFinalSubmitQueue = await this.createFinalSubmitQueue();
+    for (const session of sessions) session.engine.finalSubmitQueue = this.ownedFinalSubmitQueue;
     await this.store.updateStatus({
       state: "running",
       stage: "multiple-final-submit",
       selectedRooms: sessions.map((session) => session.room),
-      message: `${sessions.length}개 객실의 최종 예약하기를 동시에 전송합니다.`
+      finalSubmitIntervalSeconds: this.ownedFinalSubmitQueue.intervalMs / 1000,
+      message: `${sessions.length}개 객실의 최종 예약하기를 ${this.ownedFinalSubmitQueue.intervalMs / 1000}초 간격으로 전송합니다.`
     });
     const results = await Promise.allSettled(sessions.map((session) => (
       session.engine.runSingle(session.config, { prepared: true, allowFallback: false })
@@ -751,6 +772,9 @@ export class ReservationEngine {
   }
 
   async close() {
+    this.closeGeneration = (this.closeGeneration || 0) + 1;
+    this.ownedFinalSubmitQueue?.stop();
+    this.ownedFinalSubmitQueue = null;
     const children = this.childSessions.splice(0);
     const priority = this.prioritySessions.splice(0);
     await Promise.all([...children, ...priority].map((session) => session.engine.close().catch(() => {})));

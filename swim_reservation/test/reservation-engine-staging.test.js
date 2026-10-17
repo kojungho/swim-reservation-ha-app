@@ -82,7 +82,7 @@ test("최종 결과가 객실 마감이면 다음 우선순위로 처음부터 �
   assert.equal(statuses.some((status) => status.state === "success"), true);
 });
 
-test("여러 객실 모드는 독립 세션의 최종 제출을 동시에 시작한다", async () => {
+test("여러 객실 모드는 독립 세션을 함께 실행하고 공용 최종 제출 큐를 전달한다", async () => {
   const calls = [];
   const statuses = [];
   let release;
@@ -97,6 +97,7 @@ test("여러 객실 모드는 독립 세션의 최종 제출을 동시에 시작
   const running = engine.runMultiple({ ...config, bookingMode: "multiple" }, { prepared: true });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(calls.sort(), ["꿈_산맥존", "샘_산맥존"]);
+  assert.equal(engine.childSessions[0].engine.finalSubmitQueue, engine.childSessions[1].engine.finalSubmitQueue);
   release();
   await running;
 

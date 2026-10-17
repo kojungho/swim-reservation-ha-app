@@ -16,7 +16,10 @@ export async function mockBookApp(page, count = 2) {
     }
     if (req.method() !== "GET") state.writes.push(path);
     let result;
-    if (path === "/api/config") {
+    if (path === "/api/submission-settings") {
+      if (req.method() === "PUT") state.submissionSettings = req.postDataJSON();
+      result = state.submissionSettings || { intervalSeconds: 5 };
+    } else if (path === "/api/config") {
       if (req.method() === "PUT") state.config = normalizeConfig(req.postDataJSON());
       result = req.method() === "PUT" ? { config: state.config } : state.config;
     } else if (path === "/api/profiles") {

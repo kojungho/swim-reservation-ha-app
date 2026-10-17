@@ -5,14 +5,32 @@ import { chromium } from "playwright-core";
 import { mockBookApp } from "./fixtures/ui-book-app.js";
 const executablePath = [process.env.CHROMIUM_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
 
+test("설정에서 제출 간격 기본 5초·1초·0 미사용을 PC와 폰에서 저장한다", { skip: !executablePath }, async t => {
+  const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
+  for (const width of [390, 1280]) {
+    const page = await browser.newPage({ viewport: { width, height: 900 } }); const state = await mockBookApp(page);
+    await page.evaluate(() => switchWorkspaceTab("settings"));
+    const input = page.locator("#finalSubmitInterval"); assert.equal(await input.inputValue(), "5");
+    for (const seconds of [1, 0, 7]) {
+      await input.fill(String(seconds)); await page.locator("#saveFinalSubmitInterval").click();
+      await page.waitForFunction(value => document.getElementById("submissionSettingsMessage").textContent.includes(value === 0 ? "미사용(0초)" : `${value}초로 저장`), seconds);
+      assert.equal(state.submissionSettings.intervalSeconds, seconds);
+    }
+    await input.fill("-1"); await page.locator("#saveFinalSubmitInterval").click();
+    assert.equal(state.submissionSettings.intervalSeconds, 7);
+    await page.reload(); await page.waitForFunction(() => document.getElementById("finalSubmitInterval").value === "7");
+    assert.deepEqual(state.errors, []); await page.close();
+  }
+});
+
 test("서버 업데이트는 화면에 안내하고 구버전 화면에서 실제 취소를 보내지 않는다", { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
   const page = await browser.newPage(); await mockBookApp(page);
   let canceled = 0;
   await page.route("**/api/reservations/*/cancel", route => { canceled++; return route.fulfill({ json: { ok: true } }); });
   await page.route("**/api/status", route => {
-    assert.equal(route.request().headers()["x-swim-client-version"], "2.14.1");
-    return route.fulfill({ json: { state: "idle", appVersion: "2.14.2" } });
+    assert.equal(route.request().headers()["x-swim-client-version"], "2.14.2");
+    return route.fulfill({ json: { state: "idle", appVersion: "2.14.3" } });
   });
   await page.evaluate(async () => {
     nextStatusCheck = 0; await refreshStatus();
@@ -20,9 +38,9 @@ test("서버 업데이트는 화면에 안내하고 구버전 화면에서 실�
     document.querySelector(".reservation-cancel-button").click();
   });
   assert.equal(await page.locator("#screenUpdateNotice").isVisible(), true);
-  assert.match(await page.locator("#screenUpdateNotice").textContent(), /화면 2.14.1.*서버 2.14.2/);
+  assert.match(await page.locator("#screenUpdateNotice").textContent(), /화면 2.14.2.*서버 2.14.3/);
   assert.equal(canceled, 0);
-  await page.route("**/api/status", route => route.fulfill({ json: { state: "idle", appVersion: "2.14.1" } }));
+  await page.route("**/api/status", route => route.fulfill({ json: { state: "idle", appVersion: "2.14.2" } }));
   await page.evaluate(async () => { nextStatusCheck = 0; await refreshStatus(); });
   assert.equal(await page.locator("#screenUpdateNotice").isVisible(), false);
 });

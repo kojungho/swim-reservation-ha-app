@@ -18,6 +18,7 @@ import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./
 import { PlanManager, singleBookingConfig } from "./plan-manager.js";
 import { MonthCache } from "./month-cache.js";
 import { AppVersion } from "./app-version.js";
+import { SubmissionSettings } from "./submission-settings.js";
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -29,7 +30,9 @@ const cancelEventIds = new Set();
 const store = new Store(DATA_DIR);
 const siteMap = new SiteMap(DATA_DIR, path.join(PUBLIC_DIR, "site-map.png"));
 const uiSettings = new UiSettings(DATA_DIR);
-const engine = new ReservationEngine({ store, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
+const submissionSettings = new SubmissionSettings(DATA_DIR);
+const getFinalSubmitInterval = async () => (await submissionSettings.read()).intervalSeconds;
+const engine = new ReservationEngine({ store, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", getFinalSubmitInterval });
 const timeSync = new SiteTimeSync();
 const scheduler = new Scheduler({ store, engine, timeSync });
 const inspections = new InspectionService(
@@ -42,7 +45,7 @@ const inspections = new InspectionService(
   () => !scheduler.running && !scheduler.preparing && !plans.busy
 );
 const plans = new PlanManager({ dataDir: DATA_DIR, timeSync,
-  engineFactory: planStore => new ReservationEngine({ store: planStore, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" }),
+  engineFactory: planStore => new ReservationEngine({ store: planStore, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", getFinalSubmitInterval }),
   inspect: (config, signal) => inspections.inspect(config, signal),
   canInspect: () => !scheduler.running && !scheduler.preparing,
   log: (...args) => store.recordLog(...args)
@@ -87,6 +90,14 @@ const server = http.createServer(async (request, response) => {
         if (cancelEventIds.size > 200) cancelEventIds.delete(cancelEventIds.values().next().value);
       }
       return json(response, 200, { ok: true });
+    }
+    if (url.pathname === "/api/submission-settings" && request.method === "GET") return json(response, 200, await submissionSettings.read());
+    if (url.pathname === "/api/submission-settings" && request.method === "PUT") {
+      let settings;
+      try { settings = await submissionSettings.save(await readJsonBody(request)); }
+      catch (error) { return json(response, 400, { ok: false, error: error.message }); }
+      await store.recordLog("info", "submission-settings", `다인·다중 예약 최종 제출 간격을 ${settings.intervalSeconds}초로 저장했습니다.`, settings);
+      return json(response, 200, settings);
     }
     if (url.pathname === "/api/ui-settings" && request.method === "GET") return json(response, 200, await uiSettings.read());
     if (url.pathname === "/api/ui-settings" && request.method === "PUT") {

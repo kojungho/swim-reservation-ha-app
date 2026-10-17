@@ -44,6 +44,16 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
     return api;
   }
   let api = await boot();
+  await t.test("최종 제출 간격 API는 0 미사용·1초부터 저장하고 잘못된 값은 기존 값을 보존한다", async () => {
+    assert.equal((await api("submission-settings")).intervalSeconds, 5);
+    for (const intervalSeconds of [0, 1, 7]) assert.equal((await api("submission-settings", "PUT", { intervalSeconds })).intervalSeconds, intervalSeconds);
+    const invalid = await fetch(`${api.baseUrl}api/submission-settings`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intervalSeconds: -1 }) });
+    assert.equal(invalid.status, 400); await invalid.json();
+    assert.equal((await api("submission-settings")).intervalSeconds, 7);
+    await stop(); api = await boot();
+    assert.equal((await api("submission-settings")).intervalSeconds, 7);
+    await api("submission-settings", "PUT", { intervalSeconds: 5 });
+  });
   await t.test("취소 API의 초기 거절과 화면 진단을 기록하고 실제 사이트 취소는 실행하지 않는다", async () => {
     const refused = await fetch(`${api.baseUrl}api/reservations/123/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     assert.equal(refused.status, 400);
@@ -53,14 +63,14 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
     const stale = await fetch(`${api.baseUrl}api/reservations/123/cancel`, { method: "POST", headers: { "Content-Type": "application/json", "X-Swim-Client-Version": "2.14.0" }, body: "{}" });
     assert.equal(stale.status, 409);
     assert.equal((await stale.json()).code, "CLIENT_VERSION_MISMATCH");
-    assert.equal((await api("status")).appVersion, "2.14.1");
+    assert.equal((await api("status")).appVersion, "2.14.2");
     const diagnostic = { id: "00000000-0000-4000-8000-000000000123", event: "clicked", reservationId: "123", occurredAt: Date.now() };
     await api("cancel-events", "POST", diagnostic); await api("cancel-events", "POST", diagnostic);
     const logs = (await api("logs")).entries;
     assert.ok(logs.some(item => item.event === "cancel-received"));
     assert.ok(logs.some(item => item.event === "cancel-rejected"));
     assert.ok(logs.some(item => item.details?.code === "RESERVATION_SNAPSHOT_REQUIRED" && item.details.missingFields.join(",") === "room,stayDate,nights"));
-    assert.ok(logs.some(item => item.details?.code === "CLIENT_VERSION_MISMATCH" && item.details.clientVersion === "2.14.0" && item.details.serverVersion === "2.14.1"));
+    assert.ok(logs.some(item => item.details?.code === "CLIENT_VERSION_MISMATCH" && item.details.clientVersion === "2.14.0" && item.details.serverVersion === "2.14.2"));
     assert.equal(logs.filter(item => item.details?.eventId === diagnostic.id).length, 1);
   });
   assert.equal((await api("month-cache")).intervalMinutes, 60);

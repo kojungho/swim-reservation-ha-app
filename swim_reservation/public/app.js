@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.14.1";
+const CLIENT_VERSION = "2.14.2";
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
 function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, "").replace(/(\d+)순위/g, (_, rank) => rankSymbol(Number(rank))); }
@@ -101,7 +101,7 @@ const STAGE_LABELS = {
   "starting-now": "즉시 예약 시작", "room-selected": "객실 선택 완료",
   "room-reselected": "다음 객실 선택 완료", "terms-accepted": "환불 규정 동의 완료",
   "final-submit": "최종 예약 제출", "retrying-next-room": "다음 순위 객실 재시도",
-  complete: "예약 완료", "multiple-final-submit": "복수 객실 동시 제출",
+  complete: "예약 완료", "multiple-final-submit": "복수 객실 간격 제출",
   "multiple-complete": "복수 객실 예약 완료", "multiple-partial": "복수 예약 일부 성공",
   "multiple-failed": "복수 예약 실패", "reservation-error": "예약 처리 오류",
   "profiles-final-ready": "예약자별 최종 제출 대기", "profile-running": "예약자별 순차 예약 진행",
@@ -723,8 +723,8 @@ function renderRooms() {
   elements.roomSectionTitle.textContent = "객실 선택";
   elements.roomList.hidden = parallel;
   document.getElementById("roomDragHelp").hidden = parallel || multiple;
-  elements.roomSectionHelp.textContent = parallel ? "위에서 입력한 각 예약자의 객실을 체크하고 손잡이로 순위를 정하세요. 한 사람당 객실 하나를 동시에 예약합니다." : multiple
-    ? "체크한 객실(최대 5개)을 각각 별도 예약으로 준비하고 같은 시각에 최종 제출합니다."
+  elements.roomSectionHelp.textContent = parallel ? "위에서 입력한 각 예약자의 객실을 체크하고 손잡이로 순위를 정하세요. 한 사람당 객실 하나를 예약하며, 최종 제출은 설정한 간격으로 진행합니다." : multiple
+    ? "체크한 객실(최대 5개)을 각각 별도 예약으로 준비하고 최종 제출은 설정한 간격으로 진행합니다."
     : "체크된 객실 중 위에 있는 객실부터 하나가 성공할 때까지 시도합니다.";
   elements.roomList.replaceChildren();
   let rank = 0;

@@ -9,6 +9,22 @@ const gallerySelection = new Set();
 const fontNames = { title: "앱 제목", heading: "구역 제목", body: "본문·안내", field: "입력칸·항목", button: "버튼·메뉴", room: "객실명", status: "상태 표시", calendar: "달력", list: "일정·조회 내역", log: "로그" };
 
 async function initializeUiSettings() {
+  const intervalInput = document.getElementById("finalSubmitInterval");
+  const intervalMessage = document.getElementById("submissionSettingsMessage");
+  try {
+    const settings = await request("submission-settings");
+    if (Number.isInteger(settings.intervalSeconds)) intervalInput.value = settings.intervalSeconds;
+  } catch (error) { intervalMessage.textContent = `제출 간격 조회 실패: ${error.message}`; }
+  document.getElementById("saveFinalSubmitInterval").addEventListener("click", async event => {
+    if (!intervalInput.reportValidity()) return;
+    event.target.disabled = true;
+    try {
+      const settings = await request("submission-settings", { method: "PUT", body: JSON.stringify({ intervalSeconds: intervalInput.valueAsNumber }) });
+      intervalInput.value = settings.intervalSeconds;
+      intervalMessage.textContent = `${settings.intervalSeconds === 0 ? "지연 미사용(0초)" : `${settings.intervalSeconds}초`}로 저장했습니다. 다인·다중 예약의 다음 실행부터 적용됩니다.`;
+    } catch (error) { intervalMessage.textContent = `저장 실패: ${error.message}`; }
+    finally { event.target.disabled = false; }
+  });
   document.getElementById("checkAppVersion").addEventListener("click", async event => {
     event.target.disabled = true;
     const status = document.getElementById("appVersionStatus");
