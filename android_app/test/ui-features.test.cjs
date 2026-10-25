@@ -1,11 +1,11 @@
 const test=require('node:test'),assert=require('node:assert/strict'),{readFile}=require('node:fs/promises'),path=require('node:path'),{chromium}=require('playwright-core');
 const root=path.resolve(__dirname,'../app/src/main/assets/ui');
-async function setup(browser,width=390){
+async function setup(browser,width=390,storedUi={}){
   const page=await browser.newPage({viewport:{width,height:900},hasTouch:width<600,isMobile:width<600}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',dialog=>dialog.accept());
   await page.clock.setFixedTime(new Date('2026-10-25T10:00:00+09:00'));
-  await page.addInitScript(()=>{
+  await page.addInitScript(storedUi=>{
     const rooms=['해_하늘존','달_하늘존','별_하늘존','빛_하늘존','강_하늘존','산_하늘존','들_하늘존','숲_하늘존','샘_산맥존','온_산맥존','숨_산맥존','꿈_산맥존','솔_산맥존','결_산맥존'];
-    window.nativeMock={vault:{rooms,profiles:[{id:'test-person',name:'모의예약자',payer:'',phone:'01000000000'}],plans:[],ui:{},draft:{date:'2026-12-22',nights:1,mode:'reserve',rooms:'해_하늘존, 달_하늘존',siteVersion:'swimozicamp-v1'},version:'0.4.0-preview'},state:{stage:'IDLE',message:'모의 상태',active:false,uncertain:false,log:'',notifications:true,battery:true,alarm:true,catalog:rooms,clock:{synced:true,offset:120,updated:Date.now(),rtt:10}},calls:[],maps:{photos:[],selected:''}};
+    window.nativeMock={vault:{rooms,profiles:[{id:'test-person',name:'모의예약자',payer:'',phone:'01000000000'}],plans:[],ui:storedUi,draft:{date:'2026-12-22',nights:1,mode:'reserve',rooms:'해_하늘존, 달_하늘존',siteVersion:'swimozicamp-v1'},version:'0.4.0-preview'},state:{stage:'IDLE',message:'모의 상태',active:false,uncertain:false,log:'',notifications:true,battery:true,alarm:true,catalog:rooms,clock:{synced:true,offset:120,updated:Date.now(),rtt:10}},calls:[],maps:{photos:[],selected:''}};
     window.Phone={request(raw){const {action,data}=JSON.parse(raw),s=window.nativeMock;s.calls.push({action,data});let result={};
       if(action==='load')result=s.vault;else if(action==='state')result=s.state;else if(action==='draft'){s.vault.draft=data;result=s.vault;}else if(action==='ui'){s.vault.ui=data;result=s.vault;}
       else if(action==='profilePut'){s.vault.profiles.push({id:'saved-'+s.vault.profiles.length,...data});result=s.vault;}
@@ -17,7 +17,7 @@ async function setup(browser,width=390){
       else if(action==='lookup'){s.state.lookup={pending:false,capturedAt:Date.now(),profiles:[{label:'모*자',profileIndex:0,ok:true,count:1}],errors:[],rows:[{profileIndex:0,id:'TEST123-ABC',room:'해_하늘존',status:'입금 대기',stayDate:'2026-12-22',nights:'1박',total:'60,000원',depositDeadline:'12월 1일 10:00'}]};}
       return JSON.stringify({ok:true,data:result});
     }};
-  });
+  },storedUi);
   await page.route('https://phone.swim.invalid/**',async route=>{const name=new URL(route.request().url()).pathname.slice(1);if(name.startsWith('api/')||name==='favicon.ico')return route.fulfill({status:403,body:''});if(name.startsWith('map/'))return route.fulfill({contentType:'image/png',body:await readFile(path.join(root,'site-map.png'))});return route.fulfill({contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':name.endsWith('.png')?'image/png':'text/html',body:await readFile(path.join(root,name))});});
   await page.goto('https://phone.swim.invalid/index.html');await page.waitForFunction(()=>document.documentElement.dataset.ready==='true'&&featuresReady);return {page,errors};
 }
@@ -32,8 +32,17 @@ test('드래그 손잡이만 표시·촘촘한 간격·순위 보존·키보드�
     if(width===390){const cdp=await page.context().newCDPSession(page),box=await page.locator('[data-room="해_하늘존"] .room-drag-handle').boundingBox();await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+22,y:box.y+22}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:box.x+22,y:box.y+100}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});assert.equal(await page.evaluate(()=>roomOrder.join('|')),before);assert.equal(await page.evaluate(()=>roomDragSession===null),true);}
     await page.evaluate(()=>{nativeMock.state.availability={key:roomQueryKey(),ok:true,capturedAt:Date.now(),rooms:vault.rooms.map((name,i)=>({name,available:i===0}))};poll();});assert.match(await page.locator('[data-room="해_하늘존"] small').textContent(),/예약 가능/);assert.match(await page.locator('[data-room="달_하늘존"] small').textContent(),/잔여 없음/);
     if(width===390&&process.env.UI_SCREENSHOT){await page.locator('#roomList').scrollIntoViewIfNeeded();await page.screenshot({path:process.env.UI_SCREENSHOT});}
-    await page.locator('#nights').selectOption('2');assert.match(await page.locator('[data-room="해_하늘존"] small').textContent(),/미확인/);assert.deepEqual(errors,[]);await page.close();
+    await page.locator('#checkoutDate').fill('2026-12-24');assert.match(await page.locator('[data-room="해_하늘존"] small').textContent(),/미확인/);assert.deepEqual(errors,[]);await page.close();
   }
+});
+test('날짜 확인 숫자는 제거하고 입실·퇴실 기본 입력과 박수 자동 계산, 기존 날짜 복원을 유지한다',async t=>{
+  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());const{page,errors}=await setup(browser);
+  assert.equal(await page.locator('#epochValue').count(),0);assert.equal(await page.locator('#checkoutField').isVisible(),true);assert.equal(await page.locator('#nightsField').isVisible(),false);assert.equal(await page.locator('#checkoutDate').inputValue(),'2026-12-23');
+  await page.locator('#checkoutDate').fill('2026-12-25');assert.equal(await page.evaluate(()=>readPlan().nights),3);assert.equal(await page.locator('#stayNightsDisplay').textContent(),'3박');
+  await page.evaluate(()=>loadPlan({date:'2026-12-28',nights:4,mode:'reserve'}));assert.equal(await page.locator('#checkoutDate').inputValue(),'2027-01-01');assert.equal(await page.evaluate(()=>readPlan().nights),4);
+  await page.evaluate(()=>{nativeMock.vault.ui={stayRange:false};});await page.reload();await page.waitForFunction(()=>featuresReady);assert.equal(await page.locator('#checkoutField').isVisible(),true);assert.equal(await page.evaluate(()=>nativeMock.vault.ui.dateInputVersion),1);assert.deepEqual(errors,[]);await page.close();
+  const oldUi=await setup(browser,390,{stayRange:false});assert.equal(await oldUi.page.locator('#checkoutField').isVisible(),true);await oldUi.page.close();
+  const chosen=await setup(browser,390,{stayRange:false,dateInputVersion:1});assert.equal(await chosen.page.locator('#nightsField').isVisible(),true);await chosen.page.close();
 });
 test('배치도 사진 목록은 빈 상태와 기존 사진 뒤에 추가 타일을 표시하고 6장 한도를 지킨다',async t=>{
   const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());

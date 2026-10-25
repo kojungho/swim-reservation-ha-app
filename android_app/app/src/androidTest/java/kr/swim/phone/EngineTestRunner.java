@@ -9,7 +9,7 @@ import java.util.concurrent.*;
 import java.util.function.BooleanSupplier;
 
 /** On-device integration tests; only intercepted demo pages, never real site bookings. */
-public final class EngineTestRunner extends Instrumentation {
+public class EngineTestRunner extends Instrumentation {
     int assertions=0;StringBuilder report=new StringBuilder();Context app;LocalStore store;Activity activity;boolean liveInspect=false;
     void check(boolean value,String message){assertions++;if(!value)throw new AssertionError(message);report.append("PASS ").append(message).append('\n');Bundle b=new Bundle();b.putString("stream","PASS "+message+"\n");sendStatus(0,b);}
     void await(BooleanSupplier predicate,long timeout)throws Exception{long end=System.currentTimeMillis()+timeout;while(!predicate.getAsBoolean()&&System.currentTimeMillis()<end)Thread.sleep(100);if(!predicate.getAsBoolean())throw new AssertionError("Timed out: "+store.stage()+" / "+store.message());}

@@ -1,8 +1,8 @@
 {
   "packageId": "kr.swim.phone",
-  "versionCode": 8,
-  "versionName": "0.4.2-preview",
+  "versionCode": 9,
+  "versionName": "0.4.3-preview",
   "minSupportedVersionCode": 5,
-  "changeType": "design",
-  "apkUrl": "https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-v0.4.2-preview/swim-phone-0.4.2-preview.apk"
+  "changeType": "fix",
+  "apkUrl": "https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-v0.4.3-preview/swim-phone-0.4.3-preview.apk"
 }
