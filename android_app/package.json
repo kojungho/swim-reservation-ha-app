@@ -1,0 +1,1 @@
+{"private":true,"scripts":{"test":"node --test test/*.test.cjs"},"devDependencies":{"playwright-core":"1.62.1"}}

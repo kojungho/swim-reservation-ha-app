@@ -1,21 +1,21 @@
 function campStep(op,p){
-  const names=p.catalog, rooms=names.map((name,i)=>({name,siteId:i+1,displayName:name.split('_').reverse().join('')}));
+  const rooms=p.catalog.map((room,i)=>typeof room==='string'?{name:room,siteId:i+1,displayName:room.split('_').reverse().join('')}:room);
   const date=p.date,checkout=p.checkout,site=String(p.site);
   const fail=code=>({ok:false,code});
   const verify=filled=>{
     const forms=document.querySelectorAll('form.js-book');if(forms.length!==1)return null;
     const form=forms[0],u=new URL(form.action);
     const expected={site,checkin:date,checkout,adults:String(p.adults),children:'0',infants:'0'};
-    const checks={action:u.origin===location.origin&&u.pathname==='/camp/book.php'&&!u.search,method:form.method.toLowerCase()==='post',csrf:Boolean(form.querySelector('[name="_csrf"]')?.value),siteName:document.querySelector('.summary-card .sum-title')?.textContent.replace(/\s/g,'')===rooms[p.site-1]?.displayName};
+    const checks={action:u.origin===location.origin&&u.pathname==='/camp/book.php'&&!u.search,method:form.method.toLowerCase()==='post',csrf:Boolean(form.querySelector('[name="_csrf"]')?.value),siteName:document.querySelector('.summary-card .sum-title')?.textContent.replace(/\s/g,'')===rooms.find(room=>room.siteId===p.site)?.displayName};
     for(const [key,value]of Object.entries(expected))checks[key]=form.querySelector(`[name="${key}"]`)?.value===value;
     if(filled){const terms=[...form.querySelectorAll('input.js-agree[data-required="1"]')];checks.terms=terms.length>0&&terms.every(e=>e.type==='checkbox'&&e.checked&&!e.disabled);checks.bank=form.querySelector('[name="pay_method"][value="bank"]')?.checked===true;checks.valid=form.checkValidity();checks.name=form.querySelector('[name="name"]')?.value===p.name;checks.phone=form.querySelector('[name="phone"]')?.value===p.phone;}
     return {form,checks,ok:Object.values(checks).every(Boolean)};
   };
   if(op==='listing'){
     const u=new URL(location.href);if(u.searchParams.get('ci')!==date||u.searchParams.get('co')!==checkout||!document.querySelector('.room-list'))return fail('LIST_UNRECOGNIZED');
-    const available=[];
-    for(const a of document.querySelectorAll('a.room-card[href]')){const url=new URL(a.href),id=Number(url.searchParams.get('site')),name=a.querySelector('.room-name')?.textContent.trim();if(url.origin!==location.origin||url.pathname!=='/camp/site.php'||url.searchParams.get('ci')!==date||url.searchParams.get('co')!==checkout||!rooms[id-1]||rooms[id-1].displayName!==name?.replace(/\s/g,''))return fail('CATALOG_MISMATCH');available.push(id);}
-    return {ok:true,available};
+    const available=[],catalog=[];
+    for(const a of document.querySelectorAll('a.room-card[href]')){const url=new URL(a.href),id=Number(url.searchParams.get('site')),displayName=a.querySelector('.room-name')?.textContent.replace(/\s/g,'');if(url.origin!==location.origin||url.pathname!=='/camp/site.php'||url.searchParams.get('ci')!==date||url.searchParams.get('co')!==checkout||!Number.isSafeInteger(id)||id<1||id>10000||!displayName)return fail('CATALOG_MISMATCH');const old=rooms.find(room=>room.siteId===id);if(old&&old.displayName!==displayName)return fail('CATALOG_MISMATCH');const match=/^(하늘존|산맥존)(.+)$/.exec(displayName),name=match?match[2]+'_'+match[1]:displayName;if(rooms.some(room=>room.name===name&&room.siteId!==id)||available.includes(id))return fail('CATALOG_MISMATCH');available.push(id);catalog.push({name,displayName,siteId:id});}
+    return {ok:true,available,catalog};
   }
   if(op==='prepare'){
     if(!document.querySelector('form.js-book')){const text=document.querySelector('.msg-box')?.textContent||'';return fail(/체크인까지|오픈|예약.*시작|아직/.test(text)?'NOT_OPEN':/예약.*(불가|마감)|예약할 수 없|선택.*(없|불가)/.test(text)?'NO_ROOM':'FORM_UNRECOGNIZED');}

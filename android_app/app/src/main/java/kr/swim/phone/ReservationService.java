@@ -8,6 +8,7 @@ import android.os.*;
 /** Active execution/watch only. Future schedules have no service or ongoing notification. */
 public final class ReservationService extends Service {
     static final String CHANNEL="reservation-execution";
+    static final String RESULT_CHANNEL="reservation-results";
     private static ReservationService instance;
     static boolean alive(){return instance!=null&&!instance.closing;}
     private final Handler main=new Handler(Looper.getMainLooper());
@@ -17,10 +18,10 @@ public final class ReservationService extends Service {
     private final Runnable renew=new Runnable(){public void run(){if(!running||engine==null)return;holdCpu();main.postDelayed(this,60000);}};
     private final Runnable watchDue=()->{if(running&&plan!=null&&plan.watch()&&store.active())execute();};
     @Override public void onCreate(){super.onCreate();instance=this;store=new LocalStore(this);channel(this);}
-    static void channel(Context c){c.getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel(CHANNEL,"예약 엔진 실행 상태",NotificationManager.IMPORTANCE_LOW));}
+    static void channel(Context c){NotificationManager manager=c.getSystemService(NotificationManager.class);manager.createNotificationChannel(new NotificationChannel(CHANNEL,"예약 엔진 실행 상태",NotificationManager.IMPORTANCE_LOW));manager.createNotificationChannel(new NotificationChannel(RESULT_CHANNEL,"예약 결과·오류 알림",NotificationManager.IMPORTANCE_DEFAULT));}
     static Notification notice(Context c,String text,boolean ongoing){
         PendingIntent open=PendingIntent.getActivity(c,0,new Intent(c,MainActivity.class),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-        Notification.Builder b=new Notification.Builder(c,CHANNEL).setSmallIcon(kr.swim.phone.R.drawable.ic_camp).setContentTitle("쉼오지 폰 예약")
+        Notification.Builder b=new Notification.Builder(c,ongoing?CHANNEL:RESULT_CHANNEL).setSmallIcon(kr.swim.phone.R.drawable.ic_camp).setContentTitle("쉼오지 폰 예약").setVisibility(Notification.VISIBILITY_PRIVATE)
             .setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text)).setContentIntent(open).setOngoing(ongoing).setOnlyAlertOnce(true);
         if(ongoing)b.addAction(new Notification.Action.Builder(null,"중지",PendingIntent.getService(c,1,new Intent(c,ReservationService.class).setAction("STOP"),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT)).build());
         return b.build();
@@ -51,7 +52,7 @@ public final class ReservationService extends Service {
             plan.validate(lookup);PlanScheduler.requireReady(this,plan,lookup);
             if(!lookup&&!plan.demo()&&store.uncertain())throw new IllegalStateException("이전 최종 제출 결과가 미확인입니다. 공식 내역을 먼저 확인하세요.");
             running=true;
-            if(stage.equals("WAITING")&&plan.trigger>System.currentTimeMillis()){
+            if(stage.equals("WAITING")&&plan.trigger>SiteClock.now(this)){
                 AlarmReceiver.schedule(this,plan.trigger);
                 running=false;stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY;
             }
@@ -62,8 +63,8 @@ public final class ReservationService extends Service {
     private void execute(){
         if(!running||engine!=null)return;
         if(!store.active()){finish(store.uncertain()?"CHECK_REQUIRED":"STOPPED","등록된 실행 일정이 없어 중지했습니다.");return;}
-        long now=System.currentTimeMillis();
-        if(!lookup&&now>=plan.stayStart()){finish("STOPPED","입실일 00시가 지나 실행하지 않습니다.");return;}
+        long now=SiteClock.now(this);
+        if(!lookup&&now>=(plan.watch()?plan.deadline():plan.stayStart())){finish("STOPPED","예약·감시 마감 시각이 지나 실행하지 않습니다.");return;}
         try {PlanScheduler.requireReady(this,plan,lookup);}
         catch(Exception e){finish("FAILED",e.getMessage());return;}
         if(!lookup&&plan.watch()&&store.stage().equals("WATCHING")){
@@ -81,7 +82,7 @@ public final class ReservationService extends Service {
             engine=new PhoneEngine(this,plan,lookup,new PhoneEngine.Events(){
                 @Override public void stage(String stage,String message){update(stage,message);}
                 @Override public void beforeFinal(){
-                    if(!running||closing||!store.active()||System.currentTimeMillis()>=plan.stayStart())throw new IllegalStateException("Stopped or expired");
+                    if(!running||closing||!store.active()||SiteClock.now(ReservationService.this)>=(plan.watch()?plan.deadline():plan.stayStart()))throw new IllegalStateException("Stopped or expired");
                     if(!plan.demo()){if(store.uncertain())throw new IllegalStateException("Uncertain prior submit");store.markSubmitted();}
                     store.state("SUBMITTING",plan.demo()?"[모의] 최종 제출 기록":"최종 제출 전 기록 완료 · 중복 제출 방지",true);
                 }
@@ -98,7 +99,7 @@ public final class ReservationService extends Service {
         releaseCpu();
         try {
             long delay=Math.max(Plan.MIN_POLL_SECONDS,plan.pollSeconds)*1000L;
-            long untilMidnight=plan.stayStart()-System.currentTimeMillis();
+            long untilMidnight=plan.deadline()-SiteClock.now(this);
             if(untilMidnight<=0){finish("STOPPED","입실일 00시가 지나 감시를 종료했습니다.");return;}
             // A deadline alarm may wake earlier solely to terminate, never to query before ten minutes.
             long due=SystemClock.elapsedRealtime()+Math.min(delay,untilMidnight);

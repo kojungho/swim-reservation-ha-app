@@ -10,14 +10,16 @@ import android.os.*;
 final class PlanScheduler {
     static synchronized void start(Context c,Plan plan,boolean lookup)throws Exception {
         LocalStore store=new LocalStore(c);
+        CampLookup.cancel();
         if(store.active())throw new IllegalStateException("기존 작업을 먼저 중지해 주세요.");
         plan.validate(lookup);ReservationService.channel(c);
         requireReady(c,plan,lookup);
+        if(lookup)store.availability(plan,java.util.Set.of(),false,true);
         if(!lookup&&!plan.demo()&&store.uncertain())throw new IllegalStateException("이전 최종 제출 결과를 공식 예약 내역에서 먼저 확인해 주세요.");
         store.save("run",plan);store.watchDueElapsed(0);
         c.getSystemService(NotificationManager.class).cancel(2); // Clear the previous result, not an execution notification.
         try {
-            if(!lookup&&plan.trigger>System.currentTimeMillis()){
+            if(!lookup&&plan.trigger>SiteClock.now(c)){
                 store.state("WAITING","예약 시각까지 알림 없이 대기 · 실행 시각에만 엔진 시작",true);
                 AlarmReceiver.schedule(c,plan.trigger);
             }else {

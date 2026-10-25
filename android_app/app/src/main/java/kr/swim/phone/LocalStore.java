@@ -53,6 +53,16 @@ public final class LocalStore {
     public void watchDueElapsed(long when){if(!prefs.edit().putLong("watch-due-elapsed",when).commit())throw new IllegalStateException("감시 시각 저장 실패");}
     public String message(){return prefs.getString("message","폰 내부 독립 실행 · HA 연결 없음");}
     public String log(){return prefs.getString("log","");}
+    public JSONObject availability(){try{return new JSONObject(prefs.getString("availability","{}"));}catch(Exception e){return new JSONObject();}}
+    public void availability(Plan plan,java.util.Set<Integer> available,boolean ok){
+        availability(plan,available,ok,false);
+    }
+    public void availability(Plan plan,java.util.Set<Integer> available,boolean ok,boolean pending){
+        try{JSONArray rooms=new JSONArray();if(ok)for(int i=0;i<RoomCatalog.NAMES.size();i++)rooms.put(new JSONObject().put("name",RoomCatalog.NAMES.get(i)).put("available",available.contains(RoomCatalog.id(RoomCatalog.NAMES.get(i)))));
+            JSONObject result=new JSONObject().put("key",plan.date+"/"+plan.nights+"/"+plan.adults).put("ok",ok).put("pending",pending).put("capturedAt",System.currentTimeMillis()).put("rooms",rooms);
+            if(!prefs.edit().putString("availability",result.toString()).commit())throw new IllegalStateException("조회 결과 저장 실패");
+        }catch(JSONException e){throw new IllegalStateException("조회 결과 변환 실패");}
+    }
     public boolean uncertain(){return prefs.getBoolean("unverified-submit",false);}
     public void markSubmitted() {
         if(!prefs.edit().putBoolean("unverified-submit",true).commit())throw new IllegalStateException("최종 제출 기록을 저장하지 못했습니다.");

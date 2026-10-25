@@ -34,6 +34,7 @@ public final class PhoneEngine {
     private final Runnable timeout=()->finish(finalSent?"CHECK_REQUIRED":"FAILED",finalSent?"전송 뒤 응답 시간 초과 · 예약 내역 확인 필요 · 재제출하지 않습니다.":"사이트 응답 시간 초과 · 중지했습니다.");
     public static final String HOST="www.swimozicamp.com";
     private CampPhoneEngine camp;
+    private BatchPhoneEngine batch;
     private static final String DEMO_HOST="demo.swim.invalid";
     public PhoneEngine(Context c,Plan p,boolean lookup,Events events)throws IOException {
         context=c;plan=p;this.lookup=lookup;this.events=events;
@@ -47,6 +48,7 @@ public final class PhoneEngine {
     }
     @SuppressLint("SetJavaScriptEnabled")
     public void start() {
+        if(plan.batch()){try{batch=new BatchPhoneEngine(context,plan,events);batch.start();}catch(Exception e){finish("FAILED","다인·다중 예약 초기화 실패");}return;}
         if(!plan.demo()||demoScenario.startsWith("camp")){try{camp=new CampPhoneEngine(context,plan,lookup,events);camp.start();}catch(Exception e){finish("FAILED","새 사이트 엔진 초기화 실패");}return;}
         if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Main thread required");
         web=new WebView(context);web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT,false);WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);
@@ -158,6 +160,6 @@ public final class PhoneEngine {
         }catch(Exception e){fail();}
     }
     private void fail(){finish(finalSent?"CHECK_REQUIRED":"FAILED","사이트 화면 구조 또는 처리 단계가 맞지 않습니다. 안전하게 중지 · 자동 재제출 없음");}
-    public void cancel(){if(camp!=null){camp.cancel();return;}if(!ended)finish(finalSent?"CHECK_REQUIRED":"STOPPED",finalSent?"제출 후 중지됨 · 예약 내역 확인 필요":"사용자가 중지했습니다.");}
+    public void cancel(){if(batch!=null){batch.cancel();return;}if(camp!=null){camp.cancel();return;}if(!ended)finish(finalSent?"CHECK_REQUIRED":"STOPPED",finalSent?"제출 후 중지됨 · 예약 내역 확인 필요":"사용자가 중지했습니다.");}
     private void finish(String stage,String message){if(ended)return;ended=true;main.removeCallbacks(timeout);if(web!=null){web.stopLoading();web.destroy();web=null;}events.finished(stage,message);}
 }

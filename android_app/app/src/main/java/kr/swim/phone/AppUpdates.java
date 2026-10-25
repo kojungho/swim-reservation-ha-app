@@ -13,7 +13,7 @@ final class AppUpdates {
     static void check(Activity activity,boolean manual){
         if(new LocalStore(activity).active()){if(manual)new AlertDialog.Builder(activity).setMessage("예약·대기 작업을 중지한 뒤 업데이트를 확인하세요.").setPositiveButton("확인",null).show();return;}
         android.content.SharedPreferences prefs=activity.getSharedPreferences("phone-update",0);
-        if(!manual&&System.currentTimeMillis()-prefs.getLong("checked",0)<86400000)return;
+        if(!manual&&System.currentTimeMillis()-prefs.getLong("checked",0)<300000)return;
         new Thread(()->{
             String message="업데이트 정보를 확인하지 못했습니다. 현재 앱은 그대로 사용할 수 있습니다.";JSONObject manifest=null;
             try{HttpURLConnection c=(HttpURLConnection)new URL(MANIFEST).openConnection();c.setConnectTimeout(8000);c.setReadTimeout(8000);c.setInstanceFollowRedirects(false);

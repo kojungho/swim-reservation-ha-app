@@ -9,7 +9,7 @@ public final class AlarmReceiver extends BroadcastReceiver {
     static boolean permitted(Context c){return Build.VERSION.SDK_INT<31||c.getSystemService(AlarmManager.class).canScheduleExactAlarms();}
     static void schedule(Context c,long when){
         if(!permitted(c))throw new IllegalStateException("정확한 알람 권한이 필요합니다.");
-        c.getSystemService(AlarmManager.class).setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,when,pending(c));
+        c.getSystemService(AlarmManager.class).setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,when-SiteClock.offset(c),pending(c));
     }
     static void cancel(Context c){c.getSystemService(AlarmManager.class).cancel(pending(c));}
     static void scheduleWatch(Context c,long dueElapsed){
@@ -21,7 +21,7 @@ public final class AlarmReceiver extends BroadcastReceiver {
         LocalStore s=new LocalStore(c);if(!s.active()||!s.stage().equals("WAITING")&&!s.stage().equals("WATCHING"))return;
         try {
             Plan p=s.load("run");
-            if(s.stage().equals("WAITING")&&System.currentTimeMillis()<p.trigger){schedule(c,p.trigger);return;}
+            if(s.stage().equals("WAITING")&&SiteClock.now(c)<p.trigger){schedule(c,p.trigger);return;}
             if(s.stage().equals("WATCHING")){
                 if(!p.watch()||s.watchDueElapsed()<=0)return;
                 if(SystemClock.elapsedRealtime()<s.watchDueElapsed()){scheduleWatch(c,s.watchDueElapsed());return;}

@@ -38,6 +38,7 @@ public final class EngineTestRunner extends Instrumentation {
                 startPlan(readOnly,"INSPECT");waitDone();
                 Bundle result=new Bundle();result.putString("stream","READ-ONLY SITE RESULT: "+store.stage()+" / "+store.message()+"\nNo booking forms submitted.\n");finish(Activity.RESULT_OK,result);return;
             }
+            PhoneReads.testMode=true;
             check(PhoneEngine.permitted(Uri.parse("https://www.swimozicamp.com/camp/book.php"),true,false),"new official reservation route allowed");
             check(!PhoneEngine.permitted(Uri.parse("https://evil.invalid/reservation/order_ok3.php"),true,false),"foreign origin blocked");
             check(!PhoneEngine.permitted(Uri.parse("http://newpension.logosweb.or.kr/reservation/order_ok3.php"),true,false),"cleartext blocked");
@@ -81,7 +82,8 @@ public final class EngineTestRunner extends Instrumentation {
             check(js("$('triggerAt').value").equals("2026-12-01T12:34:56"),"shared datetime picker preserves hour minute and second");
             js("$('startDate').click();$('datePickerNext').click()");check(js("$('datePickerMonth').textContent").equals("2027년 1월"),"calendar crosses the year boundary");js("$('datePickerCancel').click()");
             js("switchTab('settings');uiSettings.stayRange=false;applyUi()");check(js("$('checkoutField').hidden&&!$('nightsField').hidden").equals("true"),"settings switches between nights and checkout-date selection");preview("phone-settings.png");
-            js("switchTab('multiple')");check(js("!$('phoneUnsupported').hidden&&$('planCard').hidden").equals("true"),"unsupported multiple booking cannot masquerade as a working engine");
+            js("switchTab('multiple')");check(js("$('phoneUnsupported').hidden&&!$('planCard').hidden&&readPlan().mode==='multiple'").equals("true"),"multiple booking is connected to a native plan");
+            check(js("document.querySelectorAll('#roomList .room-drag-handle').length===14&&![...document.querySelectorAll('#roomList button')].some(b=>['↑','↓'].includes(b.textContent))").equals("true"),"drag handles replace visible rank arrows");
             js("switchTab('watch')");check(js("readPlan().trigger").equals("0"),"vacancy watch does not inherit a hidden scheduled start time");
             js("$('watchInterval').value='1'");check(js("(()=>{try{readPlan();return false}catch(e){return true}})()").equals("true"),"phone UI rejects a one-minute query interval");js("$('watchInterval').value='10'");
             js("switchTab('priority');window.scrollTo(0,0)");preview("phone-addon-ui.png");
@@ -93,7 +95,37 @@ public final class EngineTestRunner extends Instrumentation {
             String profileId=savedProfile.getJSONArray("profiles").getJSONObject(0).getString("id");repository.delete("profiles",profileId);
             check(repository.load().getJSONArray("plans").getJSONObject(0).getJSONObject("plan").getString("name").equals(snapshot.name),"registered plan retains profile snapshot after profile deletion");
             check(!app.getSharedPreferences("phone-private",0).getString("phone-ui-v1","").contains(snapshot.name),"profiles and plan history vault excludes plaintext identity");
+            repository.saveDraft(snapshot.json());Plan watchDraft=Plan.from(snapshot.json());watchDraft.mode="watch";repository.saveDraft(watchDraft.json());
+            check(repository.load().getJSONObject("drafts").has("reserve")&&repository.load().getJSONObject("drafts").has("watch"),"encrypted drafts retain separate booking modes");
+            repository.completeDraft(snapshot);check(repository.load().getJSONObject("drafts").getJSONObject("reserve").getString("name").isEmpty()&&repository.load().getJSONObject("draft").getString("mode").equals("watch"),"completion clears only its matching mode and preserves another draft");
+            Plan edited=Plan.from(snapshot.json());edited.request="새로 편집";repository.saveDraft(edited.json());repository.completeDraft(snapshot);
+            check(repository.load().getJSONObject("draft").getString("request").equals("새로 편집"),"completion cannot erase a newly edited draft");
             repository.delete("plans",id);releaseActivity();
+
+            activity=startActivitySync(new Intent(app,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));uiReady();
+            js("$('monthlyMonth').value='2026-11';switchTab('monthly');requestPhoneMonth()");
+            await(()->{try{return !store.loadDocument("monthly-result").optBoolean("pending");}catch(Exception e){return false;}},5000);
+            js("poll()");check(js("document.querySelector('.monthly-count.booked').textContent").equals("0곳"),"native monthly result renders a one-line zero badge");
+            check(js("document.querySelector('.monthly-count.available').textContent").equals("4곳"),"native monthly result distinguishes available counts");
+            PhoneReads.time(app);await(()->{try{return SiteClock.state(app).optBoolean("synced");}catch(Exception e){return false;}},5000);check(Math.abs(SiteClock.offset(app))<1000,"server clock round-trip correction is bounded");
+            org.json.JSONArray lookupPeople=new org.json.JSONArray().put(new org.json.JSONObject().put("name","모의예약자").put("phone","01000000000")).put(new org.json.JSONObject().put("name","내역없음").put("phone","01000000001"));
+            runOnMainSync(()->{try{CampLookup.begin(app,lookupPeople);}catch(Exception e){throw new RuntimeException(e);}});
+            await(()->CampLookup.active==null,20000);org.json.JSONObject lookupResult=store.loadDocument("lookup-result");
+            check(lookupResult.getJSONArray("errors").length()==0&&lookupResult.getJSONArray("rows").length()==2,"native original lookup form and two detail POSTs produce validated records");
+            check(lookupResult.getJSONArray("profiles").getJSONObject(1).getInt("count")==0,"explicit empty lookup is zero, not an error");
+            check(!lookupResult.toString().contains("01000000000")&&!lookupResult.toString().contains("fake-"),"stored lookup results exclude contact and detail-selection tokens");
+            android.graphics.Bitmap photo=android.graphics.Bitmap.createBitmap(80,80,android.graphics.Bitmap.Config.ARGB_8888);photo.eraseColor(android.graphics.Color.GREEN);java.io.File photoFile=new java.io.File(app.getCacheDir(),"map-test.png");try(java.io.FileOutputStream output=new java.io.FileOutputStream(photoFile)){photo.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output);}photo.recycle();
+            MapPhotos maps=new MapPhotos(app);maps.add(Uri.fromFile(photoFile));org.json.JSONObject gallery=maps.state();String photoId=gallery.getJSONArray("photos").getString(gallery.getJSONArray("photos").length()-1);
+            check(maps.file(photoId).isFile()&&gallery.getString("selected").equals(photoId),"photo selection is decoded, stored privately and applied");
+            maps.apply("select","");check(maps.state().getString("selected").isEmpty(),"default campground map can be restored without deleting history");maps.apply("delete",photoId);check(!maps.file(photoId).exists(),"confirmed gallery deletion removes only the selected private photo");
+            releaseActivity();
+
+            for(String batchMode:java.util.List.of("multiple","profiles-parallel")){
+                PhoneEngine.demoScenario="camp";PhoneEngine.demoDocumentRequests=0;Plan batchPlan=Plan.sample();batchPlan.simulation=true;batchPlan.mode=batchMode;batchPlan.submitInterval=0;batchPlan.rooms="해_하늘존, 달_하늘존";
+                if(batchMode.equals("profiles-parallel"))batchPlan.people=new org.json.JSONArray().put(new org.json.JSONObject().put("name","모의예약자").put("phone","01000000000").put("rooms","해_하늘존, 달_하늘존")).put(new org.json.JSONObject().put("name","다음예약자").put("phone","01000000001").put("rooms","달_하늘존"));
+                startPlan(batchPlan,"START");await(()->!store.active(),70000);check(store.stage().equals("SUCCESS")&&PhoneEngine.demoDocumentRequests==4,"native "+batchMode+" completes two verified isolated sessions without duplicate submits");releaseActivity();
+            }
+            PhoneEngine.demoScenario="camp-429";PhoneEngine.demoDocumentRequests=0;Plan blockedBatch=Plan.sample();blockedBatch.simulation=true;blockedBatch.mode="multiple";blockedBatch.rooms="해_하늘존, 달_하늘존";startPlan(blockedBatch,"START");waitDone();check(store.stage().equals("CHECK_REQUIRED")&&PhoneEngine.demoDocumentRequests==2,"batch 429 halts remaining tasks without replay");releaseActivity();
 
             for(String scenario:java.util.List.of("camp-wrong-date","camp-not-open","camp","camp-429","camp-wrong-receipt")){
                 PhoneEngine.demoScenario=scenario;PhoneEngine.demoDocumentRequests=0;startDemo("START");
