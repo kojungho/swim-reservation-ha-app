@@ -1,0 +1,27 @@
+/* Add-on styles are retained; these rules identify phone-only capabilities. */
+.phone-notice { padding: 12px 14px; border: 1px solid #d9e4dc; border-radius: 12px; background: #fff9e8; font-size: 12px; line-height: 1.6; margin-bottom: 18px; }
+.phone-permissions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.phone-permissions button { min-height: 44px; }
+.phone-room-actions { display: flex; gap: 4px; margin-left: auto; }
+.phone-room-actions button { min-height: 44px; min-width: 44px; padding: 8px; }
+.phone-room { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; margin: 8px 0; }
+.phone-room label { display: flex; align-items: center; gap: 10px; margin: 0; flex: 1; min-width: 0; font-size: var(--font-room); }
+.phone-room input { width: 20px; height: 20px; min-width: 20px; }
+.phone-room small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
+.phone-inline-note { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.phone-consent { display: flex; align-items: flex-start; gap: 10px; margin: 16px 0; }
+.phone-consent input { flex: 0 0 20px; height: 20px; width: 20px; margin-top: 2px; }
+.phone-plan-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.phone-plan-actions button { min-height: 44px; }
+.phone-unavailable { background: #fff4ee; border: 1px solid #e9cec0; padding: 14px; border-radius: 12px; line-height: 1.6; }
+#statusBadge { max-width: 130px; }
+#statusText { white-space: pre-line; overflow-wrap: anywhere; }
+#logList { white-space: pre-wrap; overflow-wrap: anywhere; font-family: monospace; font-size: var(--font-log); }
+#phoneHealth { font-size: 12px; line-height: 1.7; }
+#phoneModeNote { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.phone-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
+.phone-toggle input { width: 22px; height: 22px; }
+.phone-toggle label { margin: 0; }
+#phoneError { color: var(--red); white-space: pre-line; }
+@media(max-width:600px) { .phone-room-actions { gap: 0; } .phone-room { padding: 6px 8px; } .phone-room-actions button { min-width: 36px; padding: 6px; } }
+ .phone-reset-floating { position:fixed;bottom:18px;left:18px;min-height:44px;border-radius:24px;z-index:25;box-shadow:0 4px 18px #0002; }

@@ -1,0 +1,5 @@
+<!doctype html><html lang="ko"><meta charset="UTF-8"><body><h1>모의 예약자 정보</h1><form method="POST" action="order_ok3.php"><table>
+<tr><td>예약자명</td><td><input name="name"></td></tr><tr><td>입금자명</td><td><input name="name2"></td></tr>
+<tr><td>휴대폰</td><td><input name="tel1"><input name="tel2"><input name="tel3"></td></tr>
+<tr><td>생년월일</td><td><select name="birthYear"><option value="">선택</option><option>1990</option></select><select name="birthMonth"><option value="">선택</option><option value="1">1</option></select><select name="birthDay"><option value="">선택</option><option value="1">1</option></select></td></tr>
+</table><button type="submit" onclick="const f=this.form.elements;if(f.namedItem('name').value!=='모의예약자'||f.namedItem('name2').value!=='모의입금자'||f.namedItem('tel1').value!=='010'||f.namedItem('tel2').value!=='0000'||f.namedItem('tel3').value!=='0000'||f.namedItem('birthYear').value!=='1990'||f.namedItem('birthMonth').value!=='1'||f.namedItem('birthDay').value!=='1'){event.preventDefault();alert('입력 실패')}">예약하기</button></form></body></html>

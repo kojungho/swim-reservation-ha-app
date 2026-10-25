@@ -1,0 +1,5 @@
+<!doctype html><meta charset="utf-8"><form class="js-book" method="post" action="/camp/book.php">
+<input type="hidden" name="_csrf" value="mock-csrf"><input type="hidden" name="site" value="DEMO_SITE"><input type="hidden" name="checkin" value="DEMO_DATE"><input type="hidden" name="checkout" value="DEMO_CHECKOUT"><input type="hidden" name="adults" value="2"><input type="hidden" name="children" value="0"><input type="hidden" name="infants" value="0">
+<input name="name" required><input name="phone" required><input name="depositor"><textarea name="request"></textarea><select name="arrive_time"><option value=""></option></select><input type="radio" name="pay_method" value="bank"><input type="checkbox" class="js-agree" data-required="1" name="agree_refund"><input type="checkbox" class="js-agree" data-required="0" name="marketing">
+<aside class="summary-card"><div class="sum-title">DEMO_ROOM</div></aside><button type="submit" class="js-pay">예약 신청하기</button></form>
+<script>document.querySelector('form').onsubmit=e=>{e.preventDefault();location.href='/camp/done.php?t=mock-only';};</script>

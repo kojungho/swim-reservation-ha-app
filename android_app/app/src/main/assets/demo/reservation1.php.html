@@ -1,0 +1,5 @@
+<!doctype html><html lang="ko"><meta charset="UTF-8"><body><h1>모의 객실 선택</h1>
+<form method="POST" action="order_ok1.php"><input type="hidden" name="adaystart" id="date">
+<table><tr><td><input type="checkbox" name="room_rid[0]" value="sol"></td><td>솔_산맥존</td><td><select name="daytype[0]"><option value="1">1박</option><option value="2">2박</option></select></td></tr></table>
+<button type="submit">예약하기</button></form>
+<script>document.getElementById('date').value=new URL(location.href).searchParams.get('adaystart');</script></body></html>
