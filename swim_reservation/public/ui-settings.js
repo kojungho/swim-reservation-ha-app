@@ -219,6 +219,11 @@ function renderMapGallery() {
     const remove = document.createElement("button"); remove.type = "button"; remove.className = "danger"; remove.textContent = "삭제"; remove.disabled = galleryBusy; remove.addEventListener("click", () => void deleteMapPhotos([entry.id]));
     actions.append(apply, remove); card.append(label, preview, actions); grid.append(card);
   });
+  const add = document.createElement("button"); add.id = "galleryAddButton"; add.type = "button"; add.className = "gallery-add";
+  add.setAttribute("aria-label", "배치도 사진 추가");
+  const plus = document.createElement("span"); plus.className = "gallery-add-symbol"; plus.textContent = "＋"; plus.setAttribute("aria-hidden", "true");
+  const caption = document.createElement("span"); caption.textContent = galleryEntries.length >= 6 ? "6장 가득 참" : "추가";
+  add.append(plus, caption); add.addEventListener("click", () => { if (!add.disabled) elements.siteMapFile.click(); }); grid.append(add);
   updateGalleryActions();
 }
 
@@ -226,6 +231,7 @@ function updateGalleryActions() {
   document.getElementById("galleryDeleteSelected").disabled = galleryBusy || !gallerySelection.size;
   document.getElementById("galleryDeleteAll").disabled = galleryBusy || !galleryEntries.length;
   elements.siteMapUploadButton.disabled = galleryBusy || galleryEntries.length >= 6;
+  const add = document.getElementById("galleryAddButton"); if (add) add.disabled = galleryBusy || galleryEntries.length >= 6;
 }
 
 async function deleteMapPhotos(ids) {

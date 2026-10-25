@@ -53,6 +53,9 @@
 .phone-receipt details p { margin:4px 0; }
 #phoneLookupResults { display:grid;gap:6px; }
 .phone-map-card { display:grid;gap:5px; }
+.gallery-add { display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:170px;min-width:0;margin:0;padding:16px;border:2px dashed #9db9aa;border-radius:12px;background:var(--wash);color:var(--green); }
+.gallery-add-symbol { font-size:36px;line-height:1; }
+.gallery-add:disabled { opacity:.55;cursor:default; }
 .phone-map-card img { width:100%;height:110px;object-fit:contain;cursor:zoom-in; }
 .phone-map-card input { width:22px;height:22px; }
 .monthly-calendar.counts-only button.monthly-day { min-height:76px;padding:6px 2px;gap:6px; }

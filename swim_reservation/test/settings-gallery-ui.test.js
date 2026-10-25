@@ -69,6 +69,8 @@ test("사진 갤러리는 6개·확대·적용·삭제 취소·선택 삭제·�
   });
   await page.locator("#siteMapButton").click(); await page.waitForFunction(() => document.getElementById("galleryCount").textContent === "6/6");
   assert.equal(await page.locator("#siteMapUploadButton").isDisabled(), true);
+  assert.equal(await page.getByRole("button", { name: "배치도 사진 추가", exact: true }).isDisabled(), true);
+  assert.match(await page.locator("#galleryAddButton").textContent(), /6장 가득 참/);
   await page.locator(".gallery-preview").nth(1).click(); await page.locator("#mapZoomDialog").waitFor();
   assert.match(await page.locator("#mapZoomImage").getAttribute("src"), /000000000002$/); await page.locator("#mapZoomClose").click();
   await page.locator(".gallery-photo").nth(1).getByRole("button", { name: "적용", exact: true }).click();
@@ -78,10 +80,15 @@ test("사진 갤러리는 6개·확대·적용·삭제 취소·선택 삭제·�
   await page.locator(".gallery-select input").nth(1).check(); await page.locator(".gallery-select input").nth(2).check();
   await page.locator("#galleryDeleteSelected").click(); await page.waitForFunction(() => document.getElementById("galleryCount").textContent === "4/6");
   assert.equal(await page.locator("#siteMapUploadButton").isDisabled(), false);
+  assert.equal(await page.locator("#galleryAddButton").isEnabled(), true);
+  assert.equal(await page.locator("#mapGallery > :last-child").getAttribute("id"), "galleryAddButton");
+  const chooserWait = page.waitForEvent("filechooser"); await page.locator("#galleryAddButton").click(); const chooser = await chooserWait; await chooser.setFiles([]);
   assert.equal(await page.locator("#galleryDeleteSelected").isDisabled(), true);
   await page.locator("#siteMapDialog").screenshot({ path: "/tmp/swim-profiles.6W9Acs/gallery-390.png" });
   await page.locator("#galleryDeleteAll").click(); await page.waitForFunction(() => document.getElementById("galleryCount").textContent === "0/6");
   assert.equal(gallery.activeId, null); assert.equal(await page.locator("#galleryDeleteAll").isDisabled(), true);
+  assert.equal(await page.locator("#galleryAddButton").isEnabled(), true);
+  assert.equal(await page.locator("#galleryAddButton").count(), 1);
   await page.locator("#siteMapCloseButton").click(); await page.locator("#siteMapButton").click(); assert.equal(await page.locator(".gallery-photo").count(), 0);
   assert.deepEqual(state.errors, []); assert.equal(state.planCalls.length, 0);
 });

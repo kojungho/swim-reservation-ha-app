@@ -7,6 +7,9 @@
 .setting-row select { width: 145px; flex: 0 1 145px; }
 .gallery-heading { display: flex; align-items: center; gap: 12px; margin: 20px 0 12px; }
 .map-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.gallery-add { display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;min-width:0;min-height:170px;margin:0;padding:16px;border:2px dashed #9db9aa;border-radius:12px;background:var(--wash);color:var(--green); }
+.gallery-add-symbol { font-size:36px;line-height:1; }
+.gallery-add:disabled { opacity:.55;cursor:default; }
 .gallery-photo { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
 .gallery-select { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
 .gallery-select input { width: 20px; height: 20px; flex: 0 0 20px; }

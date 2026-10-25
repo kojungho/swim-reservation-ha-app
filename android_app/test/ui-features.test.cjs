@@ -35,6 +35,15 @@ test('드래그 손잡이만 표시·촘촘한 간격·순위 보존·키보드�
     await page.locator('#nights').selectOption('2');assert.match(await page.locator('[data-room="해_하늘존"] small').textContent(),/미확인/);assert.deepEqual(errors,[]);await page.close();
   }
 });
+test('배치도 사진 목록은 빈 상태와 기존 사진 뒤에 추가 타일을 표시하고 6장 한도를 지킨다',async t=>{
+  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());
+  for(const width of [320,390,1280]){const{page,errors}=await setup(browser,width);await page.locator('#siteMapButton').click();const add=page.getByRole('button',{name:'배치도 사진 추가',exact:true});assert.equal(await add.isEnabled(),true);await add.click();assert.equal(await page.evaluate(()=>nativeMock.calls.filter(c=>c.action==='mapPick').length),1);
+    await page.evaluate(()=>{nativeMock.maps.photos=Array.from({length:2},(_,i)=>'00000000-0000-4000-8000-'+String(i+1).padStart(12,'0'));refreshPhoneMaps();});assert.equal(await page.locator('#mapGallery .phone-map-card').count(),2);assert.equal(await page.locator('#mapGallery > :last-child').getAttribute('id'),'galleryAddButton');assert.equal(await add.isEnabled(),true);
+    if(process.env.GALLERY_SCREENSHOT&&width===390)await page.locator('#siteMapDialog').screenshot({path:process.env.GALLERY_SCREENSHOT});
+    await page.evaluate(()=>{nativeMock.maps.photos=Array.from({length:6},(_,i)=>'00000000-0000-4000-8000-'+String(i+1).padStart(12,'0'));refreshPhoneMaps();});assert.equal(await add.isDisabled(),true);assert.match(await add.textContent(),/6장 가득 참/);assert.equal(await page.locator('#siteMapUploadButton').isDisabled(),true);
+    await page.getByRole('button',{name:'전체 삭제',exact:true}).click();assert.equal(await page.locator('#mapGallery .phone-map-card').count(),0);assert.equal(await add.isEnabled(),true);assert.deepEqual(errors,[]);await page.close();
+  }
+});
 test('모드별 입력을 보존하고, 완료 초안만 비우며, 명시적 초기화는 저장 예약자를 유지한다',async t=>{
   const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());const{page,errors}=await setup(browser);
   await page.locator('#reserverName').fill('단독초안');await page.evaluate(()=>switchTab('watch'));await page.locator('#reserverName').fill('대기초안');await page.evaluate(()=>switchTab('priority'));assert.equal(await page.locator('#reserverName').inputValue(),'단독초안');await page.evaluate(()=>switchTab('watch'));assert.equal(await page.locator('#reserverName').inputValue(),'대기초안');
