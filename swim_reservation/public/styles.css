@@ -477,6 +477,10 @@ button:not(.info-button):not(.monthly-day):not(.room-drag-handle), .workspace-ta
 .monthly-calendar, .monthly-room-row, .monthly-cell, .monthly-room-mark { font-size: var(--font-calendar); }
 .monthly-room-mark { flex-basis: calc(var(--font-calendar) + 4px); width: calc(var(--font-calendar) + 4px); height: calc(var(--font-calendar) + 4px); }
 .monthly-day-number { font-size: calc(var(--font-calendar) + 3px); }
+.monthly-calendar.counts-only button.monthly-day { min-height: 76px; padding: 6px 2px; gap: 6px; }
+.monthly-calendar.counts-only .monthly-count { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; padding: 4px 1px; font-size: clamp(10px, 2.8vw, 12px); line-height: 1.3; text-align: center; }
+.monthly-count.before-open, .monthly-count.unknown { color: #505b55; background: #eceeec; }
+.monthly-count.loading { color: #245b8a; background: #edf4fa; }
 .execution-plan-row, .execution-plan-row strong, .execution-plan-row small, .plan-entry,
 .history-row, .reservation-row, .lookup-status, .lookup-group, .booking-person,
 .gallery-select, .gallery-heading, .reservation-row span, .reservation-row .cancel-disabled,

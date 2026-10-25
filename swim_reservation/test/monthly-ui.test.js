@@ -6,7 +6,7 @@ import { chromium } from "playwright-core";
 import { defaultConfig } from "../src/config.js";
 
 const executablePath = [process.env.CHROMIUM_PATH, "/usr/bin/chromium", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].filter(Boolean).find(existsSync);
-test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택 시 매크로 화면으로 이동한다", { skip: !executablePath }, async t => {
+test("PC·휴대폰 달력은 기존 상세 응답을 표시하되 월별 HTTP 실패를 날짜별 요청으로 확대하지 않고 날짜 선택을 유지한다", { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true });
   t.after(() => browser.close());
   for (const width of [1280, 390]) {
@@ -87,9 +87,9 @@ test("PC·휴대폰 달력은 누락 날짜만 개별 조회하고 날짜 선택
     assert.equal(await page.locator("#monthlyContent .available").count(), 30);
     assert.equal(await page.locator("#monthlyContent .error").count(), 1);
     await page.locator("#monthlyNextButton").click();
-    await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 완료") && document.querySelector("#monthlyMonth").value === "2027-02");
+    await page.waitForFunction(() => document.querySelector("#monthlyStatus").textContent.includes("조회 중단") && document.querySelector("#monthlyMonth").value === "2027-02");
     assert.equal(await page.locator("#monthlyContent .monthly-day").count(), 28);
-    assert.equal(dayQueries.length, 59);
+    assert.equal(dayQueries.length, 31);
     await page.locator("#monthlyPrevButton").click();
     await page.locator("#monthlyContent table").waitFor();
     await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="priority"]').click();

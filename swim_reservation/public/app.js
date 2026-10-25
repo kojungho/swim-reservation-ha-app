@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.7";
+const CLIENT_VERSION = "2.15.8";
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
 function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, "").replace(/(\d+)순위/g, (_, rank) => rankSymbol(Number(rank))); }
@@ -349,7 +349,7 @@ async function loadMonthlyAvailability(force = false) {
   setMonthlyLoading(true);
   const [year, number] = month.split("-").map(Number);
   const roomNames = rooms.map(room => room.name);
-  let result = { month, opensAt: bookingOpenIso(`${month}-01`), beforeOpen: isBeforeOpen(`${month}-01`), roomNames, capturedAt: Date.now(), progressText: "월별 페이지 조회 중…", days: Array.from({ length: new Date(Date.UTC(year, number, 0)).getUTCDate() }, (_, index) => ({ date: `${month}-${String(index + 1).padStart(2, "0")}`, queryState: "queued", rooms: roomNames.map(name => ({ name, status: "unknown" })) })) };
+  let result = { month, countsOnly: true, opensAt: bookingOpenIso(`${month}-01`), beforeOpen: isBeforeOpen(`${month}-01`), roomNames, capturedAt: 0, progressText: "월별 페이지 조회 중…", days: Array.from({ length: new Date(Date.UTC(year, number, 0)).getUTCDate() }, (_, index) => ({ date: `${month}-${String(index + 1).padStart(2, "0")}`, queryState: "queued", availableCount: null, rooms: [] })) };
   renderMonthlyAvailability(result);
   const sourceUrl = 'https://www.swimozicamp.com/camp/';
   elements.monthlySourceLink.href = sourceUrl;
@@ -357,6 +357,7 @@ async function loadMonthlyAvailability(force = false) {
     let cache;
     try { cache = await request("month-cache", { signal: controller.signal }); } catch { /* Older servers retain the existing on-demand view. */ }
     if (controller.signal.aborted || id !== monthlyRequest) return;
+    if (cache?.result && !cache.result.countsOnly) cache = { ...cache, result: null, running: false };
     if (cache?.targetMonth) {
       elements.monthlyCacheInterval.value = String(cache.intervalMinutes);
       elements.monthlyCacheHelp.textContent = `${cache.targetMonth}만 서버에서 미리 조회해 저장합니다. 기본 1시간 간격이며 예약 준비·실행 중에는 쉽니다. 그 이후 달은 기존처럼 열었을 때 조회합니다.`;
@@ -364,6 +365,7 @@ async function loadMonthlyAvailability(force = false) {
     if (cache?.targetMonth === month && (cache.result || cache.intervalMinutes || force)) {
       if (force || !cache.result && !cache.running && cache.intervalMinutes) cache = await request("month-cache/refresh", { method: "POST", signal: controller.signal });
       while (!controller.signal.aborted && id === monthlyRequest) {
+        if (cache.result && !cache.result.countsOnly) throw new Error('구사이트 저장 현황은 표시하지 않습니다. 조회 버튼으로 새 현황을 확인해 주세요.');
         result = cache.result || result;
         const finished = cache.finishedAt ? new Date(cache.finishedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false }) : "아직 전체 조회가 완료되지 않았습니다";
         renderMonthlyAvailability({ ...result, capturedAt: cache.result?.capturedAt || 0, progressText: `${cache.running ? result.progressText || "미리 조회 진행 중" : cache.message || "저장된 현황"} · 전체 갱신 ${finished}`, message: "저장된 현황입니다. 조회 버튼을 누르면 즉시 재조회하며 완료까지 시간이 걸릴 수 있습니다." });
@@ -390,6 +392,7 @@ async function loadMonthlyAvailability(force = false) {
     } catch (error) {
       if (controller.signal.aborted || id !== monthlyRequest) return;
       if (error.code === "INSPECTION_BUSY") throw error;
+      if (result.countsOnly) throw error; // A failed count query must not fan out into 31 site requests.
       result.message = `월별 페이지 조회 실패: ${error.message}. 개별 날짜 링크로 확인합니다.`;
     }
     const today = seoulToday();
@@ -439,6 +442,7 @@ async function loadMonthlyAvailability(force = false) {
     renderMonthlyAvailability(result);
   } catch (error) {
     if (controller.signal.aborted || id !== monthlyRequest) return;
+    if (result.countsOnly) result.days.forEach(day => { if (['queued', 'checking'].includes(day.queryState)) day.queryState = 'error'; });
     result.progressText = `조회 중단: ${error.message}`;
     renderMonthlyAvailability(result);
   } finally {
@@ -456,7 +460,10 @@ function renderMonthlyAvailability(result) {
   elements.monthlyStatus.textContent = shortRoomText(`${result.month} · ${opened} · 예약 오픈 ${opening} · ${result.progressText || ""} · ${captureLabel}. ${result.message || ""}`);
   const days = result.days || [];
   const table = document.createElement("table");
-  table.className = "monthly-calendar";
+  table.className = `monthly-calendar${result.countsOnly ? " counts-only" : ""}`;
+  const legend = document.querySelector('.monthly-legend');
+  if (!legend.dataset.legacy) legend.dataset.legacy = legend.innerHTML;
+  legend.innerHTML = result.countsOnly ? '<span><span class="monthly-room-mark available">가</span> 예약 가능</span><span><span class="monthly-room-mark booked">0</span> 잔여 없음</span><span><span class="monthly-room-mark unknown">전</span> 오픈 전</span><span><span class="monthly-room-mark unknown">?</span> 미확인</span><span>숫자: 예약 가능한 사이트 수</span>' : legend.dataset.legacy;
   const caption = document.createElement("caption");
   caption.setAttribute("aria-label", `${result.month} 예약 현황`);
   const monthControls = document.querySelector(".monthly-controls");
@@ -490,7 +497,13 @@ function renderMonthlyAvailability(result) {
         button.classList.toggle("past", past);
         button.setAttribute("aria-label", past ? `${day.date} 지난 날짜 · 조회 제외` : `${day.date} 선택 후 예약 매크로 화면으로 이동`);
         const labels = { available: ["가", "예약 가능"], booked: ["완", "예약 완료"], pending: ["대", "예약 대기"], unavailable: ["불", "1박 불가"], unknown: ["?", "확인 불가"] };
-        const badges = result.countsOnly ? `<span class="monthly-cell">${day.beforeOpen ? "오픈 전" : Number.isInteger(day.availableCount) ? `${day.availableCount}곳 가능` : "미확인"}</span>` : (past ? [] : day.rooms).map(room => {
+        const loading = ['queued', 'checking'].includes(day.queryState);
+        const validCount = Number.isInteger(day.availableCount) && day.availableCount >= 0;
+        const countState = loading ? 'loading' : day.beforeOpen ? 'before-open' : !validCount ? 'unknown' : day.availableCount > 0 ? 'available' : 'booked';
+        const countText = loading ? '조회 중' : day.beforeOpen ? '오픈 전' : validCount ? `${day.availableCount}곳` : '미확인';
+        const countLabel = validCount && !loading && !day.beforeOpen ? `예약 가능 ${day.availableCount}곳${day.availableCount === 0 ? ' · 잔여 없음' : ''}` : countText;
+        if (result.countsOnly && !past) button.setAttribute('aria-label', `${day.date} · ${countLabel} · 선택 후 예약 화면으로 이동`);
+        const badges = result.countsOnly ? `<span class="monthly-cell monthly-count ${countState}" title="${escapeHtml(countLabel)}">${countText}</span>` : (past ? [] : day.rooms).map(room => {
           const status = labels[room.status] ? room.status : "unknown";
           const [mark, label] = labels[status];
           const name = shortRoomText(room.name);

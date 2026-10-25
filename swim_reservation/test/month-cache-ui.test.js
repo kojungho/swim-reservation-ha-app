@@ -12,7 +12,7 @@ test("3개월 뒤는 저장 현황을 즉시 보여주고 조회는 서버 갱�
   await page.clock.setFixedTime(new Date("2026-10-12T10:00:00+09:00"));
   const state = await mockBookApp(page);
   let refreshes = 0, directReads = 0, intervalMinutes = 60;
-  const result = month => ({ month, beforeOpen: true, opensAt: "2026-11-01T00:00:00", capturedAt: Date.parse("2026-10-12T09:00:00+09:00"), roomNames: ["해"], days: [{ date: `${month}-01`, rooms: [{ name: "해", status: "available" }] }] });
+  const result = month => ({ month, countsOnly: true, beforeOpen: true, opensAt: "2026-11-01T00:00:00", capturedAt: Date.parse("2026-10-12T09:00:00+09:00"), roomNames: ["해"], days: [{ date: `${month}-01`, beforeOpen: true, availableCount: null, rooms: [] }] });
   await page.route(/\/api\/month-cache(?:\/refresh)?$/, async route => {
     if (route.request().url().endsWith("/refresh")) refreshes++;
     if (route.request().method() === "PUT") intervalMinutes = route.request().postDataJSON().intervalMinutes;

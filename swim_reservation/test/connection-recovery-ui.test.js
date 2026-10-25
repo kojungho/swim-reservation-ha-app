@@ -29,7 +29,7 @@ test("서버 업데이트는 화면에 안내하고 구버전 화면에서 실�
   let canceled = 0;
   await page.route("**/api/reservations/*/cancel", route => { canceled++; return route.fulfill({ json: { ok: true } }); });
   await page.route("**/api/status", route => {
-    assert.equal(route.request().headers()["x-swim-client-version"], "2.15.7");
+    assert.equal(route.request().headers()["x-swim-client-version"], "2.15.8");
     return route.fulfill({ json: { state: "idle", appVersion: "2.14.5" } });
   });
   await page.evaluate(async () => {
@@ -38,9 +38,9 @@ test("서버 업데이트는 화면에 안내하고 구버전 화면에서 실�
     document.querySelector(".reservation-cancel-button").click();
   });
   assert.equal(await page.locator("#screenUpdateNotice").isVisible(), true);
-  assert.match(await page.locator("#screenUpdateNotice").textContent(), /화면 2.15.7.*서버 2.14.5/);
+  assert.match(await page.locator("#screenUpdateNotice").textContent(), /화면 2.15.8.*서버 2.14.5/);
   assert.equal(canceled, 0);
-  await page.route("**/api/status", route => route.fulfill({ json: { state: "idle", appVersion: "2.15.7" } }));
+  await page.route("**/api/status", route => route.fulfill({ json: { state: "idle", appVersion: "2.15.8" } }));
   await page.evaluate(async () => { nextStatusCheck = 0; await refreshStatus(); });
   assert.equal(await page.locator("#screenUpdateNotice").isVisible(), false);
 });
@@ -81,11 +81,11 @@ test("설정에서 업데이트 버튼은 제거하고 실행·화면 버전만 
   const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
   for (const width of [390, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } }); await mockBookApp(page);
-    await page.route("**/api/status", route => route.fulfill({ json: { state: "idle", appVersion: "2.15.7" } }));
+    await page.route("**/api/status", route => route.fulfill({ json: { state: "idle", appVersion: "2.15.8" } }));
     await page.evaluate(async () => { nextStatusCheck = 0; await refreshStatus(); });
     await page.evaluate(() => switchWorkspaceTab("settings"));
     assert.equal(await page.locator("#checkAppVersion, #haUpdateLink").count(), 0);
-    assert.match(await page.locator("#installedAppVersion").textContent(), /앱 버전: 2.15.7 · 화면 버전: 2.15.7/);
+    assert.match(await page.locator("#installedAppVersion").textContent(), /앱 버전: 2.15.8 · 화면 버전: 2.15.8/);
     await page.close();
   }
 });
