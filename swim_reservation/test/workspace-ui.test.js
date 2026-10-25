@@ -95,7 +95,7 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
     assert.equal(plans[2].config.bookingMode, "priority");
     assert.equal(plans[2].watchProfileIndex, 0);
     assert.equal(plans[2].watchEndsAt, "2026-10-07T18:00");
-    assert.equal(await page.locator("#watchEndsAt").inputValue(), "");
+    assert.equal(await page.locator("#watchEndsAt").inputValue(), "2026-10-07T18:00");
     await openPlanDetails(page, 2);
     assert.match(await page.locator("#planList .plan-entry").innerText(), /마감 2026-10-07 18:00 \(직접 지정\)/);
     await openPlanDetails(page, 2);

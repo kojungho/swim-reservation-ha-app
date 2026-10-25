@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.3";
+const CLIENT_VERSION = "2.15.4";
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
 function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, "").replace(/(\d+)순위/g, (_, rank) => rankSymbol(Number(rank))); }
@@ -127,6 +127,7 @@ async function init() {
   await initializeUiSettings();
   initializeBookingBook();
   await loadBookingBook().catch(error => showMessage(`예약자 정보 조회 실패: ${error.message}`, true));
+  initializeEditorDrafts();
   await refreshHistory();
   await refreshStatus();
   await refreshLogs();

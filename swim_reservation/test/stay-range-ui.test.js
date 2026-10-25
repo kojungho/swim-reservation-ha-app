@@ -54,8 +54,9 @@ test("PC·폰의 입실/퇴실 달력은 연말 범위·자동 박수·색상·�
     assert.equal(await page.locator("#nights").inputValue(), "2"); assert.equal(await page.locator("#startDate").inputValue(), "2026-10-20");
     await page.locator("#setting-stayRange").check(); await page.locator("#settingsSave").click();
     await page.reload(); await page.waitForFunction(() => document.getElementById("bookingProfileSelect1").options.length === 3);
+    await page.evaluate(() => switchWorkspaceTab('priority'));
     assert.equal(await page.locator("#checkoutField").isVisible(), true); assert.equal(await page.locator("#nights").isVisible(), false);
-    assert.equal(await page.locator("#checkoutDate").inputValue(), "2026-12-21");
+    assert.equal(await page.locator("#checkoutDate").inputValue(), "2026-10-22");
     await page.evaluate(() => loadConfig({ ...readConfig(), startDate: "2028-02-28", nights: 2 }));
     assert.equal(await page.locator("#checkoutDate").inputValue(), "2028-03-01");
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

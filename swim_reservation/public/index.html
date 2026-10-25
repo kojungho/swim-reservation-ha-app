@@ -18,7 +18,7 @@
     <div id="connectionNotice" class="connection-notice" role="status" aria-live="polite" hidden><span id="connectionMessage"></span><button id="reconnectButton" type="button" class="secondary">다시 연결</button></div>
     <div id="screenUpdateNotice" class="connection-notice" role="status" aria-live="polite" hidden><span id="screenUpdateMessage"></span><button id="screenReloadButton" type="button" class="secondary" aria-expanded="false" aria-controls="screenReloadConfirm">화면 새로 열기</button></div>
     <section id="screenReloadConfirm" class="connection-notice" aria-labelledby="screenReloadTitle" hidden>
-      <div><strong id="screenReloadTitle">최신 화면으로 다시 열까요?</strong><p>저장하지 않은 입력은 사라집니다. 서버에 등록된 예약 대기·실행 작업은 계속됩니다.</p></div>
+      <div><strong id="screenReloadTitle">최신 화면으로 다시 열까요?</strong><p>예약 초안은 이 브라우저 탭에 임시 보관합니다. 그 외 저장하지 않은 입력은 사라질 수 있습니다. 서버에 등록된 예약 대기·실행 작업은 계속됩니다.</p></div>
       <div class="section-actions"><button id="screenReloadCancel" type="button" class="secondary">취소</button><a id="screenReloadProceed" class="button primary" target="_self">확인 후 새로 열기</a></div>
     </section>
 
@@ -170,7 +170,7 @@
       <div id="settingsControls"></div>
       <div class="actions"><button id="settingsSave" type="button">저장</button><button id="settingsReset" class="secondary" type="button">기본값</button></div>
       <p id="settingsMessage" role="status" aria-live="polite"></p>
-      <div class="app-update"><h3>예약 제출 간격</h3><p>다인·다중 예약의 최종 제출에 공통 적용합니다. 0초는 지연 미사용, 1초부터는 입력한 간격을 적용합니다. 첫 제출은 즉시 진행하며 변경값은 다음 실행부터 적용됩니다. 간격을 늘려도 예약 성공이나 요청 제한 해제를 보장하지 않습니다.</p><div class="section-actions"><label>최종 제출 간격(초)<input id="finalSubmitInterval" type="number" min="0" max="60" step="1" value="5" required></label><button id="saveFinalSubmitInterval" class="secondary" type="button">제출 간격 저장</button></div><p id="submissionSettingsMessage" role="status" aria-live="polite">기본값 5초 · 0~60초 (0: 미사용)</p></div>
+      <div class="app-update"><h3>예약 제출 간격</h3><p>다인·다중 예약의 최종 제출에 공통 적용합니다. 0초는 지연 미사용, 1초부터는 입력한 간격을 적용합니다. 첫 제출은 즉시 진행하며 변경값은 다음 실행부터 적용됩니다. 간격을 늘려도 예약 성공이나 요청 제한 해제를 보장하지 않습니다.</p><div class="section-actions submission-interval-row"><label>최종 제출 간격(초)<input id="finalSubmitInterval" type="number" min="0" max="60" step="1" value="5" required></label><button id="saveFinalSubmitInterval" class="secondary" type="button">제출 간격 저장</button></div><p id="submissionSettingsMessage" role="status" aria-live="polite">기본값 5초 · 0~60초 (0: 미사용)</p></div>
     </section>
     <aside class="notice" id="safetyNotice">
       <strong>안전한 운영을 위해</strong>
@@ -217,7 +217,7 @@
       <ol><li>저장된 예약자를 선택하거나 직접 입력하고 필요한 사람만 추가합니다. 신규 예약자는 ‘예약자 저장’으로 목록에 추가할 수 있습니다.</li><li>각 예약자의 객실 우선순위에서 후보를 체크하고 두 줄 손잡이로 순서를 정합니다. 개인별 순위는 이 모드에서만 사용합니다.</li><li>날짜·박수·실행 시각을 확인하고 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘지금 바로 예약’을 사용할 수 있습니다.</li></ol>
       <p class="booking-help-warning">같은 객실을 여러 사람의 1순위로 선택하면 서로 경쟁할 수 있습니다. 확실한 마감만 다음 순위로 넘어가며, 결과가 불확실하면 그 사람의 추가 제출을 중단합니다.</p>
     </details>
-    <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>미래 시각 예약과 취소 대기는 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 새 사이트는 사전 입력 없이 지정 시각에 예약 화면을 열어 입력·필수 약관 동의·최종 제출합니다. 자동 예약은 무통장입금만 지원하며 제출 결과가 불확실하면 재제출하지 않습니다. ‘지금 바로 예약’은 실행 시각이 미래이거나 서버 시간이 미확인인 경우 표시하지 않으며 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약자 정보’ 탭은 실제 예약에 사용할 사람들을 관리합니다. 각 모드에 선택 목록은 자동 표시되지만 사람을 선택하기 전에는 입력란을 채우지 않습니다. 일정 등록 후에는 선택과 입력을 초기화합니다. ‘예약 조회’는 저장한 모든 예약자의 내역을 조회합니다. 저장하지 않는 ‘1회성 조회’는 이름과 휴대폰 번호만 입력해 별도로 확인합니다. 등록된 일정의 설정은 이후 편집과 관계없이 유지됩니다.</p></div>
+    <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>미래 시각 예약과 취소 대기는 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 새 사이트는 사전 입력 없이 지정 시각에 예약 화면을 열어 입력·필수 약관 동의·최종 제출합니다. 자동 예약은 무통장입금만 지원하며 제출 결과가 불확실하면 재제출하지 않습니다. ‘지금 바로 예약’은 실행 시각이 미래이거나 서버 시간이 미확인인 경우 표시하지 않으며 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약자 정보’ 탭은 실제 예약에 사용할 사람들을 관리합니다. 각 모드에 선택 목록은 자동 표시되지만 사람을 선택하기 전에는 입력란을 채우지 않습니다. 입력은 모드별로 유지하며, 연결된 예약이 완료되면 해당 초안만 초기화합니다. 직접 지울 때는 플로팅 초기화 버튼을 사용하세요. ‘예약 조회’는 저장한 모든 예약자의 내역을 조회합니다. 저장하지 않는 ‘1회성 조회’는 이름과 휴대폰 번호만 입력해 별도로 확인합니다. 등록된 일정의 설정은 이후 편집과 관계없이 유지됩니다.</p></div>
   </dialog>
   <dialog id="monthlyDialog" class="monthly-dialog" aria-label="월별 예약 현황">
     <div class="monthly-controls"><button id="monthlyPrevButton" class="secondary" type="button" aria-label="이전 달">‹</button><label><input id="monthlyMonth" aria-label="조회 월" type="month" min="2000-01" max="2100-12"></label><button id="monthlyNextButton" class="secondary" type="button" aria-label="다음 달">›</button><div class="monthly-query-control"><button id="monthlyQueryButton" class="secondary" type="button">조회</button><span id="monthlyQuerySpinner" class="query-spinner" role="status" aria-label="월별 예약 조회 중" hidden></span></div></div>
@@ -229,6 +229,8 @@
   <dialog id="planDetailsDialog" class="booking-help-dialog" aria-labelledby="planDetailsTitle"><div class="booking-help-heading"><h2 id="planDetailsTitle">일정 상세</h2><button id="planDetailsClose" type="button" class="secondary">닫기</button></div><div id="planList" class="history-list"></div><p id="planDetailsMessage" role="status"></p></dialog>
   <button id="siteMapButton" class="site-map-floating" type="button" aria-label="캠핑장 배치도" title="캠핑장 배치도"><svg class="site-map-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2Z M9 3v16 M15 5v16"/></svg><span class="site-map-label">배치도</span></button>
   <button id="scrollTopButton" class="scroll-top-floating" type="button" aria-label="맨 위로" title="맨 위로" hidden><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14 M6 12l6-6 6 6 M12 6v14"/></svg></button>
+  <button id="editorResetButton" class="editor-reset-floating secondary" type="button" aria-haspopup="dialog" aria-controls="editorResetDialog">초기화</button>
+  <dialog id="editorResetDialog" class="booking-help-dialog" aria-labelledby="editorResetTitle"><h2 id="editorResetTitle">입력한 예약 정보를 초기화할까요?</h2><p>모든 예약 모드의 미저장 입력·날짜·선택 사이트·예약자 선택을 지웁니다. 저장된 예약자, 등록 일정과 실제 예약은 삭제하거나 중지하지 않습니다.</p><div class="section-actions"><button id="editorResetCancel" class="secondary" type="button">취소</button><button id="editorResetConfirm" class="danger" type="button">입력 전체 초기화</button></div></dialog>
   <dialog id="datePickerDialog" class="date-picker-dialog" aria-labelledby="datePickerTitle">
     <h2 id="datePickerTitle">날짜 선택</h2>
     <div id="datePickerRange" class="stay-range-summary" hidden><button type="button" id="datePickerCheckin" class="secondary">입실일</button><button type="button" id="datePickerCheckout" class="secondary">퇴실일</button><output id="datePickerNights">—</output></div>
@@ -247,6 +249,7 @@
   <script src="ui-settings.js"></script>
   <script src="workspace.js"></script>
   <script src="booking-book.js"></script>
+  <script src="editor-drafts.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

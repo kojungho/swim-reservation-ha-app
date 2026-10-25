@@ -86,7 +86,7 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     assert.equal(await page.locator("#planCard").isVisible(), false);
     await page.reload();
     await page.waitForFunction(() => document.querySelector("#bookingProfileSelect1").options.length === 1);
-    assert.equal(await page.locator("#reserverName").inputValue(), "");
+    assert.equal(await page.locator("#reserverName").inputValue(), testGuest(1).reserverName);
     assert.deepEqual(state.errors, []);
     await page.close();
   }

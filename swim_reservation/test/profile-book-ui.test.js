@@ -6,7 +6,7 @@ import { chromium } from "playwright-core";
 import { mockBookApp, testGuest } from "./fixtures/ui-book-app.js";
 
 const executablePath = [process.env.CHROMIUM_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/usr/bin/chromium"].filter(Boolean).find(existsSync);
-test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선택·신규 저장·일정 등록 초기화가 독립적이다", { skip: !executablePath }, async t => {
+test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선택·신규 저장·일정 초안 유지가 독립적이다", { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true });
   t.after(() => browser.close());
   for (const width of [1280, 390]) {
@@ -52,9 +52,9 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     await openPlanDetails(page);
     assert.deepEqual(await page.locator("#planList .plan-profile-targets p").allTextContents(), ["저장예약자1 : ① 해", "저장예약자3 : ① 달"]);
     await page.locator("#planDetailsClose").click();
-    assert.equal(await page.locator("#reserverName").inputValue(), "");
-    assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 0);
-    assert.equal(await page.locator("#bookingProfileSelect1").inputValue(), "");
+    assert.equal(await page.locator("#reserverName").inputValue(), testGuest(1).reserverName);
+    assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 1);
+    assert.equal(await page.locator("#bookingProfileSelect1").inputValue(), "0");
     assert.equal(state.book.length, 3);
     await openPlanDetails(page, 0);
     await page.locator("#planList .plan-entry").getByRole("button", { name: "설정 불러오기", exact: true }).click();
@@ -74,10 +74,12 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(state.config.profiles[0].reserverName, guest.reserverName);
     await page.reload();
     await page.waitForFunction(() => document.querySelector("#bookingProfileSelect1").options.length === 4);
-    assert.equal(await page.locator("#reserverName").inputValue(), "");
+    assert.equal(await page.locator("#reserverName").inputValue(), guest.reserverName);
     assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 0);
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="profiles-parallel"]').click();
+    await page.locator('#editorResetButton').click();
+    await page.locator('#editorResetConfirm').click();
     for (let person = 2; person <= 5; person++) await page.locator("#addProfileButton").click();
     assert.equal(await page.locator("#addProfileButton").isDisabled(), false);
     await page.locator("#bookingProfileSelect5").selectOption("2");

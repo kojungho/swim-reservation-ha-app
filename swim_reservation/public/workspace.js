@@ -83,8 +83,13 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   const modes = ["priority", "multiple", "profiles-parallel"];
   if (![...modes, "watch", "people", "monthly", "book", "logs", "settings"].includes(tab)) return;
   const entering = workspaceTab !== tab;
+  if (entering && !keepEditor && typeof captureEditorDraft === 'function') captureEditorDraft();
   workspaceTab = tab;
-  if (entering && !keepEditor) resetPlanEditor(tab);
+  if (entering && !keepEditor && ["priority", "multiple", "profiles-parallel", "watch"].includes(tab)) {
+    if (typeof draftsReady !== 'undefined' && draftsReady) restoreEditorDraft(tab);
+    else resetPlanEditor(tab);
+  }
+  document.getElementById('editorResetButton').hidden = !['priority', 'multiple', 'profiles-parallel', 'watch'].includes(tab);
   if (modes.includes(tab)) { elements.bookingMode.value = tab; renderRooms(); }
   if (tab === "watch") {
     elements.bookingMode.value = "priority";
@@ -126,6 +131,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   document.getElementById("addPlanButton").setAttribute("aria-label", tab === "watch" ? "현재 조건으로 취소 대기 등록" : "현재 설정으로 일정 등록");
   renderPlanEditMode();
   updateImmediateBookingVisibility();
+  if (typeof persistDrafts === 'function') persistDrafts();
   if (tab === "monthly") {
     if (!elements.monthlyDialog.open) {
       selectedMonthlyDate = null;
@@ -241,6 +247,7 @@ function resetPlanEditor(tab = workspaceTab) {
 async function registerPlan(kind, start) {
   if (planRegistrationPending) throw new Error("일정을 등록 중입니다. 잠시 기다려 주세요.");
   const generation = editorGeneration, tab = workspaceTab, edit = editingPlan;
+  const submittedDraft = editorSnapshot();
   if (edit && kind !== "watch") kind = edit.kind;
   const button = document.getElementById("addPlanButton");
   planRegistrationPending = true;
@@ -255,12 +262,13 @@ async function registerPlan(kind, start) {
     const result = await request(edit ? `plans/${edit.id}` : "plans", { method: edit ? "PUT" : "POST", body: JSON.stringify({ name: document.getElementById("planName").value, kind, watchProfileIndex: 0, intervalSeconds: document.getElementById("watchInterval").value, watchEndsAt: kind === "watch" ? document.getElementById("watchEndsAt").value : "", config }) });
     if (!result.id) throw new Error("일정 등록 결과를 확인하지 못했습니다.");
     const cleared = generation === editorGeneration && tab === workspaceTab && !roomDrag;
-    if (cleared) resetPlanEditor();
+    if (edit && cleared) { editingPlan = null; submittedDraft.editingPlan = null; renderPlanEditMode(); }
+    linkDraftToPlan(tab, result.id, submittedDraft);
     if (start) {
       try { await request(`plans/${result.id}/start`, { method: "POST" }); }
       catch (error) { await refreshPlans(); throw new Error(`일정은 등록했지만 시작하지 못했습니다: ${error.message}. 목록에서 설정을 확인하세요.`); }
     }
-    planMessage(`${edit ? "기존 일정 수정을 저장했습니다. 목록에서 시작을 눌러 다시 실행하세요." : start ? "독립 일정으로 실행했습니다." : "일정을 등록했습니다. 목록에서 시작을 누르면 실행됩니다."} ${cleared ? "입력란을 초기화했습니다." : "새로 편집한 입력 내용은 유지했습니다."}`);
+    planMessage(`${edit ? "기존 일정 수정을 저장했습니다. 목록에서 시작을 눌러 다시 실행하세요." : start ? "독립 일정으로 실행했습니다." : "일정을 등록했습니다. 목록에서 시작을 누르면 실행됩니다."} ${cleared ? "입력은 예약 완료까지 유지합니다." : "새로 편집한 입력 내용은 유지했습니다."}`);
     await refreshPlans();
   } finally { planRegistrationPending = false; button.disabled = false; }
 }
@@ -271,6 +279,7 @@ async function refreshPlans() {
   try {
     const result = await request("plans");
     planEntries = result.entries || [];
+    clearCompletedDrafts(planEntries);
     if (selectedDetailPlan && !planEntries.some(entry => entry.id === selectedDetailPlan)) document.getElementById("planDetailsDialog").close();
     renderExecutionPlans();
     renderPlanBadge();

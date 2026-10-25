@@ -63,14 +63,14 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
     const stale = await fetch(`${api.baseUrl}api/reservations/123/cancel`, { method: "POST", headers: { "Content-Type": "application/json", "X-Swim-Client-Version": "2.14.0" }, body: "{}" });
     assert.equal(stale.status, 409);
     assert.equal((await stale.json()).code, "CLIENT_VERSION_MISMATCH");
-    assert.equal((await api("status")).appVersion, "2.15.3");
+    assert.equal((await api("status")).appVersion, "2.15.4");
     const diagnostic = { id: "00000000-0000-4000-8000-000000000123", event: "clicked", reservationId: "123", occurredAt: Date.now() };
     await api("cancel-events", "POST", diagnostic); await api("cancel-events", "POST", diagnostic);
     const logs = (await api("logs")).entries;
     assert.ok(logs.some(item => item.event === "cancel-received"));
     assert.ok(logs.some(item => item.event === "cancel-rejected"));
     assert.ok(logs.some(item => item.details?.code === "RESERVATION_SNAPSHOT_REQUIRED" && item.details.missingFields.join(",") === "room,stayDate,nights"));
-    assert.ok(logs.some(item => item.details?.code === "CLIENT_VERSION_MISMATCH" && item.details.clientVersion === "2.14.0" && item.details.serverVersion === "2.15.3"));
+    assert.ok(logs.some(item => item.details?.code === "CLIENT_VERSION_MISMATCH" && item.details.clientVersion === "2.14.0" && item.details.serverVersion === "2.15.4"));
     assert.equal(logs.filter(item => item.details?.eventId === diagnostic.id).length, 1);
   });
   assert.equal((await api("month-cache")).intervalMinutes, 60);
