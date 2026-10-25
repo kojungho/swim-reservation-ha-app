@@ -20,6 +20,7 @@ public final class MainActivity extends Activity {
     static final String UI_HOST="phone.swim.invalid";
     static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","phone-features.js","date-picker.js","site-map.png");
     WebView screen;
+    AppUpdates updates;
     private LocalStore store;private PhoneRepository repository;
     private final Handler main=new Handler(Looper.getMainLooper());
     static boolean localUi(Uri uri,boolean mainFrame){
@@ -28,7 +29,7 @@ public final class MainActivity extends Activity {
     }
     @SuppressLint({"SetJavaScriptEnabled","AddJavascriptInterface"})
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);store=new LocalStore(this);repository=new PhoneRepository(this);
+        super.onCreate(state);store=new LocalStore(this);repository=new PhoneRepository(this);updates=new AppUpdates(this);
         android.widget.FrameLayout root=new android.widget.FrameLayout(this);screen=new WebView(this);root.addView(screen,new android.widget.FrameLayout.LayoutParams(-1,-1));setContentView(root);
         root.setOnApplyWindowInsetsListener((v,insets)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets b=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.ime());v.setPadding(b.left,b.top,b.right,b.bottom);}else v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets.consumeSystemWindowInsets();});
         WebSettings settings=screen.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(false);settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
@@ -55,7 +56,6 @@ public final class MainActivity extends Activity {
             }
         });
         screen.loadUrl("https://"+UI_HOST+"/index.html");
-        AppUpdates.check(this,false);
     }
     private WebResourceResponse denied(){return new WebResourceResponse("text/plain","UTF-8",403,"Blocked",Map.of(),new ByteArrayInputStream(new byte[0]));}
     String api(String raw){
@@ -65,7 +65,7 @@ public final class MainActivity extends Activity {
             Object result;
             switch(action){
                 case "load":result=repository.load().put("rooms",new JSONArray(RoomCatalog.NAMES)).put("version",BuildConfig.VERSION_NAME);break;
-                case "checkUpdates":main.post(()->AppUpdates.check(this,true));result="앱 업데이트 확인 중";break;
+                case "checkUpdates":main.post(()->updates.check(true));result="앱 업데이트 확인 중";break;
                 case "syncTime":PhoneReads.time(this);result="서버 시각 동기화 중";break;
                 case "monthly":PhoneReads.monthly(this,data.getString("month"));result="월별 현황 조회 중";break;
                 case "lookup":{JSONArray profiles=data.optJSONArray("profiles");if(profiles==null)profiles=repository.load().getJSONArray("profiles");JSONArray selected=profiles;main.post(()->{try{CampLookup.begin(this,selected);}catch(Exception e){try{store.saveDocument("lookup-result",new JSONObject().put("pending",false).put("error","예약자 정보·작업 상태를 확인하세요.").put("capturedAt",System.currentTimeMillis()));}catch(Exception ignored){}}});result="예약 내역 조회 중";break;}
@@ -81,7 +81,7 @@ public final class MainActivity extends Activity {
                 case "profileDelete":result=repository.delete("profiles",data.getString("id"));break;
                 case "planPut":result=repository.put("plans",data);break;
                 case "planDelete":result=repository.delete("plans",data.getString("id"));break;
-                case "run":{Plan plan=PhoneRepository.plan(data,true);main.post(()->confirmRun(plan));result="폰 실행 확인 창을 확인하세요.";break;}
+                case "run":{AppUpdates.requireSupported(this);Plan plan=PhoneRepository.plan(data,true);main.post(()->confirmRun(plan));result="폰 실행 확인 창을 확인하세요.";break;}
                 case "inspect":{Plan plan=PhoneRepository.plan(data,false);plan.validate(true);main.post(()->startPlan(plan,true));result="객실 조회를 요청했습니다. 실제 상태는 로그에서 확인하세요.";break;}
                 case "demo":main.post(()->{PhoneEngine.demoScenario="camp";startPlan(Plan.sample(),false);});result="새 사이트 모의 테스트 시작 요청";break;
                 case "stop":main.post(()->PlanScheduler.stop(this));result="중지 요청";break;
@@ -120,7 +120,8 @@ public final class MainActivity extends Activity {
     private void safeSettings(Runnable action){try{action.run();}catch(Exception e){message("설정 화면을 열지 못했습니다. 시스템 앱 정보에서 직접 확인해 주세요.");}}
     private void open(Uri uri){try{startActivity(new Intent(Intent.ACTION_VIEW,uri));}catch(Exception e){message("브라우저를 열지 못했습니다.");}}
     private void message(String text){if(!isFinishing())new AlertDialog.Builder(this).setMessage(text).setPositiveButton("확인",null).show();}
-    @Override protected void onResume(){super.onResume();if(store!=null&&store.active()&&!store.stage().equals("WAITING")&&!ReservationService.alive())store.state(store.uncertain()?"CHECK_REQUIRED":"STOPPED","실행 서비스 종료 확인 · 자동 재제출 없이 중지",false);}
+    @Override protected void onResume(){super.onResume();if(store!=null&&store.active()&&!store.stage().equals("WAITING")&&!ReservationService.alive())store.state(store.uncertain()?"CHECK_REQUIRED":"STOPPED","실행 서비스 종료 확인 · 자동 재제출 없이 중지",false);if(updates!=null)updates.resume();}
+    @Override protected void onPause(){if(updates!=null)updates.pause();super.onPause();}
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==45&&result==RESULT_OK&&data!=null&&data.getData()!=null){Uri uri=data.getData();new Thread(()->{try{new MapPhotos(this).add(uri);main.post(()->{if(screen!=null)screen.evaluateJavascript("window.refreshPhoneMaps?.()",null);});}catch(Exception e){main.post(()->message("사진을 저장하지 못했습니다. 10MB 이내 이미지·최대 6장을 확인하세요."));}},"map-import").start();}}
-    @Override protected void onDestroy(){CampLookup.cancel();if(screen!=null){screen.removeJavascriptInterface("Phone");screen.stopLoading();screen.destroy();screen=null;}super.onDestroy();}
+    @Override protected void onDestroy(){if(updates!=null)updates.destroy();CampLookup.cancel();if(screen!=null){screen.removeJavascriptInterface("Phone");screen.stopLoading();screen.destroy();screen=null;}super.onDestroy();}
 }

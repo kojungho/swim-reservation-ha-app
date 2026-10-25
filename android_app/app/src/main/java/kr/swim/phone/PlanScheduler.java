@@ -12,6 +12,7 @@ final class PlanScheduler {
         LocalStore store=new LocalStore(c);
         CampLookup.cancel();
         if(store.active())throw new IllegalStateException("기존 작업을 먼저 중지해 주세요.");
+        if(!lookup&&!plan.demo())AppUpdates.requireSupported(c);
         plan.validate(lookup);ReservationService.channel(c);
         requireReady(c,plan,lookup);
         if(lookup)store.availability(plan,java.util.Set.of(),false,true);

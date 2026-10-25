@@ -30,6 +30,7 @@ public final class EngineTestRunner extends Instrumentation {
     void uiReady()throws Exception{long end=System.currentTimeMillis()+15000;while(System.currentTimeMillis()<end){String error=js("document.documentElement.dataset.error||''");if(!error.isEmpty())throw new AssertionError("UI init: "+error);if(js("document.documentElement.dataset.ready||''").equals("true"))return;Thread.sleep(100);}throw new AssertionError("UI not ready");}
     @Override public void onStart(){
         app=getTargetContext();store=new LocalStore(app);
+        AppUpdates.MetadataSource originalUpdateSource=AppUpdates.source;
         try{
             shell("pm grant "+app.getPackageName()+" android.permission.POST_NOTIFICATIONS");
             shell("appops set "+app.getPackageName()+" SCHEDULE_EXACT_ALARM allow");
@@ -39,6 +40,7 @@ public final class EngineTestRunner extends Instrumentation {
                 Bundle result=new Bundle();result.putString("stream","READ-ONLY SITE RESULT: "+store.stage()+" / "+store.message()+"\nNo booking forms submitted.\n");finish(Activity.RESULT_OK,result);return;
             }
             PhoneReads.testMode=true;
+            AppUpdates.source=()->new org.json.JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("minSupportedVersionCode",0).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
             check(PhoneEngine.permitted(Uri.parse("https://www.swimozicamp.com/camp/book.php"),true,false),"new official reservation route allowed");
             check(!PhoneEngine.permitted(Uri.parse("https://evil.invalid/reservation/order_ok3.php"),true,false),"foreign origin blocked");
             check(!PhoneEngine.permitted(Uri.parse("http://newpension.logosweb.or.kr/reservation/order_ok3.php"),true,false),"cleartext blocked");
@@ -211,6 +213,6 @@ public final class EngineTestRunner extends Instrumentation {
             check(store.stage().equals("STOPPED")&&!store.active(),"reboot stops a watch instead of secretly placing a booking");
             Bundle done=new Bundle();done.putString("stream","\n"+assertions+" assertions passed\n"+report);finish(Activity.RESULT_OK,done);
         }catch(Throwable e){Bundle result=new Bundle();result.putString("stream","FAILED: "+e+"\n"+store.log()+"\n"+report);finish(Activity.RESULT_CANCELED,result);}
-        finally{PhoneEngine.demoScenario="";if(!liveInspect&&store.active())PlanScheduler.stop(app);try{shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");}catch(Exception ignored){}releaseActivity();}
+        finally{AppUpdates.source=originalUpdateSource;PhoneEngine.demoScenario="";if(!liveInspect&&store.active())PlanScheduler.stop(app);try{shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");}catch(Exception ignored){}releaseActivity();}
     }
 }
