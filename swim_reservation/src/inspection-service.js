@@ -6,7 +6,7 @@ export class InspectionService {
     this.jobs = new Set();
   }
 
-  inspect(config, signal) {
+  inspect(config, signal, traceContext = {}) {
     const controller = new AbortController();
     const cancel = () => controller.abort();
     signal?.addEventListener("abort", cancel, { once: true });
@@ -17,10 +17,12 @@ export class InspectionService {
       if (controller.signal.aborted) throw canceled();
       if (!this.canInspect()) throw Object.assign(new Error("예약 준비 또는 실행 중에는 객실 확인을 잠시 기다려 주세요."), { code: "INSPECTION_BUSY" });
       const engine = this.createEngine();
+      engine.traceContext = { ...engine.traceContext, ...traceContext, operation: 'availability' };
       // Close only this job's page; never mutate another job's engine references.
       const closePage = () => { void engine.page?.close().catch(() => {}); };
       try {
-        await engine.ensurePage();
+        if (engine.traceStep) await engine.traceStep('browser-ready', () => engine.ensurePage());
+        else await engine.ensurePage();
         if (controller.signal.aborted) throw canceled();
         controller.signal.addEventListener("abort", closePage, { once: true });
         const rooms = await engine.inspect(snapshot);

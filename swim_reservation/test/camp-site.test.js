@@ -97,11 +97,22 @@ test('실행 시각에 새 폼을 입력하고 필수 약관·무통장 제출 1
   assert.match(f.status.message, /입금 대기/);
   await f.engine.close();
   assert.ok(!JSON.stringify(f.logs).includes('FAKE-PRIVATE-TOKEN'));
+  const steps = f.logs.filter(entry => entry[1] === 'booking-step').map(entry => entry[3]);
+  for (const step of ['browser-ready', 'site-resolve', 'form-ready', 'form-verify', 'form-controls-check', 'personal-fields-fill', 'payment-select', 'terms-accept', 'input-verify', 'pre-submit-verify', 'consent-verify', 'submit-click', 'final-submit', 'receipt-verify']) {
+    assert.ok(steps.some(entry => entry.step === step && entry.outcome === 'start'), step);
+    assert.ok(steps.some(entry => entry.step === step && entry.outcome === 'complete'), step);
+  }
+  assert.ok(steps.some(entry => entry.step === 'pre-submit-verify' && entry.checks?.csrfPresent === true));
+  assert.ok(!JSON.stringify(f.logs).includes('테스트예약자'));
+  assert.ok(!JSON.stringify(f.logs).includes('01000000000'));
+  assert.ok(JSON.stringify(f.logs).includes('010-****-0000'));
 });
 test('오픈 전 안내는 제출하지 않으며 페이지·폼 불일치도 제출하지 않는다', { skip: !executablePath }, async t => {
   for (const [html, code] of [[ '<div class="msg-box">12.31(목) 체크인까지 예약 가능합니다.</div>', 'BOOKING_NOT_OPEN' ], [form.replace('value="2026-12-22"', 'value="2026-12-24"'), 'FORM_MISMATCH']]) {
     const f = await fixture(t, { html });
     await assert.rejects(f.engine.runSingle(config()), error => error.code === code);
+    await f.engine.close();
+    if (code === 'FORM_MISMATCH') assert.ok(f.logs.some(entry => entry[3]?.checks?.checkin === false && entry[3]?.step === 'form-verify'));
     assert.equal(f.requests.filter(request => request.method === 'POST').length, 0);
   }
 });

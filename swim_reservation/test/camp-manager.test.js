@@ -22,12 +22,13 @@ async function setup(t, { result = campReceipt({ heading: '입금을 기다리�
     if (request.url() !== reservationCheckUrl()) return route.abort();
     return route.fulfill({ status: request.method() === 'POST' ? status : 200, contentType: 'text/html; charset=utf-8', body: request.method() === 'POST' ? result : form });
   });
-  const manager = new ReservationManager({ executablePath });
+  const logs = [];
+  const manager = new ReservationManager({ executablePath, log: async (...entry) => logs.push(entry) });
   manager.withPage = action => action(page);
   // Browser routing does not intercept APIRequestContext; never allow a real API
   // call from synthetic tests. Individual detail-list tests replace this stub.
   page.request.post = async () => { throw new Error('Unexpected API detail request in mock test'); };
-  return { manager, page, requests, close: () => browser.close() };
+  return { manager, page, requests, logs, close: () => browser.close() };
 }
 test('조회 주소에는 이름·전화번호·개별 토큰을 포함하지 않는다', () => {
   assert.equal(reservationCheckUrl(profile), `${CAMP_ROOT}lookup.php`);
@@ -55,6 +56,13 @@ test('실제와 같은 요약 목록은 공개 번호 없는 확정 예약도 �
   assert.ok(!JSON.stringify(rows).includes('FAKE-PICK'));
   assert.ok(!JSON.stringify(rows).includes('FAKE-CSRF'));
   assert.equal(f.requests.filter(request => request.method === 'POST').length, 1);
+  const steps = f.logs.map(entry => entry[3]);
+  assert.equal(new Set(steps.map(entry => entry.attemptId)).size, 1);
+  for (const step of ['lookup-session', 'lookup-open', 'lookup-form-verify', 'lookup-fill', 'lookup-submit', 'lookup-result-parse', 'lookup-selections-verify', 'lookup-detail-fetch', 'lookup-detail-verify']) {
+    assert.ok(steps.some(entry => entry.step === step && entry.outcome === 'complete'), step);
+  }
+  assert.deepEqual(steps.filter(entry => entry.step === 'lookup-detail-fetch' && entry.outcome === 'start').map(entry => entry.detailIndex), [0, 1, 2]);
+  assert.ok(!/테스트예약자|01000000000|FAKE-CSRF|FAKE-PICK/.test(JSON.stringify(f.logs)));
 });
 test('공개 번호 없는 두 항목이 같은 상세 예약을 반환하면 부분 결과나 중복 예약으로 표시하지 않는다', { skip: !executablePath }, async t => {
   const f = await setup(t, { result: compactList().replaceAll('TEST456-XYZ', '').replaceAll('TEST789-PQR', '') });
@@ -76,6 +84,7 @@ test('요약 목록의 상세 429 또는 식별값 불일치에서는 나머지 
     };
     await assert.rejects(f.manager.list(profile), scenario === 'rate-limit' ? /HTTP 429/ : /식별값/);
     assert.equal(calls, 1);
+    assert.ok(f.logs.some(entry => entry[3]?.step === (scenario === 'rate-limit' ? 'lookup-detail-fetch' : 'lookup-detail-verify') && entry[3]?.outcome === 'error'));
     await f.close();
   }
 });

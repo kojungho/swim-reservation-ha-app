@@ -11,10 +11,14 @@ export async function inspectCalendarDay(engine, { calendarDate }) {
 }
 export async function inspectMonth(engine, { month, knownRooms = [] }) {
   const sourceUrl = monthlyUrl(month);
-  const response = await engine.page.request.get(sourceUrl, { timeout: 20_000 });
-  if (!response.ok()) throw new Error(`달력 조회 HTTP ${response.status()}입니다. 자동 재시도하지 않습니다.`);
-  const result = await response.json();
-  return parseCampCalendar(result, month, knownRooms, sourceUrl);
+  const response = await engine.traceStep('calendar-fetch', async () => {
+    const response = await engine.page.request.get(sourceUrl, { timeout: 20_000 });
+    engine.recordTrace('calendar-fetch', 'http', { httpStatus: response.status(), method: 'GET' });
+    if (!response.ok()) throw Object.assign(new Error(`달력 조회 HTTP ${response.status()}입니다. 자동 재시도하지 않습니다.`), { code: 'CALENDAR_HTTP_ERROR', safeToLog: true });
+    return response;
+  });
+  const result = await engine.traceStep('calendar-parse', () => response.json());
+  return engine.traceStep('calendar-verify', async () => parseCampCalendar(result, month, knownRooms, sourceUrl));
 }
 export function parseCampCalendar(result, month, knownRooms = [], sourceUrl = monthlyUrl(month)) {
   if (result.ok !== true || result.ym !== month || !/^\d{4}-\d{2}-\d{2}$/.test(result.open) || !result.days || typeof result.days !== 'object') throw new Error('정상적인 달력 응답이 아닙니다.');

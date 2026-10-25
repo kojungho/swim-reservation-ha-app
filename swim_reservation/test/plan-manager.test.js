@@ -119,12 +119,20 @@ test("재시작 전 실행 중인 일정은 확인 필요로 중지하고 자동
   assert.equal(calls.length, 0);
 });
 test("조회 실패·오픈 전·다른 박수 불가에서는 예약하지 않는다", async t => {
-  const { manager, calls } = await fixture(t, async () => { throw new Error("날짜 확인 실패"); });
+  let context;
+  const { manager, calls } = await fixture(t, async (_config, _signal, traceContext) => { context = traceContext; throw new Error("날짜 확인 실패"); });
   const id = await manager.add({ kind: "watch", config: config() });
   await manager.start(id);
   await manager.poll(manager.get(id));
   assert.equal(calls.length, 0);
   assert.equal((await manager.get(id).store.getStatus()).stage, "watch-read-error");
+  const logs = await manager.get(id).store.listLogs();
+  const failed = logs.find(entry => entry.event === 'watch-step' && entry.details.outcome === 'error');
+  assert.equal(failed.details.step, 'watch-lookup');
+  assert.equal(failed.details.planId, id);
+  assert.equal(failed.details.attemptId, context.attemptId);
+  assert.equal(context.planId, id);
+  assert.ok(!JSON.stringify(failed).includes(profile.phone));
   assert.equal(matchWatchRooms(config(), found.map(room => ({ ...room, available: true, status: "unavailable" }))), false);
 });
 test("취소 대기는 다른 객실이 마감이어도 한 객실만 가능하면 시작하고 미확인·예약 대기는 제외한다", () => {

@@ -51,7 +51,7 @@ const inspections = new InspectionService(
 );
 const plans = new PlanManager({ dataDir: DATA_DIR, timeSync,
   engineFactory: planStore => new ReservationEngine({ store: planStore, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", getFinalSubmitInterval }),
-  inspect: (config, signal) => inspections.inspect(config, signal),
+  inspect: (config, signal, traceContext) => inspections.inspect(config, signal, traceContext),
   canInspect: () => !scheduler.running && !scheduler.preparing,
   log: (...args) => store.recordLog(...args)
 });

@@ -16,6 +16,10 @@ test('한 번의 브라우저 평가로 전체 입력·필수 동의를 마치�
   });
   const result = await page.locator('form').evaluate(fillCampForm, values);
   assert.equal(result.ok, true);
+  assert.deepEqual(result.steps.map(step => step.step), ['form-controls-check', 'personal-fields-fill', 'payment-select', 'terms-accept', 'input-verify']);
+  assert.ok(result.steps.every(step => step.outcome === 'complete' && Number.isFinite(step.elapsedMs)));
+  assert.ok(!JSON.stringify(result).includes(values.fields.name));
+  assert.ok(!JSON.stringify(result).includes(values.fields.phone));
   assert.equal(await page.locator('[name="name"]').inputValue(), values.fields.name);
   assert.equal(await page.locator('[name="phone"]').inputValue(), values.fields.phone);
   assert.equal(await page.locator('[name="arrive_time"]').inputValue(), values.fields.arrive_time);
@@ -24,6 +28,17 @@ test('한 번의 브라우저 평가로 전체 입력·필수 동의를 마치�
   assert.equal(await page.locator('[value="card"]').isChecked(), false);
   assert.equal(await page.locator('[name="_csrf"]').inputValue(), 'FAKE-UNTOUCHED');
   assert.deepEqual(await page.evaluate(() => [window.inputs, window.changes, window.submits]), [7, 7, 0]);
+});
+test('일괄 입력의 실패 항목 이름만 기록하고 입력값·약관 원문은 반환하지 않는다', { skip: !executablePath }, async t => {
+  const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.setContent(html.replace('type="tel"', 'type="tel" pattern="[0-9]{2}"'));
+  const result = await page.locator('form').evaluate(fillCampForm, values);
+  assert.equal(result.ok, false);
+  assert.equal(result.failedStep, 'input-verify');
+  assert.deepEqual(result.invalidFields, ['phone']);
+  assert.equal(result.steps.at(-1).checks.nativeValid, false);
+  assert.ok(!JSON.stringify(result).includes(values.fields.phone));
 });
 test('필드·약관 변경 또는 잘못된 선택값은 입력 전 검증에서 거부한다', { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());

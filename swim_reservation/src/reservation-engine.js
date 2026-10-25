@@ -37,10 +37,10 @@ export class ReservationEngine {
 
   recordTrace(step, outcome, extra = {}) {
     const details = { ...this.traceContext, step, outcome, room: this.selectedRoom || this.traceContext.room || null, page: safeReservationUrl(this.page?.url?.()), ...extra };
-    const labels = { "room-lookup": "객실 조회", "room-select": "객실 선택", "room-submit": "객실 선택 전송", "terms-accept": "약관 동의", "terms-submit": "약관 전송", "personal-fill": "예약자 정보 입력", "final-submit": "최종 예약 제출", "result-page": "결과 화면 확인", "receipt-verify": "예약 완료 대조" };
+    const labels = { "browser-ready": "브라우저 준비", "site-resolve": "사이트 번호 확인", "form-detect": "예약 폼 탐색", "form-ready": "예약 폼 준비 확인", "opening-wait": "오픈 반영 대기", "site-unavailable": "사이트 예약 불가 확인", "form-verify": "폼·보안값·기간 대조", "form-controls-check": "입력 항목·필수 약관 구조 확인", "personal-fields-fill": "예약자 정보 일괄 입력", "payment-select": "무통장 선택", "input-verify": "입력 결과 검증", "deadline-verify": "대기 만료 시각 확인", "pre-submit-verify": "제출 직전 사이트·기간 대조", "consent-verify": "자동 제출 동의 확인", "submit-click": "예약 신청 버튼 클릭", "listing-verify": "빈자리 목록 해석·대조", "catalog-save": "사이트 목록 저장", "room-lookup": "객실 조회", "room-select": "객실 선택", "room-submit": "객실 선택 전송", "terms-accept": "약관 동의", "terms-submit": "약관 전송", "personal-fill": "예약자 정보 입력", "final-submit": "최종 예약 제출", "result-page": "결과 화면 확인", "receipt-verify": "예약 완료 대조" };
     const person = Number.isInteger(details.profileIndex) ? `예약자 ${details.profileIndex + 1}` : "예약";
     const room = details.room ? ` · ${details.room.replace(/_(하늘존|산맥존)/g, "")}` : "";
-    const result = { start: "시작", complete: "완료", error: "실패", http: "HTTP 응답" }[outcome] || outcome;
+    const result = { start: "시작", complete: "완료", error: "실패", http: "HTTP 응답", checks: "검사 결과" }[outcome] || outcome;
     const message = `${person}${room} · ${step === "site-rate-limit" ? "사이트 요청 제한 진단" : step === "final-delay" ? "최종 제출 간격 대기" : labels[step] || step} ${result}${extra.httpStatus ? ` · HTTP ${extra.httpStatus}` : ""}${extra.error?.message ? ` · ${extra.error.message}` : ""}`;
     // Queue logging without delaying the time-critical final click. Flush when closing.
     this.traceWrites.push(Promise.resolve().then(() => this.store.recordLog?.(outcome === "error" || extra.httpStatus >= 400 ? "error" : "info", "booking-step", message, details)).catch(() => {}));

@@ -4,6 +4,7 @@ import path from "node:path";
 import { Store } from "./store.js";
 import { Scheduler } from "./scheduler.js";
 import { normalizeConfig, validateConfig, getProfiles, bookingOpenIso, triggerEpoch } from "./config.js";
+import { operationTrace, maskedProfile } from './camp-trace.js';
 
 // Each plan owns its configuration, status and browser. Editor changes never affect armed plans.
 function planRevision(plan) { return createHash("sha256").update(JSON.stringify([plan.name, plan.kind, plan.config, plan.intervalSeconds, plan.watchEndsAt || ""])).digest("hex"); }
@@ -207,11 +208,21 @@ export class PlanManager {
       }
       if (!this.canInspect() || this.busy) return;
       plan.controller = new AbortController();
-      const rooms = await this.inspect(plan.config, plan.controller.signal);
+      const checkId = randomUUID();
+      const trace = operationTrace((...args) => plan.store.recordLog(...args), { planId: plan.id, attemptId: checkId, profile: maskedProfile(getProfiles(plan.config)[0]) }, 'watch-step');
+      let rooms;
+      try { rooms = await trace.step('watch-lookup', () => this.inspect(plan.config, plan.controller.signal, { planId: plan.id, attemptId: checkId })); }
+      finally { await trace.flush(); }
       if (!plan.enabled || generation !== plan.generation || this.closed) return;
       if (this.timeSync.now() >= triggerEpoch(watchDeadlineAt(plan))) { await this.expireWatch(plan); return; }
       plan.failures = 0;
-      const matchedConfig = watchConfiguration(plan.config, rooms);
+      let matchedConfig;
+      try { matchedConfig = await trace.step('watch-match', async () => {
+        const matched = watchConfiguration(plan.config, rooms);
+        trace.emit('watch-match', 'checks', { matched: Boolean(matched), availableCount: rooms.filter(room => room.available).length });
+        return matched;
+      }); }
+      finally { await trace.flush(); }
       const matches = Boolean(matchedConfig);
       await plan.store.updateStatus({ state: "waiting", stage: matches ? "watch-found" : "watching", lastCheckedAt: now, roomAvailability: rooms, message: matches ? "조건에 맞는 객실을 발견했습니다. 예약을 시도합니다." : "조건에 맞는 객실이 없어 감시를 계속합니다." });
       if (matches) {
