@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.2";
+const CLIENT_VERSION = "2.15.3";
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
 function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, "").replace(/(\d+)순위/g, (_, rank) => rankSymbol(Number(rank))); }
@@ -141,6 +141,24 @@ async function init() {
 }
 
 function bindEvents() {
+  const reloadButton = document.getElementById("screenReloadButton");
+  const reloadConfirm = document.getElementById("screenReloadConfirm");
+  const reloadLink = document.getElementById("screenReloadProceed");
+  reloadButton.addEventListener("click", () => {
+    // WebView/HA iframe may suppress window.confirm(). Use an in-page prompt
+    // and an ordinary same-frame link; retain the ingress path and parameters.
+    const target = new URL(window.location.href);
+    target.searchParams.set("_screen", String(Date.now()));
+    reloadLink.href = target.href;
+    reloadConfirm.hidden = false;
+    reloadButton.setAttribute("aria-expanded", "true");
+    reloadLink.focus({ preventScroll: true });
+  });
+  document.getElementById("screenReloadCancel").addEventListener("click", () => {
+    reloadConfirm.hidden = true;
+    reloadButton.setAttribute("aria-expanded", "false");
+    reloadButton.focus({ preventScroll: true });
+  });
   const reconnect = () => { nextStatusCheck = 0; void refreshStatus(); };
   document.getElementById("reconnectButton").addEventListener("click", reconnect);
   window.addEventListener("online", reconnect);

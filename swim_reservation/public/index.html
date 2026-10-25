@@ -16,7 +16,11 @@
       </div>
     </header>
     <div id="connectionNotice" class="connection-notice" role="status" aria-live="polite" hidden><span id="connectionMessage"></span><button id="reconnectButton" type="button" class="secondary">다시 연결</button></div>
-    <div id="screenUpdateNotice" class="connection-notice" role="status" aria-live="polite" hidden><span id="screenUpdateMessage"></span><button type="button" class="secondary" onclick="if (confirm('저장하지 않은 입력은 사라집니다. 화면을 새로 열까요?')) location.reload()">화면 새로 열기</button></div>
+    <div id="screenUpdateNotice" class="connection-notice" role="status" aria-live="polite" hidden><span id="screenUpdateMessage"></span><button id="screenReloadButton" type="button" class="secondary" aria-expanded="false" aria-controls="screenReloadConfirm">화면 새로 열기</button></div>
+    <section id="screenReloadConfirm" class="connection-notice" aria-labelledby="screenReloadTitle" hidden>
+      <div><strong id="screenReloadTitle">최신 화면으로 다시 열까요?</strong><p>저장하지 않은 입력은 사라집니다. 서버에 등록된 예약 대기·실행 작업은 계속됩니다.</p></div>
+      <div class="section-actions"><button id="screenReloadCancel" type="button" class="secondary">취소</button><a id="screenReloadProceed" class="button primary" target="_self">확인 후 새로 열기</a></div>
+    </section>
 
     <div class="workspace-menu-floating">
     <button id="workspaceMenuButton" type="button" aria-expanded="false" aria-controls="workspaceMenu" aria-label="메뉴 열기"><span class="menu-bars" aria-hidden="true"><span></span><span></span><span></span></span><span id="workspaceMenuLabel">단독 예약</span><span aria-hidden="true">▾</span></button>
