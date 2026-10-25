@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.6";
+const CLIENT_VERSION = "2.15.7";
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
 function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, "").replace(/(\d+)순위/g, (_, rank) => rankSymbol(Number(rank))); }
@@ -1161,11 +1161,16 @@ function renderReservations(reservations, { container = elements.reservationList
     for (const reservation of found) {
     const row = document.createElement("div");
     row.className = "reservation-row";
+    if (reservation.cancelPolicy === 'contact') row.classList.add('reservation-compact');
+    if (reservation.cancelPolicy === 'contact') {
+      row.innerHTML = `<div><strong>${escapeHtml(shortRoomText(reservation.room))}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span></div><div class="reservation-compact-state"><strong>${escapeHtml(reservation.status)}</strong><span>${escapeHtml(reservation.total)}</span></div><details class="reservation-more"><summary>상세</summary><div><span>예약번호 ${escapeHtml(reservation.id)}</span>${reservation.depositDeadline ? `<span>입금 기한 ${escapeHtml(reservation.depositDeadline)}</span>` : ''}<span class="cancel-disabled">취소는 캠핑장에 문의해 주세요</span></div></details>`;
+    } else {
     row.innerHTML = `
       <div><strong>${escapeHtml(shortRoomText(reservation.room))}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span>${reservation.cancelPolicy === 'contact' ? `<span>예약번호 ${escapeHtml(reservation.id)}</span>` : ''}</div>
       <div><span>예약 금액</span><strong>${escapeHtml(reservation.total)}</strong></div>
       <div><span>예약 상태</span><strong>${escapeHtml(reservation.status)}</strong>${reservation.depositDeadline ? `<span>입금 기한 ${escapeHtml(reservation.depositDeadline)}</span>` : ''}</div>
       ${reservation.cancelable ? '<button type="button" class="reservation-cancel-button danger">예약 취소</button>' : `<span class="cancel-disabled">${reservation.cancelPolicy === 'contact' ? '취소는 캠핑장에 문의해 주세요' : '사이트에서 취소 불가'}</span>`}`;
+    }
     const cancelButton = row.querySelector(".reservation-cancel-button");
     cancelButton?.addEventListener("click", () => {
       recordCancelEvent("clicked", reservation.id);

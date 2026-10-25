@@ -14,6 +14,8 @@ test('PC·폰의 새 예약 조회는 예약번호·입금 대기·기한·전�
     await page.waitForFunction(() => !savedLookupPending);
     await page.evaluate(() => renderReservations([{ id: 'TEST123-ABC', room: '숨_산맥존', stayDate: '2026-12-22', nights: '1박', total: '60,000원', status: '입금 대기', depositDeadline: '10월 26일 (월) 15:58 까지', cancelable: false, cancelPolicy: 'contact', profileIndex: 0 }], { profiles: [{ reserverName: '모의예약자', phone: '01000000000' }] }));
     const row = page.locator('#reservationList .reservation-row');
+    assert.ok((await row.boundingBox()).height <= 85);
+    await row.locator('summary').click();
     assert.match(await row.innerText(), /예약번호 TEST123-ABC/);
     assert.match(await row.innerText(), /입금 대기/);
     assert.match(await row.innerText(), /입금 기한.*15:58/);

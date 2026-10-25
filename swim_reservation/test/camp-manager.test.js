@@ -132,7 +132,10 @@ test('명시적인 정상 빈 결과만 0건이며 입력 화면·다른 예약�
   const empty = await setup(t, { result: '<div class="done-wrap"><div class="msg-box"><p>일치하는 예약 내역이 없습니다.</p></div></div>' });
   assert.deepEqual(await empty.manager.list(profile), []);
   await empty.close();
-  for (const result of [lookupForm, campReceipt({ name: '다른예약자' }) + '<p>테스트예약자</p>', campReceipt({ state: '처리중' }), campReceipt({ checkout: '2026.12.24' })]) {
+  const currentEmpty = await setup(t, { result: '<div class="done-wrap"><form class="lookup-form"><div class="form-error">일치하는 예약이 없습니다. 예약자명·연락처를 확인해 주세요.</div></form></div>' });
+  assert.deepEqual(await currentEmpty.manager.list(profile), []);
+  await currentEmpty.close();
+  for (const result of [lookupForm, '<div class="done-wrap"><form class="lookup-form"><div class="form-error">잠시 후 다시 시도해 주세요.</div></form></div>', campReceipt({ name: '다른예약자' }) + '<p>테스트예약자</p>', campReceipt({ state: '처리중' }), campReceipt({ checkout: '2026.12.24' })]) {
     const f = await setup(t, { result });
     await assert.rejects(f.manager.list(profile), /일치 확인하지 못/);
     await f.close();

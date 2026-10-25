@@ -63,6 +63,8 @@ export function readCampReservations({ expectedName = '', rooms = [], html } = {
     return row ? { kind: 'detail', submissionComplete: /^예약신청이완료되었습니다[.!]?$/.test(compact(head.querySelector('h1')?.textContent)), rows: [row] } : { kind: 'unknown', rows: [] };
   }
   // Only an explicit result message means zero; the untouched lookup form does not.
+  const noMatch = [...wrap.querySelectorAll('form.lookup-form > .form-error')].some(element => compact(element.textContent) === '일치하는예약이없습니다.예약자명·연락처를확인해주세요.');
+  if (noMatch) return { kind: 'empty', rows: [] };
   const messages = [...wrap.querySelectorAll('.msg-box p, .lookup-empty, .notice, .error, .message')].map(element => compact(element.textContent));
   const empty = messages.some(message => /^(조회된|일치하는|등록된)?예약(내역|정보)?(이|가)?없습니다[.!]?$/.test(message));
   return { kind: empty ? 'empty' : 'unknown', rows: [] };
