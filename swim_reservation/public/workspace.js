@@ -248,6 +248,10 @@ async function registerPlan(kind, start) {
   if (planRegistrationPending) throw new Error("일정을 등록 중입니다. 잠시 기다려 주세요.");
   const generation = editorGeneration, tab = workspaceTab, edit = editingPlan;
   const submittedDraft = editorSnapshot();
+  const linkedDraft = editorDrafts[tab];
+  if (!edit && linkedDraft?.completion && linkedDraft.completion.signature === draftSignature(submittedDraft)) {
+    throw new Error('동일한 입력으로 이미 등록한 일정이 있습니다. 등록 목록에서 시작·결과를 확인하세요. 새 일정은 내용을 변경하거나 입력을 초기화한 뒤 등록해 주세요.');
+  }
   if (edit && kind !== "watch") kind = edit.kind;
   const button = document.getElementById("addPlanButton");
   planRegistrationPending = true;

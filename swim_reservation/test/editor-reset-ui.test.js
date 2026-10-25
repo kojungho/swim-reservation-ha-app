@@ -42,6 +42,9 @@ test('일정 등록만으로 입력을 지우지 않고 연결된 예약 성공 
   await fill(page, '완료할 초안');
   await page.evaluate(() => registerPlan('scheduled', false));
   assert.equal(await page.locator('#planName').inputValue(), '완료할 초안');
+  const duplicate = await page.evaluate(async () => { try { await registerPlan('scheduled', false); return ''; } catch (error) { return error.message; } });
+  assert.match(duplicate, /이미 등록한 일정/);
+  assert.equal(state.plans.length, 1);
   await page.reload();
   await page.waitForFunction(() => document.getElementById('planName').value === '완료할 초안');
   state.plans[0].status = { state: 'failed' };
