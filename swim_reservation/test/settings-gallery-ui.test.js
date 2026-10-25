@@ -66,12 +66,15 @@ test("사진 갤러리는 6개·확대·적용·삭제 취소·선택 삭제·�
       return route.fulfill({ json: gallery });
     }
     if (req.method() === "POST") { gallery.activeId = url.pathname.split("/").at(-1); return route.fulfill({ json: gallery }); }
-    return route.fulfill({ contentType: "image/png", body: png });
+    return route.fulfill({ contentType: "image/png", body: png, headers: url.searchParams.get("download") === "1" ? { "Content-Disposition": 'attachment; filename="swim-map-test.png"' } : {} });
   });
   await page.locator("#siteMapButton").click(); await page.waitForFunction(() => document.getElementById("galleryCount").textContent === "6/6");
-  assert.equal(await page.locator("#siteMapUploadButton").isDisabled(), true);
+  assert.equal(await page.locator("#siteMapUploadButton").isVisible(), false);
   assert.equal(await page.getByRole("button", { name: "배치도 사진 추가", exact: true }).isDisabled(), true);
   assert.match(await page.locator("#galleryAddButton").textContent(), /6장 가득 참/);
+  assert.equal(await page.locator(".gallery-download").count(), 6);
+  assert.match(await page.locator(".gallery-download").first().getAttribute("href"), /000000000001\?download=1$/);
+  assert.match(await page.locator(".gallery-download").first().getAttribute("download"), /^swim-map-.*\.png$/);
   await page.locator(".gallery-preview").nth(1).click(); await page.locator("#mapZoomDialog").waitFor();
   assert.match(await page.locator("#mapZoomImage").getAttribute("src"), /000000000002$/); await page.locator("#mapZoomClose").click();
   await page.locator(".gallery-photo").nth(1).getByRole("button", { name: "적용", exact: true }).click();
@@ -80,7 +83,7 @@ test("사진 갤러리는 6개·확대·적용·삭제 취소·선택 삭제·�
   state.rejectDialogs = true; await page.locator("#galleryDeleteAll").click(); assert.equal(gallery.entries.length, 6); state.rejectDialogs = false;
   await page.locator(".gallery-select input").nth(1).check(); await page.locator(".gallery-select input").nth(2).check();
   await page.locator("#galleryDeleteSelected").click(); await page.waitForFunction(() => document.getElementById("galleryCount").textContent === "4/6");
-  assert.equal(await page.locator("#siteMapUploadButton").isDisabled(), false);
+  assert.equal(await page.locator("#siteMapUploadButton").isVisible(), false);
   assert.equal(await page.locator("#galleryAddButton").isEnabled(), true);
   assert.equal(await page.locator("#mapGallery > :last-child").getAttribute("id"), "galleryAddButton");
   const chooserWait = page.waitForEvent("filechooser"); await page.locator("#galleryAddButton").click(); const chooser = await chooserWait; await chooser.setFiles([]);

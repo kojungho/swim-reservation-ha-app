@@ -21,6 +21,7 @@ public final class MainActivity extends Activity {
     static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","phone-features.js","date-picker.js","stay-calendar.js","site-choice.js","site-map.png");
     WebView screen;
     AppUpdates updates;
+    private String pendingMapExport;
     private LocalStore store;private PhoneRepository repository;
     private final Handler main=new Handler(Looper.getMainLooper());
     static boolean localUi(Uri uri,boolean mainFrame){
@@ -29,7 +30,7 @@ public final class MainActivity extends Activity {
     }
     @SuppressLint({"SetJavaScriptEnabled","AddJavascriptInterface"})
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);store=new LocalStore(this);repository=new PhoneRepository(this);updates=new AppUpdates(this);
+        super.onCreate(state);pendingMapExport=state==null?null:state.getString("pendingMapExport");store=new LocalStore(this);repository=new PhoneRepository(this);updates=new AppUpdates(this);
         android.widget.FrameLayout root=new android.widget.FrameLayout(this);screen=new WebView(this);root.addView(screen,new android.widget.FrameLayout.LayoutParams(-1,-1));setContentView(root);
         root.setOnApplyWindowInsetsListener((v,insets)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets b=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.ime());v.setPadding(b.left,b.top,b.right,b.bottom);}else v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets.consumeSystemWindowInsets();});
         WebSettings settings=screen.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(false);settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
@@ -73,6 +74,7 @@ public final class MainActivity extends Activity {
                 case "lookupStop":main.post(CampLookup::cancel);result="조회 중지";break;
                 case "maps":result=new MapPhotos(this).state();break;
                 case "mapPick":main.post(()->{if(store.active()){message("예약 작업 중에는 사진을 바꾸지 마세요.");return;}Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(picker,45);}catch(Exception e){message("사진 선택 화면을 열지 못했습니다.");}});result="사진 선택";break;
+                case "mapExport":{String id=data.getString("id");Intent save=mapExportIntent(id);main.post(()->{if(pendingMapExport!=null){message("사진 저장 위치를 먼저 선택하거나 취소해 주세요.");return;}pendingMapExport=id;try{startActivityForResult(save,46);}catch(Exception e){pendingMapExport=null;message("사진 저장 화면을 열지 못했습니다.");}});result="사진 저장 위치 선택";break;}
                 case "mapAction":{if(store.active())throw new IllegalStateException("예약 작업을 먼저 중지하세요.");String mapAction=data.getString("action");if(mapAction.equals("delete")&&!data.optBoolean("confirmed"))throw new IllegalArgumentException("사진 삭제 확인이 필요합니다.");result=new MapPhotos(this).apply(mapAction,data.getString("id"));break;}
                 case "state":result=runtimeState();break;
                 case "draft":result=repository.saveDraft(data);break;
@@ -123,6 +125,25 @@ public final class MainActivity extends Activity {
     private void message(String text){if(!isFinishing())new AlertDialog.Builder(this).setMessage(text).setPositiveButton("확인",null).show();}
     @Override protected void onResume(){super.onResume();if(store!=null&&store.active()&&!store.stage().equals("WAITING")&&!ReservationService.alive())store.state(store.uncertain()?"CHECK_REQUIRED":"STOPPED","실행 서비스 종료 확인 · 자동 재제출 없이 중지",false);if(updates!=null)updates.resume();}
     @Override protected void onPause(){if(updates!=null)updates.pause();super.onPause();}
-    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==45&&result==RESULT_OK&&data!=null&&data.getData()!=null){Uri uri=data.getData();new Thread(()->{try{new MapPhotos(this).add(uri);main.post(()->{if(screen!=null)screen.evaluateJavascript("window.refreshPhoneMaps?.()",null);});}catch(Exception e){main.post(()->message("사진을 저장하지 못했습니다. 10MB 이내 이미지·최대 6장을 확인하세요."));}},"map-import").start();}}
+    Intent mapExportIntent(String id)throws Exception{
+        new MapPhotos(this).registeredFile(id);
+        return new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("image/jpeg").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"swim-map-"+id+".jpg");
+    }
+    @Override protected void onSaveInstanceState(Bundle state){state.putString("pendingMapExport",pendingMapExport);super.onSaveInstanceState(state);}
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);
+        if(request==46){
+            String id=pendingMapExport;pendingMapExport=null;
+            if(result==RESULT_OK&&data!=null&&data.getData()!=null&&id!=null){
+                Uri destination=data.getData();
+                new Thread(()->{try{
+                    // Validate membership before opening the user-selected destination.
+                    MapPhotos photos=new MapPhotos(this);photos.registeredFile(id);
+                    try(OutputStream out=getContentResolver().openOutputStream(destination,"w")){if(out==null)throw new IOException();photos.exportTo(id,out);}
+                    main.post(()->message("배치도 사진을 저장했습니다."));
+                }catch(Exception e){main.post(()->message("사진을 저장하지 못했습니다. 저장 위치·여유 공간과 등록 사진을 확인하세요."));}},"map-export").start();
+            }
+            return;
+        }
+if(request==45&&result==RESULT_OK&&data!=null&&data.getData()!=null){Uri uri=data.getData();new Thread(()->{try{new MapPhotos(this).add(uri);main.post(()->{if(screen!=null)screen.evaluateJavascript("window.refreshPhoneMaps?.()",null);});}catch(Exception e){main.post(()->message("사진을 저장하지 못했습니다. 10MB 이내 이미지·최대 6장을 확인하세요."));}},"map-import").start();}}
     @Override protected void onDestroy(){if(updates!=null)updates.destroy();CampLookup.cancel();if(screen!=null){screen.removeJavascriptInterface("Phone");screen.stopLoading();screen.destroy();screen=null;}super.onDestroy();}
 }

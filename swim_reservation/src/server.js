@@ -130,7 +130,7 @@ const server = http.createServer(async (request, response) => {
         if (request.method === "POST") return json(response, 200, await siteMap.select(photoMatch[1]));
         if (request.method === "GET") {
           const image = await siteMap.readPhoto(photoMatch[1]);
-          response.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+          response.writeHead(200, { "Content-Type": "image/png", "Content-Length": image.length, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", ...(url.searchParams.get("download") === "1" ? { "Content-Disposition": `attachment; filename="swim-map-${photoMatch[1]}.png"` } : {}) });
           return response.end(image);
         }
       } catch (error) { if (error.statusCode) return json(response, error.statusCode, { error: error.message }); throw error; }

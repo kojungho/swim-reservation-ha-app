@@ -218,7 +218,8 @@ function renderMapGallery() {
     const apply = document.createElement("button"); apply.type = "button"; apply.className = "secondary"; apply.textContent = "적용"; apply.disabled = galleryBusy || entry.id === galleryActiveId;
     apply.addEventListener("click", () => void mapGalleryAction(async () => { await request(`site-map/gallery/${entry.id}`, { method: "POST", body: "{}" }); }, "안내 사진을 변경했습니다."));
     const remove = document.createElement("button"); remove.type = "button"; remove.className = "danger"; remove.textContent = "삭제"; remove.disabled = galleryBusy; remove.addEventListener("click", () => void deleteMapPhotos([entry.id]));
-    actions.append(apply, remove); card.append(label, preview, actions); grid.append(card);
+    const download = document.createElement("a"); download.className = "secondary gallery-download"; download.textContent = "다운로드"; download.href = API(`site-map/gallery/${entry.id}`) + "?download=1"; download.download = `swim-map-${entry.id}.png`;
+    actions.append(apply, download, remove); card.append(label, preview, actions); grid.append(card);
   });
   const add = document.createElement("button"); add.id = "galleryAddButton"; add.type = "button"; add.className = "gallery-add";
   add.setAttribute("aria-label", "배치도 사진 추가");

@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import path from "node:path";
@@ -63,14 +63,14 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
     const stale = await fetch(`${api.baseUrl}api/reservations/123/cancel`, { method: "POST", headers: { "Content-Type": "application/json", "X-Swim-Client-Version": "2.14.0" }, body: "{}" });
     assert.equal(stale.status, 409);
     assert.equal((await stale.json()).code, "CLIENT_VERSION_MISMATCH");
-    assert.equal((await api("status")).appVersion, "2.15.11");
+    assert.equal((await api("status")).appVersion, "2.15.12");
     const diagnostic = { id: "00000000-0000-4000-8000-000000000123", event: "clicked", reservationId: "123", occurredAt: Date.now() };
     await api("cancel-events", "POST", diagnostic); await api("cancel-events", "POST", diagnostic);
     const logs = (await api("logs")).entries;
     assert.ok(logs.some(item => item.event === "cancel-received"));
     assert.ok(logs.some(item => item.event === "cancel-rejected"));
     assert.ok(logs.some(item => item.details?.code === "RESERVATION_SNAPSHOT_REQUIRED" && item.details.missingFields.join(",") === "room,stayDate,nights"));
-    assert.ok(logs.some(item => item.details?.code === "CLIENT_VERSION_MISMATCH" && item.details.clientVersion === "2.14.0" && item.details.serverVersion === "2.15.11"));
+    assert.ok(logs.some(item => item.details?.code === "CLIENT_VERSION_MISMATCH" && item.details.clientVersion === "2.14.0" && item.details.serverVersion === "2.15.12"));
     assert.equal(logs.filter(item => item.details?.eventId === diagnostic.id).length, 1);
   });
   assert.equal((await api("month-cache")).intervalMinutes, 60);
@@ -121,6 +121,20 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
     const full = await fetch(`${api.baseUrl}api/site-map`, { method: "PUT", body: png }); assert.equal(full.status, 409); await full.json();
     const first = gallery.entries[0].id;
     await api(`site-map/gallery/${first}`, "POST", {});
+    const download = await fetch(`${api.baseUrl}api/site-map/gallery/${first}?download=1`);
+    assert.equal(download.status,200);assert.equal(download.headers.get("content-disposition"),`attachment; filename="swim-map-${first}.png"`);
+    assert.equal(Number(download.headers.get("content-length")),png.length);assert.deepEqual(Buffer.from(await download.arrayBuffer()),png);
+    if(executablePath){
+      const browser=await chromium.launch({executablePath,headless:true});
+      try{
+        const page=await browser.newPage({acceptDownloads:true});await page.goto(api.baseUrl);
+        await page.locator("#siteMapButton").click();await page.waitForFunction(()=>document.querySelectorAll(".gallery-download").length===6);
+        const event=page.waitForEvent("download");await page.locator(".gallery-download").first().click();const saved=await event;
+        assert.equal(await saved.failure(),null);assert.match(saved.suggestedFilename(),/^swim-map-.*\.png$/);
+        assert.deepEqual(await readFile(await saved.path()),png);
+        assert.equal((await api("site-map/gallery")).entries.length,6);
+      }finally{await browser.close();}
+    }
     const photo = await fetch(`${api.baseUrl}api/site-map/gallery/${first}`); assert.equal(photo.headers.get("content-type"), "image/png"); assert.deepEqual(Buffer.from(await photo.arrayBuffer()), png);
     await stop(); api = await boot();
     assert.deepEqual(await api("ui-settings"), settings);
