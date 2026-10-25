@@ -13,6 +13,7 @@ test("설정은 저장·복원·글자 종류·4개 모서리·인접 배치·�
     const page = await browser.newPage({ viewport: { width, height: 844 } });
     const state = await mockBookApp(page); let saved = structuredClone(DEFAULT_UI_SETTINGS);
     await page.route("https://app.test/api/ui-settings", route => { if (route.request().method() === "PUT") saved = route.request().postDataJSON(); return route.fulfill({ json: saved }); });
+    await page.locator("#roomList select").selectOption({index:1});await page.locator("#roomList .site-choice-tools button").click();
     await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="settings"]').click();
     assert.equal(await page.locator("#font-room").inputValue(), "14");
     await page.locator("#font-room").fill("18");
