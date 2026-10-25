@@ -183,7 +183,7 @@ export class PlanManager {
       const remaining = triggerEpoch(watchDeadlineAt(plan)) - this.timeSync.now();
       if (Number.isFinite(remaining)) delay = Math.min(delay, remaining > 0 ? remaining : plan.failures ? delay : 1000);
     }
-    plan.timer = setTimeout(() => this.poll(plan).catch(error => this.log("error", "plan-watch", error.message)), delay);
+    plan.timer = setTimeout(() => this.poll(plan).catch(error => this.log("error", "plan-watch", error.message, { planId: plan.id })), delay);
     plan.timer.unref?.();
   }
   async poll(plan) {

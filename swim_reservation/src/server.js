@@ -19,6 +19,7 @@ import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./
 import { PlanManager, singleBookingConfig } from "./plan-manager.js";
 import { MonthCache } from "./month-cache.js";
 import { SubmissionSettings } from "./submission-settings.js";
+import { HaNotifications, notificationService } from './ha-notifications.js';
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -28,6 +29,10 @@ const APP_VERSION = JSON.parse(await readFile(path.join(ROOT, "package.json"), "
 const cancelEventIds = new Set();
 
 const store = new Store(DATA_DIR);
+const notifications = new HaNotifications({ service: await notificationService(path.join(DATA_DIR, 'options.json')),
+  onError: () => { void store.recordLog('error', 'ha-notification', 'S25 오류 알림 전송에 실패했습니다. HA 알림 서비스와 연결을 확인해 주세요.').catch(() => {}); }
+});
+store.onLog = entry => notifications.observe(entry);
 const siteMap = new SiteMap(DATA_DIR, path.join(PUBLIC_DIR, "site-map.png"));
 const uiSettings = new UiSettings(DATA_DIR);
 const submissionSettings = new SubmissionSettings(DATA_DIR);
@@ -83,6 +88,12 @@ monthCache.start();
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+    if (url.pathname === '/api/notifications/test' && request.method === 'POST') {
+      try {
+        await notifications.send('쉼오지 예약 · 알림 테스트', 'S25 오류 알림 연결을 확인했습니다. 앞으로 예약 실행·대기 중 오류가 발생하면 알려드립니다.');
+        return json(response, 200, { ok: true });
+      } catch { return json(response, 503, { ok: false, error: 'HA 알림 서비스 연결을 확인해 주세요.' }); }
+    }
     if (url.pathname === "/api/cancel-events" && request.method === "POST") {
       const input = await readJsonBody(request);
       const labels = { clicked: "버튼 클릭", busy: "다른 작업 처리 중으로 화면에서 차단", dismissed: "사용자가 확인창을 닫음", confirmed: "사용자가 취소 확인", "response-ok": "화면에서 완료 응답 수신", "connection-lost": "화면에서 취소 응답 수신 실패", "response-error": "화면에서 취소 오류 응답 수신" };

@@ -189,6 +189,8 @@ export class Store {
       await atomicWrite(this.logPath, entries.slice(-1000));
     });
     await this.logQueue;
+    // Notification delivery must never delay or fail a reservation operation.
+    try { this.onLog?.(entry); } catch { /* best effort */ }
     return entry;
   }
 

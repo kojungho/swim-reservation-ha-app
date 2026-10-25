@@ -1,5 +1,5 @@
 name: "쉼오지 예약 도우미"
-version: "2.15.0"
+version: "2.15.1"
 image: "ghcr.io/kojungho/swim-reservation"
 slug: "swim_reservation"
 description: "단독·다중·객실 수 기준 다인 예약 및 취소 대기를 지원합니다. 예약자 20명 저장, 일정 등록·실행과 전체/1회성 조회를 제공합니다."
@@ -15,5 +15,8 @@ ingress_port: 8099
 panel_icon: mdi:tent
 panel_title: "쉼오지 예약"
 apparmor: false
-options: {}
-schema: {}
+homeassistant_api: true
+options:
+  error_notify_service: mobile_app_sm_s938n
+schema:
+  error_notify_service: str
