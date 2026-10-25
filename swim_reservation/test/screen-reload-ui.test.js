@@ -10,11 +10,12 @@ test('PC·폰에서 브라우저 확인창 없이 취소는 입력을 보존하�
   for (const width of [390, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     const state = await mockBookApp(page);
+    await page.route('https://app.test/api/status', route => route.fulfill({ json: { state: 'idle', appVersion: 'new-server-test' } }));
     await page.evaluate(() => {
       history.replaceState(null, '', '?existing=kept#settings');
       window.confirm = () => { throw new Error('Native confirmation must not be used'); };
-      document.getElementById('screenUpdateNotice').hidden = false;
     });
+    await page.evaluate(() => refreshStatus());
     await page.locator('#reserverName').fill('저장 전 입력');
     await page.locator('#screenReloadButton').click();
     assert.equal(await page.locator('#screenReloadConfirm').isVisible(), true);
@@ -41,6 +42,7 @@ test('PC·폰에서 브라우저 확인창 없이 취소는 입력을 보존하�
 test('HA와 같은 확인창 차단 iframe에서도 현재 프레임만 새로 열고 상위 앱 주소를 유지한다', { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
   const page = await browser.newPage(); await mockBookApp(page);
+  await page.route('https://app.test/api/status', route => route.fulfill({ json: { state: 'idle', appVersion: 'new-server-test' } }));
   const parentUrl = page.url();
   await page.evaluate(() => {
     const frame = document.createElement('iframe');
@@ -51,7 +53,7 @@ test('HA와 같은 확인창 차단 iframe에서도 현재 프레임만 새로 �
   const frame = page.frames().find(item => item !== page.mainFrame());
   await frame.waitForFunction(() => typeof bindEvents === 'function' && document.getElementById('bookingProfileSelect1')?.options.length > 1);
   assert.equal(await frame.evaluate(() => window.confirm('blocked test')), false);
-  await frame.evaluate(() => { document.getElementById('screenUpdateNotice').hidden = false; });
+  await frame.evaluate(() => refreshStatus());
   await frame.locator('#screenReloadButton').click();
   assert.equal(await frame.locator('#screenReloadConfirm').isVisible(), true);
   await Promise.all([frame.waitForURL(url => url.searchParams.has('_screen')), frame.locator('#screenReloadProceed').click()]);

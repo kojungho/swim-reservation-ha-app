@@ -60,6 +60,7 @@ test("예약자 추가 폼·수정 저장·첫 예약자 제외·사람별 색�
     const colors = await page.evaluate(() => [getComputedStyle(document.getElementById("firstBookingProfilePanel")).backgroundColor, getComputedStyle(document.querySelector("#extraProfiles .second-profile-panel")).backgroundColor]);
     assert.notEqual(colors[0], colors[1]);
     await page.locator("#excludeFirstProfile").click();
+    await page.locator('#profileRemoveConfirm').click();
     assert.equal(await page.locator("#reserverName").inputValue(), "저장예약자2");
     assert.deepEqual(await page.evaluate(() => firstProfilePriority[0]), { name: "샘_산맥존", enabled: true });
     assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 0);

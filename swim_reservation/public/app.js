@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.5";
+const CLIENT_VERSION = "2.15.6";
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
 function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, "").replace(/(\d+)순위/g, (_, rank) => rankSymbol(Number(rank))); }
@@ -11,7 +11,8 @@ function bookingGuestLimit() { return Math.max(1, new Set(rooms.map(room => room
 function updateGuestAddButton() {
   const limit = bookingGuestLimit(), full = extraProfiles.length + 1 >= limit;
   elements.addProfileButton.disabled = full;
-  elements.addProfileButton.textContent = full ? `최대 ${limit}명` : "+ 예약자 추가";
+  elements.addProfileButton.textContent = "+";
+  elements.addProfileButton.setAttribute('aria-label', full ? `예약자 추가 · 최대 ${limit}명` : '예약자 추가');
   elements.addProfileButton.title = `객실 수 기준 최대 ${limit}명까지 추가할 수 있습니다.`;
 }
 function applyGuestColor(element, index) {
@@ -239,12 +240,12 @@ function bindEvents() {
     renderRooms();
   });
   document.getElementById("excludeFirstProfile").addEventListener("click", () => {
-    if (!extraProfiles.length || !window.confirm("첫 예약자를 현재 일정에서 제외할까요? 저장된 예약자와 등록 일정은 유지됩니다.")) return;
-    const config = readConfig();
-    config.profiles = config.profiles.slice(1);
-    loadConfig(config);
-    renderBookingProfileSelectors();
+    if (!extraProfiles.length) return;
+    confirmProfileRemoval(0);
   });
+  document.getElementById('profileRemoveCancel').addEventListener('click', () => document.getElementById('profileRemoveDialog').close());
+  document.getElementById('profileRemoveConfirm').addEventListener('click', applyProfileRemoval);
+  document.getElementById('profileRemoveDialog').addEventListener('close', () => { pendingProfileRemoval = null; });
   elements.siteTimeSyncButton.addEventListener("click", () => perform(async () => refreshSiteTime(true)));
   elements.saveButton.addEventListener("click", () => perform(async () => {
     await saveConfig();
@@ -584,14 +585,15 @@ function renderExtraProfiles() {
     const panel = document.createElement("div");
     panel.className = "second-profile-panel";
     applyGuestColor(panel, index + 1);
-    panel.innerHTML = '<h3>예약자 ' + (index + 2) + '</h3><div class="grid two identity-fields"></div><div class="section-actions profile-panel-actions"><button type="button" class="secondary">예약자 제외</button></div>';
-    for (const [key, label] of [["reserverName", "예약자명"], ["depositorName", "입금자명"], ["phone", "휴대폰 번호"]]) {
+    panel.innerHTML = '<div class="profile-panel-heading"><h3>예약자 ' + (index + 2) + '</h3><button type="button" class="secondary profile-remove-button" aria-label="예약자 제외" title="예약자 ' + (index + 2) + ' 제외">×</button></div><div class="grid two identity-fields"></div>';
+    for (const [key, label] of [["reserverName", "예약자명"], ["depositorName", "입금자명 (선택)"], ["phone", "휴대폰 번호"]]) {
       const field = document.createElement("label");
       field.textContent = label;
       const input = document.createElement("input");
       input.id = key + (index + 2);
       input.value = profile[key] || "";
       input.autocomplete = "off";
+      if (key === 'depositorName') input.placeholder = '미입력 시 예약자명';
       if (key === "phone" || key === "birthDate") input.inputMode = "numeric";
       if (key === "birthDate") { input.maxLength = 8; input.placeholder = "YYYYMMDD"; }
       input.addEventListener("input", () => { profile[key] = input.value; refreshSiteProfileSelector(); });
@@ -599,18 +601,32 @@ function renderExtraProfiles() {
       panel.querySelector(".grid").append(field);
     }
     panel.querySelector("button").addEventListener("click", () => {
-      if (!window.confirm("예약자 " + (index + 2) + "를 현재 입력 중인 일정에서 제외할까요? 저장된 예약자 정보와 등록 일정은 유지됩니다.")) return;
-      extraProfiles.splice(index, 1);
-      editorGeneration++;
-      savedSecondProfile = {};
-      renderExtraProfiles();
-      renderRooms();
+      confirmProfileRemoval(index + 1);
     });
     mountExtraBookingSelector(panel, index + 1);
     elements.extraProfiles.append(panel);
   });
   updateGuestAddButton();
   refreshSiteProfileSelector();
+}
+
+let pendingProfileRemoval = null;
+function confirmProfileRemoval(index) {
+  pendingProfileRemoval = { index, signature: JSON.stringify(readConfig().profiles) };
+  document.getElementById('profileRemoveMessage').textContent = `예약자 ${index + 1}을 현재 입력 중인 일정에서 제외할까요? 저장된 예약자·등록 일정·실제 예약은 삭제하지 않습니다.`;
+  document.getElementById('profileRemoveDialog').showModal();
+}
+function applyProfileRemoval() {
+  const pending = pendingProfileRemoval;
+  pendingProfileRemoval = null;
+  document.getElementById('profileRemoveDialog').close();
+  if (!pending || pending.signature !== JSON.stringify(readConfig().profiles) || !extraProfiles.length) return;
+  if (pending.index === 0) {
+    const config = readConfig(); config.profiles = config.profiles.slice(1); loadConfig(config); renderBookingProfileSelectors();
+  } else {
+    extraProfiles.splice(pending.index - 1, 1); editorGeneration++; savedSecondProfile = {}; renderExtraProfiles(); renderRooms();
+  }
+  captureEditorDraft();
 }
 
 function refreshSiteProfileSelector() {

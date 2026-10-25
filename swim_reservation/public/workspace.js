@@ -29,7 +29,7 @@ function initializeWorkspace() {
   document.getElementById("executionCard").hidden = true;
   const logCard = document.getElementById("logCard");
   logCard.querySelector(".log-help").after(elements.statusDetails, elements.profileStatusList, elements.diagnosticsPanel);
-  profilePage.querySelector("h3").before(elements.multipleProfileField, document.getElementById("watchProfileField"));
+  document.getElementById('firstBookingProfileTitle').closest('.profile-panel-heading').before(elements.multipleProfileField, document.getElementById("watchProfileField"));
   const actions = document.createElement("div");
   actions.className = "actions lookup-site-controls";
   const lookupControl = document.createElement("div"); lookupControl.className = "lookup-request-control";
@@ -163,7 +163,7 @@ function updateBookingProfileVisibility() {
   firstPanel.dataset.guestColor = !one ? "0" : "";
   document.getElementById("excludeFirstProfile").hidden = one || !extraProfiles.length;
   document.getElementById("firstBookingProfileFields").hidden = one && index !== 0;
-  [...elements.extraProfiles.children].forEach((panel, extraIndex) => { panel.hidden = one && index !== extraIndex + 1; applyGuestColor(panel, extraIndex + 1); panel.querySelector(".profile-panel-actions button").hidden = one; });
+  [...elements.extraProfiles.children].forEach((panel, extraIndex) => { panel.hidden = one && index !== extraIndex + 1; applyGuestColor(panel, extraIndex + 1); panel.querySelector(".profile-remove-button").hidden = one; });
   elements.addProfileButton.hidden = one;
   elements.profileModeHelp.textContent = workspaceTab === "profiles-parallel" ? `예약자 저장 목록에서 사람별로 선택하거나 직접 입력하세요. 객실 수 기준 최대 ${bookingGuestLimit()}명까지 각자의 객실 하나를 동시에 예약합니다. 인원·후보가 많으면 준비 시간과 메모리 사용량이 늘 수 있습니다.` : "저장된 예약자를 한 명 선택하거나 직접 입력하세요. 새 사람은 예약자 저장으로 목록에 추가할 수 있습니다. 목록은 자동으로 표시되지만 선택 전에는 정보를 입력하지 않습니다.";
 }
