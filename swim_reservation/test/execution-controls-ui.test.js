@@ -107,7 +107,7 @@ test("PC·폰에서 일정 목록을 실행 영역 아래에 두고 미래 예�
     await page.locator("#triggerAt").evaluate((input, value) => { input.value = value; input.dispatchEvent(new Event("input", { bubbles: true })); }, "2026-10-12T09:00");
     await page.locator("#bookingProfileSelect1").selectOption("0");
     await page.waitForFunction(() => document.querySelector("#reserverName").value === "테스트예약자");
-    await page.locator("#roomList input[type=checkbox]").first().check();
+    await page.locator("#roomList select").selectOption({ index: 1 }); await page.locator("#roomList .site-choice-tools button").click();
     await page.locator("#runNowButton").click();
     await page.waitForFunction(() => document.querySelector("#planMessage").textContent.includes("독립 일정으로 실행"));
     assert.equal(plans.length, 3);

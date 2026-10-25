@@ -26,7 +26,7 @@ test("PC·폰은 날짜/박수 한 줄·접힌 시각/종료일·시간 팝업·
     assert.equal(await page.locator("#triggerAt").isVisible(), false);
     const geometry = await page.evaluate(() => {
       const rect = id => document.getElementById(id).getBoundingClientRect();
-      return { paired: Math.abs(rect("startDate").top - rect("nights").top) < 1, menuRight: rect("workspaceMenuButton").right > innerWidth - 40, metaSingleLine: document.querySelector(".header-meta").getBoundingClientRect().height < 35, overflow: document.documentElement.scrollWidth > innerWidth };
+      return { paired: Math.abs(rect("startDate").top - rect("checkoutDate").top) < 1, menuRight: rect("workspaceMenuButton").right > innerWidth - 40, metaSingleLine: document.querySelector(".header-meta").getBoundingClientRect().height < 35, overflow: document.documentElement.scrollWidth > innerWidth };
     });
     assert.deepEqual(geometry, { paired: true, menuRight: true, metaSingleLine: true, overflow: false });
     await page.locator("#reservationConnectionDetails summary").click(); assert.equal(await page.locator("#triggerAt").isVisible(), true);
@@ -78,13 +78,14 @@ test("20명 저장 목록과 객실 수 기준 다인 입력은 5명에서 잘�
   await page.waitForFunction(() => document.querySelector("#bookingBookList").textContent.includes("20번째 수정"));
   await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="profiles-parallel"]').click();
   await page.locator("#startDate").fill("2027-01-20");
-  await page.waitForFunction(() => document.querySelector("#profilePriorities input:not(:disabled)"));
+  await page.waitForFunction(() => document.querySelector("#profilePriorities select:not(:disabled)"));
   const count = await page.evaluate(() => bookingGuestLimit());
   for (let index = 1; index < count; index++) await page.locator("#addProfileButton").click();
   assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), count - 1);
   assert.equal(await page.locator("#addProfileButton").isDisabled(), true);
   await page.locator(`#bookingProfileSelect${count}`).selectOption("19");
   assert.equal(await page.locator(`#reserverName${count}`).inputValue(), "20번째 수정");
+  await page.locator("#startDate").fill("2026-12-20");
   state.availability = [...state.config.roomPriority.map(room => ({ name: room.name, available: true, status: "available" })), { name: "새객실", available: true, status: "available" }];
   await page.evaluate(() => refreshAvailability());
   assert.equal(await page.locator("#addProfileButton").isEnabled(), true);

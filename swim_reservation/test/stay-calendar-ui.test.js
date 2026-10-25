@@ -18,7 +18,7 @@ test('앱과 같은 마감·예정·퇴실일 규칙, 연박은 전체 기간 �
  await page.evaluate(()=>{switchWorkspaceTab('priority');elements.startDate.value='2027-01-17';updateStayFields();});
  await page.locator('#startDate').click();await page.waitForFunction(()=>document.querySelector('[data-date="2027-01-17"] small')?.textContent==='예정');
  assert.equal(await page.locator('[data-date="2027-01-17"]').isEnabled(),true);await page.locator('#datePickerCancel').click();
- await page.evaluate(()=>{elements.startDate.value='2026-12-19';elements.nights.value='2';availabilityByRoom.set(rooms[0].name,'unavailable');availabilityByRoom.set(rooms[1].name,'available');renderRooms();});
- assert.match(await page.locator('#roomList').innerText(),/연박 가능/);assert.match(await page.locator('#roomList').innerText(),/선택 기간 연박 불가/);
+ await page.evaluate(()=>{elements.startDate.value='2026-12-19';elements.nights.value='2';availabilityContext=elements.startDate.value+'/2';availabilityByRoom.set(rooms[0].name,'unavailable');availabilityByRoom.set(rooms[1].name,'available');renderRooms();});
+ assert.match(await page.locator('#roomList select').innerText(),/연박 가능/);assert.equal(await page.locator('#roomList select option').filter({hasText:'해'}).count(),0);
  assert.deepEqual(state.errors,[]);assert.equal(state.planCalls.length,0);assert.equal(state.writes.some(p=>/run-now|\/start$/.test(p)),false);
 });

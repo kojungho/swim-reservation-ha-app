@@ -68,7 +68,7 @@ public class EngineTestRunner extends Instrumentation {
             activity=startActivitySync(new Intent(app,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             uiReady();
             check(js("document.querySelectorAll('[data-workspace-tab]').length").equals("9"),"all nine add-on workspace menu entries present");
-            check(js("document.querySelectorAll('#roomList input[type=checkbox]').length").equals("14"),"add-on styled room list provides all fourteen checkboxes");
+            check(js("document.querySelectorAll('#roomList .site-choice-editor').length===1&&document.querySelectorAll('#roomList input[type=checkbox]').length===0").equals("true"),"shared site picker replaces the checkbox workflow");
             js("selected=new Set(['꿈_산맥존','솔_산맥존']);moveRoom('솔_산맥존',-1);renderRooms()");
             check(js("readPlan().rooms").equals("솔_산맥존, 꿈_산맥존"),"room selection and order feed the actual phone plan");
             store.save("test-room-choice",Plan.from(new org.json.JSONObject(js("JSON.stringify(readPlan())"))));check(store.load("test-room-choice").rooms.equals("솔_산맥존, 꿈_산맥존"),"selected sites and rank survive encrypted storage");
@@ -85,7 +85,7 @@ public class EngineTestRunner extends Instrumentation {
             js("$('startDate').click();$('datePickerNext').click()");check(js("$('datePickerMonth').textContent").equals("2027년 1월"),"calendar crosses the year boundary");js("$('datePickerCancel').click()");
             js("switchTab('settings');uiSettings.stayRange=false;applyUi()");check(js("$('checkoutField').hidden&&!$('nightsField').hidden").equals("true"),"settings switches between nights and checkout-date selection");preview("phone-settings.png");
             js("switchTab('multiple')");check(js("$('phoneUnsupported').hidden&&!$('planCard').hidden&&readPlan().mode==='multiple'").equals("true"),"multiple booking is connected to a native plan");
-            check(js("document.querySelectorAll('#roomList .room-drag-handle').length===14&&![...document.querySelectorAll('#roomList button')].some(b=>['↑','↓'].includes(b.textContent))").equals("true"),"drag handles replace visible rank arrows");
+            check(js("document.querySelectorAll('#roomList .site-choice-editor').length===1&&![...document.querySelectorAll('#roomList button')].some(b=>['↑','↓'].includes(b.textContent))").equals("true"),"drag handles replace visible rank arrows");
             js("switchTab('watch')");check(js("readPlan().trigger").equals("0"),"vacancy watch does not inherit a hidden scheduled start time");
             js("$('watchInterval').value='1'");check(js("(()=>{try{readPlan();return false}catch(e){return true}})()").equals("true"),"phone UI rejects a one-minute query interval");js("$('watchInterval').value='10'");
             js("switchTab('priority');window.scrollTo(0,0)");preview("phone-addon-ui.png");

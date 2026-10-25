@@ -30,7 +30,7 @@ test("객실을 마우스·터치로 이동하고 취소·키보드 이동·저�
     await page.waitForFunction(() => document.querySelector("#planList").textContent.includes("등록된 일정이 없습니다."));
     await page.waitForFunction(() => availabilityContext === `${elements.startDate.value}/${Number(elements.nights.value)}`);
     await page.locator("#roomList").evaluate(el => { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -180); });
-    const labels = () => page.locator(".room-drag-handle").evaluateAll(xs => xs.map(x => x.getAttribute("aria-label").replace(" 순서 이동", "")));
+    const labels = () => page.locator(".site-choice-row").evaluateAll(xs => xs.map(x => x.dataset.choiceName));
     const handle = page.locator(".room-drag-handle").first();
     await handle.scrollIntoViewIfNeeded();
     const a = await handle.boundingBox();
@@ -48,7 +48,7 @@ test("객실을 마우스·터치로 이동하고 취소·키보드 이동·저�
       await page.mouse.move(end.x, end.y, { steps: 10 }); await page.mouse.up();
     }
     assert.deepEqual((await labels()).slice(0, 3), [original[1], original[2], original[0]], JSON.stringify({ mobile, a, b, start, end, after: await page.locator(".room-row").evaluateAll(rows => rows.slice(0, 4).map(row => ({ y: row.getBoundingClientRect().y, height: row.getBoundingClientRect().height }))) }));
-    assert.equal(await page.locator('.room-toggle input:checked').count(), 3);
+    assert.equal(await page.locator('.site-choice-row').count(), 3);
     await page.locator(".room-drag-handle").nth(2).focus();
     await page.keyboard.press("ArrowUp");
     assert.deepEqual((await labels()).slice(0, 3), [original[1], original[0], original[2]]);
@@ -60,7 +60,7 @@ test("객실을 마우스·터치로 이동하고 취소·키보드 이동·저�
     assert.deepEqual(await labels(), beforeCancel);
     await page.evaluate(() => elements.saveButton.click());
     await page.waitForFunction(() => document.body.innerText.includes("저장했습니다"));
-    assert.deepEqual(config.roomPriority.map(x => x.name), beforeCancel);
+    assert.deepEqual(config.roomPriority.filter(x => x.enabled).map(x => x.name), beforeCancel);
     await page.reload();
     await page.locator(".room-drag-handle").first().waitFor();
     assert.deepEqual(await labels(), beforeCancel);

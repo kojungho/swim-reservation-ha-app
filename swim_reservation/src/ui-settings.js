@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 export const DEFAULT_UI_SETTINGS = {
   fonts: { title: 28, heading: 18, body: 14, field: 16, button: 13, room: 14, status: 12, calendar: 12, list: 14, log: 12 },
-  serverTime: true, reservationInfo: true, safety: true, watchInfo: true, stayRange: false,
+  serverTime: true, reservationInfo: true, safety: true, watchInfo: true, stayRange: true, dateInputVersion: 1,
   menuCorner: "top-right", mapCorner: "bottom-right", menuSpacing: 6, mapIcon: true, floatingSize: 46
 };
 export function normalizeUiSettings(input = {}) {
@@ -30,6 +30,10 @@ export function normalizeUiSettings(input = {}) {
     if (!Number.isInteger(input.floatingSize) || input.floatingSize < 44 || input.floatingSize > 64) throw new Error("플로팅 크기는 44~64px의 정수로 입력해 주세요.");
     result.floatingSize = input.floatingSize;
   }
+  if(input.dateInputVersion!==undefined&&input.dateInputVersion!==0&&input.dateInputVersion!==1)throw new Error("날짜 표시 설정 버전을 확인해 주세요.");
+  // Old add-on files defaulted to nights-only. Migrate once; later explicit choices survive.
+  if(input.dateInputVersion!==1)result.stayRange=true;
+  result.dateInputVersion=1;
   return result;
 }
 export class UiSettings {

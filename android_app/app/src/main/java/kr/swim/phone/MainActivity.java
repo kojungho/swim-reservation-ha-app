@@ -18,7 +18,7 @@ import java.io.*;
 /** Bundled add-on presentation; native, server-independent reservation service remains separate. */
 public final class MainActivity extends Activity {
     static final String UI_HOST="phone.swim.invalid";
-    static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","phone-features.js","date-picker.js","stay-calendar.js","site-map.png");
+    static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","phone-features.js","date-picker.js","stay-calendar.js","site-choice.js","site-map.png");
     WebView screen;
     AppUpdates updates;
     private LocalStore store;private PhoneRepository repository;

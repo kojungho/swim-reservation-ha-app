@@ -12,7 +12,7 @@ test("PC·폰의 입실/퇴실 달력은 연말 범위·자동 박수·색상·�
     const page = await browser.newPage({ viewport: { width, height: 844 } }), state = await mockBookApp(page);
     let settings = structuredClone(DEFAULT_UI_SETTINGS);
     await page.route("https://app.test/api/ui-settings", route => { if (route.request().method() === "PUT") settings = route.request().postDataJSON(); return route.fulfill({ json: settings }); });
-    assert.equal(await page.locator("#checkoutField").isVisible(), false);
+    assert.equal(await page.locator("#checkoutField").isVisible(), true);
     await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="settings"]').click();
     await page.locator("#setting-stayRange").check(); await page.locator("#settingsSave").click();
     await page.waitForFunction(() => document.getElementById("settingsMessage").textContent.includes("저장했습니다")); assert.equal(settings.stayRange, true);

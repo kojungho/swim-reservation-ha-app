@@ -496,21 +496,9 @@ function refreshWatchProfileSelector() {
 }
 
 function renderWatchRooms() {
-  renderRoomSelectionControls();
-  elements.roomSectionTitle.textContent = "객실 선택";
-  elements.roomSectionHelp.textContent = "원하는 객실을 체크만 하세요. 순위 없이 조건에 맞는 자리가 나오면 객실 하나를 예약합니다.";
-  elements.roomList.hidden = false;
-  elements.profilePriorities.hidden = true;
-  elements.multipleProfileField.hidden = true;
-  document.getElementById("roomDragHelp").hidden = true;
-  document.getElementById("roomDragStatus").textContent = "";
-  elements.roomList.replaceChildren();
-  for (const room of rooms) {
-    const row = document.createElement("div");
-    row.className = `room-row${room.enabled ? " enabled" : ""}`;
-    const state = availabilityByRoom.get(room.name) || "unknown";
-    row.innerHTML = `<label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} aria-label="${escapeHtml(room.name)} 감시 대상"></label><div class="room-name">${escapeHtml(room.name)}<span class="availability ${state}">${AVAILABILITY_LABELS[state] || AVAILABILITY_LABELS.unknown}</span></div>`;
-    row.querySelector("input").addEventListener("change", event => { room.enabled = event.target.checked; renderWatchRooms(); });
-    elements.roomList.append(row);
-  }
+  elements.roomSectionTitle.textContent="사이트 선택";
+  elements.roomSectionHelp.textContent="취소 대기할 사이트를 추가하세요. 마감된 사이트도 감시 후보로 지정할 수 있습니다.";
+  elements.roomList.hidden=false;elements.profilePriorities.hidden=true;elements.multipleProfileField.hidden=true;
+  document.getElementById("roomDragHelp").hidden=true;
+  elements.roomList.replaceChildren(siteChoiceEditor(rooms));renderRoomSelectionControls();
 }

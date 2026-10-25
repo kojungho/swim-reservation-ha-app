@@ -399,6 +399,7 @@ async function serveStatic(pathname, response) {
     "/workspace.js": ["workspace.js", "text/javascript; charset=utf-8"],
     "/editor-drafts.js": ["editor-drafts.js", "text/javascript; charset=utf-8"],
     "/stay-calendar.js": ["stay-calendar.js", "text/javascript; charset=utf-8"],
+    "/site-choice.js": ["site-choice.js", "text/javascript; charset=utf-8"],
     "/booking-book.js": ["booking-book.js", "text/javascript; charset=utf-8"],
     "/ui-settings.js": ["ui-settings.js", "text/javascript; charset=utf-8"],
     "/styles.css": ["styles.css", "text/css; charset=utf-8"],

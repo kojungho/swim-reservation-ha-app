@@ -23,7 +23,7 @@ loadPlan=function(plan={}){
   beforeFeaturesLoad(plan);phonePeople=(plan.people||[]).map(p=>({...p,rooms:String(p.rooms||'').split(/[,\n]/).map(n=>n.trim()).filter(Boolean)}));
   submissionInterval=plan.submitInterval??5;if($('phoneSubmitInterval'))$('phoneSubmitInterval').value=String(submissionInterval);
   $('watchEndsAt').value=plan.watchUntil?new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date(plan.watchUntil)).replace(' ','T'):'';
-  lastLoadedExtras=plan;if(plan.mode==='multiple'||plan.mode==='profiles-parallel')switchTab(plan.mode);if(featuresReady)renderPhonePeople();suppressDraftSwitch=wasSuppressed;if(featuresReady)updatePhoneResetVisibility();
+  lastLoadedExtras=plan;if(plan.mode==='multiple'||plan.mode==='profiles-parallel')switchTab(plan.mode);if(featuresReady){renderPhonePeople();queuePhonePeriodCheck();}suppressDraftSwitch=wasSuppressed;if(featuresReady)updatePhoneResetVisibility();
 };
 switchTab=function(tab){
   if(featuresReady&&!suppressDraftSwitch&&tab!==workspaceTab){
@@ -44,7 +44,8 @@ switchTab=function(tab){
 };
 currentSiteTime=function(){return Date.now()+(phoneClock.synced?phoneClock.offset:0);};
 poll=function(){
-  beforeFeaturesPoll();if(!featuresReady)return;
+  const previousAvailability=JSON.stringify(availabilitySnapshot||{});beforeFeaturesPoll();if(!featuresReady)return;
+  if(previousAvailability!==JSON.stringify(availabilitySnapshot||{}))renderPhoneRankEditors();
   runPhonePeriodCheck();
   const state=nativeState;
   if(state.draftClearedAt&&state.draftClearedAt!==clearedDraftAt){clearedDraftAt=state.draftClearedAt;const cleared=state.clearedDraft;if(cleared){delete draftByMode[cleared.mode];try{if(['priority','watch','multiple','profiles-parallel'].includes(workspaceTab)&&phoneDraftSignature(readPlan())===phoneDraftSignature(cleared))loadPlan({mode:cleared.mode});}catch(error){/* Keep an edited, incomplete draft intact. */}}}
@@ -59,22 +60,20 @@ poll=function(){
   const monthKey=JSON.stringify(state.monthly||{});if(monthKey!==featureMonthKey){featureMonthKey=monthKey;renderPhoneMonth(state.monthly||{});}
 };
 function changedPhoneDraft(){document.dispatchEvent(new Event('roomorderchange'));}
-function makePersonRanks(person){
-  const wrap=node('div',undefined,'phone-person-ranks'),choices=node('select');choices.setAttribute('aria-label','추가할 사이트');
-  for(const name of vault.rooms)if(!person.rooms.includes(name))choices.add(new Option(roomLabel(name),name));
-  const add=makeButton('사이트 추가',()=>{if(choices.value){person.rooms.push(choices.value);renderPhonePeople();changedPhoneDraft();}});add.disabled=!choices.options.length;
-  const tools=node('div',undefined,'phone-rank-add');tools.append(choices,add);wrap.append(tools);
-  const list=node('div',undefined,'phone-mini-ranks');
-  person.rooms.forEach((name,index)=>{
-    const row=node('div',undefined,'phone-person-rank');row.dataset.rankName=name;row.append(node('span',String.fromCodePoint(0x2460+index)+' '+roomLabel(name)));
-    const remove=makeButton('×',()=>{person.rooms.splice(index,1);renderPhonePeople();changedPhoneDraft();});remove.setAttribute('aria-label',roomLabel(name)+' 우선순위 제외');
-    const drag=makeButton('☰',()=>{});drag.classList.add('room-drag-handle');drag.setAttribute('aria-label',roomLabel(name)+' 순서 이동');let saved=null;
-    drag.addEventListener('pointerdown',e=>{if(e.button!==0||!e.isPrimary)return;e.preventDefault();saved=[...person.rooms];drag.setPointerCapture(e.pointerId);});
-    drag.addEventListener('pointermove',e=>{if(!saved)return;const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.phone-person-rank');if(!target||target.parentElement!==list||target===row)return;const from=person.rooms.indexOf(name),to=person.rooms.indexOf(target.dataset.rankName);person.rooms.splice(from,1);person.rooms.splice(to,0,name);list.insertBefore(row,from<to?target.nextSibling:target);drag.setPointerCapture(e.pointerId);});
-    drag.addEventListener('pointerup',()=>{saved=null;renderPhonePeople();changedPhoneDraft();});drag.addEventListener('pointercancel',()=>{if(saved)person.rooms=saved;saved=null;renderPhonePeople();});
-    drag.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const from=person.rooms.indexOf(name),to=from+(e.key==='ArrowUp'?-1:1);if(to>=0&&to<person.rooms.length){[person.rooms[from],person.rooms[to]]=[person.rooms[to],person.rooms[from]];renderPhonePeople();changedPhoneDraft();}});
-    row.append(remove,drag);list.append(row);
-  });wrap.append(list);return wrap;
+function makePersonRanks(person,index){
+  const wrap=node('div',undefined,'phone-person-ranks');wrap.dataset.personIndex=String(index);
+  const order=[...new Set([...(person.order||person.rooms),...vault.rooms])],items=order.map(name=>({name,enabled:person.rooms.includes(name)}));
+  wrap.append(createSiteChoiceEditor({items,canSelect:name=>phoneChoiceState(name).selectable,status:phoneChoiceState,prefix:'예약자 '+(index+1),message:phoneChoiceMessage(),onChange:()=>{
+    person.order=items.map(item=>item.name);person.rooms=items.filter(item=>item.enabled).map(item=>item.name);renderPhoneRankEditors();changedPhoneDraft();
+  }}));
+  return wrap;
+}
+function renderPhoneRankEditors(){
+  phonePruneChoices();
+  document.querySelectorAll('#phonePeople .phone-person-ranks').forEach(wrap=>{
+    const index=Number(wrap.dataset.personIndex),person=phonePeople[index];if(person)wrap.replaceChildren(...makePersonRanks(person,index).childNodes);
+  });
+  phoneSelectionControls();
 }
 function renderPhonePeople(){
   const area=$('phonePeople');if(!area)return;area.replaceChildren();
@@ -82,9 +81,9 @@ function renderPhonePeople(){
     const card=node('article',undefined,'phone-person-card'),heading=node('div',undefined,'phone-person-heading');heading.append(node('h3','예약자 '+(index+1)));
     if(phonePeople.length>1){const remove=makeButton('×',()=>{if(confirm('현재 일정에서 예약자 '+(index+1)+'을 제외할까요? 저장된 예약자와 실제 예약은 유지합니다.')){phonePeople.splice(index,1);renderPhonePeople();changedPhoneDraft();}});remove.setAttribute('aria-label','예약자 제외');heading.append(remove);}card.append(heading);
     const saved=node('select');saved.setAttribute('aria-label','예약자 '+(index+1)+' 저장 목록');saved.add(new Option('직접 입력 / 저장 예약자 선택',''));for(const p of vault.profiles)saved.add(new Option(p.name,p.id));saved.addEventListener('change',()=>{const p=vault.profiles.find(p=>p.id===saved.value);if(p){Object.assign(person,{name:p.name,payer:p.payer||'',phone:p.phone});renderPhonePeople();changedPhoneDraft();}});card.append(saved);
-    const fields=node('div',undefined,'grid two identity-fields');for(const[key,label]of[['name','예약자명'],['payer','입금자명 (선택)'],['phone','휴대폰 번호']]){const row=node('label',label),input=node('input');input.value=person[key]||'';input.autocomplete='off';if(key==='phone')input.inputMode='numeric';if(key==='payer')input.placeholder='미입력 시 예약자명';input.addEventListener('input',()=>{person[key]=input.value;});row.append(input);fields.append(row);}card.append(fields,makeButton('예약자 저장',()=>{vault=api('profilePut',{name:person.name,payer:person.payer,phone:person.phone});renderProfiles();renderPhonePeople();}),makePersonRanks(person));area.append(card);
+    const fields=node('div',undefined,'grid two identity-fields');for(const[key,label]of[['name','예약자명'],['payer','입금자명 (선택)'],['phone','휴대폰 번호']]){const row=node('label',label),input=node('input');input.value=person[key]||'';input.autocomplete='off';if(key==='phone')input.inputMode='numeric';if(key==='payer')input.placeholder='미입력 시 예약자명';input.addEventListener('input',()=>{person[key]=input.value;});row.append(input);fields.append(row);}card.append(fields,makeButton('예약자 저장',()=>{vault=api('profilePut',{name:person.name,payer:person.payer,phone:person.phone});renderProfiles();renderPhonePeople();}),makePersonRanks(person,index));area.append(card);
   });
-  const add=makeButton('+',()=>{phonePeople.push({name:'',payer:'',phone:'',rooms:[]});renderPhonePeople();changedPhoneDraft();});add.classList.add('phone-person-add');add.setAttribute('aria-label','예약자 추가');add.disabled=phonePeople.length>=vault.rooms.length;area.append(add);
+  const add=makeButton('+',()=>{phonePeople.push({name:'',payer:'',phone:'',rooms:[]});renderPhonePeople();changedPhoneDraft();});add.classList.add('phone-person-add');add.setAttribute('aria-label','예약자 추가');add.disabled=phonePeople.length>=vault.rooms.length;area.append(add);phoneSelectionControls();
 }
 function requestPhoneLookup(profiles){try{featureLookupKey='';api('lookup',profiles?{profiles}:{});$('phoneLookupStatus').textContent='예약 내역 조회 중…';}catch(e){showError(e);}}
 function renderPhoneLookup(result){
@@ -125,6 +124,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   for(const event of ['input','change','roomorderchange'])document.addEventListener(event,()=>queueMicrotask(updatePhoneResetVisibility));
   const reset=document.querySelector('.phone-reset-floating');if(reset){const replacement=reset.cloneNode(true);reset.replaceWith(replacement);replacement.addEventListener('click',()=>{if(confirm('현재 화면의 예약 입력만 초기화할까요? 다른 화면의 초안·저장 예약자·등록 일정·실제 예약은 유지합니다.')){const mode=tabMode(workspaceTab);delete draftByMode[mode];delete modeEditorMeta[mode];api('draftReset',{mode});loadPlan({mode});$('planName').value='';editingPlan='';updatePhoneResetVisibility();}});}
   for(const id of ['startDate','nights','campAdults'])$(id).addEventListener('change',queuePhonePeriodCheck);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!nativeState.active)queuePhonePeriodCheck();});
+  if(!nativeState.active)queuePhonePeriodCheck();
   updatePhoneResetVisibility();
 });
 
@@ -140,7 +141,7 @@ function updatePhoneResetVisibility(){
   }catch(error){button.hidden=false;}
 }
 
-let phonePeriodTimer,phonePeriodQueued='',phonePeriodAttempted='';
+let phonePeriodTimer,phonePeriodQueued='',phonePeriodAttempted='',phonePeriodAttemptedAt=0;
 function queuePhonePeriodCheck(){
   clearTimeout(phonePeriodTimer);phonePeriodTimer=setTimeout(()=>{
     if(!['priority','watch','multiple','profiles-parallel'].includes(workspaceTab))return;
@@ -153,7 +154,7 @@ function runPhonePeriodCheck(){
   const key=phonePeriodQueued;
   if(key!==roomQueryKey()){phonePeriodQueued='';return;}
   phonePeriodQueued='';
-  if(key===phonePeriodAttempted||window.stayCalendar.planned($('startDate').value,Number($('nights').value)))return;
-  phonePeriodAttempted=key;
+  if(key===phonePeriodAttempted&&Date.now()-phonePeriodAttemptedAt<60000||(window.stayCalendar.planned($('startDate').value,Number($('nights').value))||Date.parse(bookingOpenIso($('startDate').value)+'+09:00')>currentSiteTime()))return;
+  phonePeriodAttempted=key;phonePeriodAttemptedAt=Date.now();
   try{api('inspect',readPlan());}catch(error){showError(error);}
 }

@@ -27,7 +27,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(await page.locator("#reserverName").inputValue(), testGuest(1).reserverName);
     assert.equal(await page.locator("#saveProfilesButton").isDisabled(), true);
     await page.locator("#addProfileButton").click();
-    assert.equal(await page.locator("#profilePriorities input:checked").count(), 0);
+    assert.equal(await page.locator("#profilePriorities .site-choice-row").count(), 0);
     assert.equal(await page.locator("#reserverName2").inputValue(), "");
     await page.locator("#bookingProfileSelect2").selectOption("1");
     assert.equal(await page.locator("#reserverName2").inputValue(), testGuest(2).reserverName);
@@ -42,8 +42,8 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(state.book[0].roomPriority.find(room => room.name === "달_하늘존").enabled, true);
     assert.equal(await page.locator("#saveBookingActor2").isDisabled(), true);
     await page.locator("#startDate").fill("2026-12-20");
-    await page.locator('[data-profile-index="0"] input[type=checkbox]').first().check();
-    await page.locator('[data-profile-index="1"] input[type=checkbox]').nth(1).check();
+    await page.locator('[data-profile-index="0"] select').selectOption("해_하늘존");await page.locator('[data-profile-index="0"] .site-choice-tools button').click();
+    await page.locator('[data-profile-index="1"] select').selectOption("달_하늘존");await page.locator('[data-profile-index="1"] .site-choice-tools button').click();
     await page.locator("#planName").fill("사람별 일정");
     await page.locator("#addPlanButton").click();
     await page.locator("#executionPlanList .execution-plan").first().waitFor();
@@ -66,7 +66,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 0);
     await page.locator("#startDate").fill("2026-12-21");
     await page.locator("#startDate").fill("2026-12-20");
-    await page.locator("#roomList input[type=checkbox]").first().check();
+    await page.locator("#roomList select").selectOption({ index: 1 }); await page.locator("#roomList .site-choice-tools button").click();
     await page.evaluate(() => elements.saveButton.click());
     await page.waitForFunction(() => document.querySelector("#workspaceMessage").textContent.includes("설정을 HA"));
     assert.equal(state.book.length, 3);

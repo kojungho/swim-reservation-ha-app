@@ -1,6 +1,6 @@
 const uiDefaults = {
   fonts: { title: 28, heading: 18, body: 14, field: 16, button: 13, room: 14, status: 12, calendar: 12, list: 14, log: 12 },
-  serverTime: true, reservationInfo: true, safety: true, watchInfo: true, stayRange: false,
+  serverTime: true, reservationInfo: true, safety: true, watchInfo: true, stayRange: true, dateInputVersion: 1,
   menuCorner: "top-right", mapCorner: "bottom-right", menuSpacing: 6, mapIcon: true, floatingSize: 46
 };
 let uiSettings = structuredClone(uiDefaults);
@@ -105,6 +105,7 @@ async function initializeUiSettings() {
   try {
     const saved = await request("ui-settings");
     uiSettings = { ...uiDefaults, ...saved, fonts: { ...uiDefaults.fonts, ...saved.fonts } };
+    if(saved.dateInputVersion!==1){uiSettings.stayRange=true;uiSettings.dateInputVersion=1;}
   } catch (error) { document.getElementById("settingsMessage").textContent = `설정 조회 실패: ${error.message}`; }
   renderUiSettings(); applyUiSettings();
 }

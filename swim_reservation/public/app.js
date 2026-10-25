@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.10";
+const CLIENT_VERSION = "2.15.11";
 window.stayCalendar = new StayCalendarModel(month => request(`monthly-availability?month=${month}`, { timeoutMs: 25000 }), () => Number.isFinite(currentSiteTime()) ? currentSiteTime() : Date.now());
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
@@ -24,7 +24,37 @@ function applyGuestColor(element, index) {
     element.style.borderColor = `hsl(${hue} 35% 76%)`;
   }
 }
-function canSelectRoom(name) { return availabilityContext === `${elements.startDate.value}/${Number(elements.nights.value)}` && ["available", "available-before-open", "before-open-no-data"].includes(availabilityByRoom.get(name)); }
+function plannedSiteChoices(){
+  return Boolean(elements.startDate.value&&(window.stayCalendar?.planned(elements.startDate.value,Number(elements.nights.value))||isBeforeOpen(elements.startDate.value)));
+}
+function siteChoiceState(name){
+  if(!elements.startDate.value)return {kind:'unknown',label:'입실·퇴실일 선택 필요'};
+  if(workspaceTab==='watch')return {kind:'unknown',label:plannedSiteChoices()?'예정 · 취소 대기 후보':'취소 대기 후보'};
+  if(plannedSiteChoices())return {kind:'before-open-no-data',label:'예정 · 오픈 전 후보'};
+  const kind=availabilityContext===`${elements.startDate.value}/${Number(elements.nights.value)}`?availabilityByRoom.get(name)||'unknown':'unknown';
+  return {kind,label:kind==='available'&&Number(elements.nights.value)>1?'연박 가능':kind==='unavailable'&&Number(elements.nights.value)>1?'선택 기간 연박 불가':AVAILABILITY_LABELS[kind]||'미확인'};
+}
+function canSelectRoom(name) {
+  if(!elements.startDate.value)return false;
+  return workspaceTab==='watch'||plannedSiteChoices()||['available','available-before-open'].includes(siteChoiceState(name).kind);
+}
+function siteChoiceMessage(){
+  if(!elements.startDate.value)return '입실일·퇴실일을 먼저 선택하세요.';
+  if(plannedSiteChoices())return '예정 일정은 전체 사이트를 후보로 선택할 수 있습니다. 실제 가능 여부는 오픈 후 다시 확인합니다.';
+  if(workspaceTab==='watch')return '취소 대기는 현재 마감된 사이트도 감시 후보로 선택할 수 있습니다.';
+  const states=rooms.map(room=>siteChoiceState(room.name));
+  if(states.some(s=>['unknown','checking','checking-before-open'].includes(s.kind)))return '선택한 전체 기간을 조회한 뒤 가능한 사이트만 추가할 수 있습니다. 미확인은 0곳이 아닙니다.';
+  return states.some(s=>s.kind==='available')?'목록에는 같은 사이트로 전체 숙박 기간이 가능한 곳만 표시합니다.':'선택 기간에 예약 가능한 사이트가 없습니다. 날짜별 빈자리가 있어도 같은 사이트의 연박은 불가능할 수 있습니다.';
+}
+function siteChoiceEditor(items,prefix=''){
+  let removed=0;
+  for(const item of items)if(item.enabled&&['booked','unavailable'].includes(siteChoiceState(item.name).kind)){item.enabled=false;removed++;}
+  if(removed){document.getElementById('roomDragStatus').textContent='선택 기간에 예약 불가한 사이트 '+removed+'개를 선택에서 제외했습니다.';if(typeof captureEditorDraft==='function')captureEditorDraft();}
+  return createSiteChoiceEditor({items,canSelect:canSelectRoom,status:siteChoiceState,prefix,ranked:workspaceTab!=='watch'&&elements.bookingMode.value!=='multiple',message:siteChoiceMessage(),onChange:()=>{
+    editorGeneration++;renderRooms();if(typeof captureEditorDraft==='function')captureEditorDraft();
+  }});
+}
+
 function setRoomSelection(items, enabled) {
   items.forEach(room => { if (!enabled || canSelectRoom(room.name) || workspaceTab === "watch") room.enabled = enabled; });
   editorGeneration++;
@@ -658,61 +688,18 @@ function refreshSiteProfileSelector() {
 }
 
 function renderProfilePriorities() {
-  const parallel = elements.bookingMode.value === "profiles-parallel";
-  const multiple = elements.bookingMode.value === "multiple";
-  elements.multipleProfileField.hidden = parallel || workspaceTab === "watch";
-  elements.profilePriorities.hidden = !parallel;
-  updateBookingProfileVisibility();
-  elements.profilePriorities.replaceChildren();
-  if (!parallel) return;
-  const profiles = readConfig().profiles;
-  elements.profilePriorities.classList.toggle("single-profile", profiles.length === 1);
-  profiles.forEach((profile, profileIndex) => {
-    const priority = profileIndex ? (extraProfiles[profileIndex - 1].roomPriority ||= []) : firstProfilePriority;
-    if (!priority.length) priority.push(...rooms.map(room => ({ name: room.name, enabled: room.enabled })));
-    for (const room of rooms) if (!priority.some(item => item.name === room.name)) priority.push({ name: room.name, enabled: false });
-    const panel = document.createElement("div");
-    panel.className = "second-profile-panel";
-    if (profiles.length > 1) applyGuestColor(panel, profileIndex);
-    const title = document.createElement("h3");
-    title.textContent = `${profile.reserverName || `예약자 ${profileIndex + 1}`} · 객실 선택`;
-    panel.append(title);
-    const toolbar = document.createElement("div");
-    toolbar.className = "section-actions room-actions profile-room-actions";
-    const selectAll = document.createElement("button"), clearAll = document.createElement("button");
-    for (const button of [selectAll, clearAll]) { button.type = "button"; button.className = "secondary"; }
-    selectAll.textContent = "전체 선택"; selectAll.disabled = !priority.some(room => canSelectRoom(room.name) && !room.enabled);
-    clearAll.textContent = "전체 해제"; clearAll.hidden = !priority.some(room => room.enabled);
-    selectAll.addEventListener("click", () => setRoomSelection(priority, true));
-    clearAll.addEventListener("click", () => setRoomSelection(priority, false));
-    toolbar.append(selectAll, clearAll); panel.append(toolbar);
-    const list = document.createElement("div");
-    list.className = "room-list";
-    list.dataset.profileIndex = String(profileIndex);
-    let rank = 0;
-    priority.forEach((room, index) => {
-      if (room.enabled) rank++;
-      const row = document.createElement("div");
-      row.className = `room-row${room.enabled ? " enabled" : ""}`;
-      const availability = availabilityByRoom.get(room.name) || "unknown";
-      row.innerHTML = `<label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} ${canSelectRoom(room.name) ? "" : "disabled"} aria-label="예약자 ${profileIndex + 1} ${escapeHtml(room.name)} 선택"></label><div class="room-name"><span class="room-rank">${room.enabled ? `${rank}순위` : "—"}</span>${escapeHtml(room.name)}<span class="availability ${availability}">${Number(elements.nights.value)>1&&availability==="available"?"연박 가능":Number(elements.nights.value)>1&&availability==="unavailable"?"선택 기간 연박 불가":AVAILABILITY_LABELS[availability]}</span></div><button class="room-drag-handle" type="button" aria-label="예약자 ${profileIndex + 1} ${escapeHtml(room.name)} 순서 이동"><span class="drag-bars" aria-hidden="true"></span></button>`;
-      row.querySelector("input").addEventListener("change", event => { room.enabled = event.target.checked; renderProfilePriorities(); });
-      const handle = row.querySelector("button");
-      handle.addEventListener("pointerdown", event => startRoomDrag(event, row, index, list, priority, renderProfilePriorities));
-      handle.addEventListener("keydown", event => {
-        if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
-        event.preventDefault();
-        const target = index + (event.key === "ArrowUp" ? -1 : 1);
-        if (target < 0 || target >= priority.length) return;
-        priority.splice(target, 0, ...priority.splice(index, 1));
-        editorGeneration++;
-        renderProfilePriorities();
-        elements.profilePriorities.querySelector(`[data-profile-index="${profileIndex}"]`).children[target].querySelector("button").focus();
-      });
-      list.append(row);
-    });
-    panel.append(list);
-    elements.profilePriorities.append(panel);
+  const parallel=elements.bookingMode.value==="profiles-parallel";
+  elements.multipleProfileField.hidden=parallel||workspaceTab==="watch";
+  elements.profilePriorities.hidden=!parallel;updateBookingProfileVisibility();elements.profilePriorities.replaceChildren();
+  if(!parallel)return;
+  const profiles=readConfig().profiles;elements.profilePriorities.classList.toggle("single-profile",profiles.length===1);
+  profiles.forEach((profile,index)=>{
+    const priority=index?(extraProfiles[index-1].roomPriority||=[]):firstProfilePriority;
+    if(!priority.length)priority.push(...rooms.map(room=>({name:room.name,enabled:room.enabled})));
+    for(const room of rooms)if(!priority.some(item=>item.name===room.name))priority.push({name:room.name,enabled:false});
+    const panel=document.createElement("div");panel.className="second-profile-panel";applyGuestColor(panel,index);
+    const title=document.createElement("h3");title.textContent=`예약자 ${index+1} · 사이트 순위`;panel.append(title);
+    const editor=siteChoiceEditor(priority,'예약자 '+(index+1));editor.dataset.profileIndex=String(index);panel.append(editor);elements.profilePriorities.append(panel);
   });
   renderRoomSelectionControls();
 }
@@ -770,41 +757,14 @@ function openLegacyHistory(entry) {
 }
 
 function renderRooms() {
-  if (roomDrag) return;
-  if (workspaceTab === "watch") { renderWatchRooms(); return; }
-  const parallel = elements.bookingMode.value === "profiles-parallel";
-  updateGuestAddButton();
-  renderProfilePriorities();
+  if(roomDrag)return;
+  if(workspaceTab==="watch"){renderWatchRooms();return;}
+  const parallel=elements.bookingMode.value==="profiles-parallel";updateGuestAddButton();renderProfilePriorities();
+  elements.roomList.hidden=parallel;document.getElementById("roomDragHelp").hidden=true;
+  elements.roomSectionTitle.textContent="사이트 선택";
+  elements.roomSectionHelp.textContent=parallel?"예약자별 목록에서 사이트를 추가한 뒤 손잡이로 순위를 정하세요.":"선택한 전체 숙박 기간에 예약 가능한 사이트만 추가할 수 있습니다.";
+  if(!parallel)elements.roomList.replaceChildren(siteChoiceEditor(rooms));
   renderRoomSelectionControls();
-  const multiple = elements.bookingMode.value === "multiple";
-  elements.roomSectionTitle.textContent = "객실 선택";
-  elements.roomList.hidden = parallel;
-  document.getElementById("roomDragHelp").hidden = parallel || multiple;
-  elements.roomSectionHelp.textContent = parallel ? "위에서 입력한 각 예약자의 객실을 체크하고 손잡이로 순위를 정하세요. 한 사람당 객실 하나를 예약하며, 최종 제출은 설정한 간격으로 진행합니다." : multiple
-    ? "체크한 객실(최대 5개)을 각각 별도 예약으로 준비하고 최종 제출은 설정한 간격으로 진행합니다."
-    : "체크된 객실 중 위에 있는 객실부터 하나가 성공할 때까지 시도합니다.";
-  elements.roomList.replaceChildren();
-  let rank = 0;
-  rooms.forEach((room, index) => {
-    if (room.enabled) rank += 1;
-    const row = document.createElement("div");
-    row.className = `room-row${room.enabled ? " enabled" : ""}`;
-    const availability = availabilityByRoom.get(room.name);
-    const availabilityLabel = Number(elements.nights.value)>1 && availability==="available" ? "연박 가능" : Number(elements.nights.value)>1 && availability==="unavailable" ? "선택 기간 연박 불가" : AVAILABILITY_LABELS[availability] || AVAILABILITY_LABELS.unknown;
-    row.innerHTML = `
-      <label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} ${canSelectRoom(room.name) ? "" : "disabled"} aria-label="${escapeHtml(room.name)} 선택"></label>
-      <div class="room-name">${multiple ? "" : `<span class="room-rank">${room.enabled ? `${rank}순위` : "—"}</span>`}${escapeHtml(room.name)}${room.newlyDetected ? '<span class="room-detected">신규 자동 추가</span>' : ""}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
-      ${multiple ? "" : `<button class="room-drag-handle" type="button" aria-label="${escapeHtml(room.name)} 순서 이동" title="누른 채 드래그하여 이동 · 키보드 위아래 방향키" aria-describedby="roomDragHelp"><span class="drag-bars" aria-hidden="true"></span></button>`}`;
-    row.querySelector("input").addEventListener("change", (event) => { room.enabled = event.target.checked; renderRooms(); });
-    const handle = row.querySelector(".room-drag-handle");
-    handle?.addEventListener("pointerdown", event => startRoomDrag(event, row, index));
-    handle?.addEventListener("keydown", event => {
-      if (!["ArrowUp", "ArrowDown"].includes(event.key) || roomDrag) return;
-      event.preventDefault();
-      moveRoom(index, event.key === "ArrowUp" ? -1 : 1);
-    });
-    elements.roomList.append(row);
-  });
 }
 
 function moveRoom(index, delta) {
@@ -1230,8 +1190,9 @@ async function refreshAvailability() {
   const requestId = ++availabilityRequest;
   availabilityByRoom.clear();
   const beforeOpen = isBeforeOpen(startDate);
-  if(window.stayCalendar?.planned(startDate,nights)){
-    for(const room of rooms)availabilityByRoom.set(room.name,"before-open");
+  if(plannedSiteChoices()){
+    availabilityContext=`${startDate}/${nights}`;
+    for(const room of rooms)availabilityByRoom.set(room.name,"before-open-no-data");
     renderRooms();return;
   }
   if (currentState === "running") {

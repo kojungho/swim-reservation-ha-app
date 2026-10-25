@@ -23,3 +23,10 @@ test("표시·글꼴·모서리·메뉴 간격 설정은 독립 저장되고 재
   await Promise.all([store.save({ menuSpacing: 1 }), store.save({ menuSpacing: 3 })]);
   assert.equal((await store.read()).menuSpacing, 3);
 });
+
+test('기존 애드온의 입실·퇴실 표시를 한번 전환하고 이후 명시적 해제는 유지한다',()=>{
+ assert.equal(normalizeUiSettings({stayRange:false}).stayRange,true);
+ assert.equal(normalizeUiSettings({stayRange:false}).dateInputVersion,1);
+ assert.equal(normalizeUiSettings({stayRange:false,dateInputVersion:1}).stayRange,false);
+ assert.throws(()=>normalizeUiSettings({dateInputVersion:'1'}));
+});

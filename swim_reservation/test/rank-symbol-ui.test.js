@@ -9,10 +9,10 @@ test("목록·개인별 순위·일정·이력은 동그라미 숫자로 통일�
   for (const width of [390, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 844 } });
     const state = await mockBookApp(page);
-    const expected = Array.from({ length: 14 }, (_, i) => `${i + 1}순위`);
+    const expected = Array.from({ length: 14 }, (_, i) => String.fromCodePoint(0x2460+i));
     await page.evaluate(() => { rooms.forEach(room => { room.enabled = true; }); renderRooms(); });
     assert.deepEqual(await page.locator("#roomList .room-rank").allTextContents(), expected);
-    assert.match(await page.locator("#roomList").innerText(), /1순위/);
+    assert.match(await page.locator("#roomList").innerText(), /①/);
     const config = await page.evaluate(() => readConfig());
     state.plans.push({ id: "00000000-0000-0000-0000-000000000001", name: "순위 일정", kind: "scheduled", enabled: false, config, status: { state: "stopped" } });
     await page.evaluate(() => refreshPlans());
@@ -24,7 +24,7 @@ test("목록·개인별 순위·일정·이력은 동그라미 숫자로 통일�
     assert.equal(await page.locator("#planList p").textContent(), "① 해 → ② 샘");
     await page.locator("#planDetailsClose").click();
     await page.evaluate(() => { elements.bookingMode.value = "profiles-parallel"; firstProfilePriority = [{ name: "해_하늘존", enabled: true }, { name: "샘_산맥존", enabled: true }]; renderProfilePriorities(); });
-    assert.deepEqual(await page.locator("#profilePriorities .room-rank").allTextContents().then(values => values.slice(0, 2)), ["1순위", "2순위"]);
+    assert.deepEqual(await page.locator("#profilePriorities .room-rank").allTextContents().then(values => values.slice(0, 2)), ["①", "②"]);
     await page.evaluate(() => { elements.bookingMode.value = "multiple"; renderRooms(); });
     assert.equal(await page.locator("#roomList .room-rank").count(), 0);
     await page.evaluate(() => { switchWorkspaceTab("watch"); });

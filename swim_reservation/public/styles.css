@@ -550,3 +550,18 @@ button.info-button { font-size: calc(var(--font-button) * 1.3); }
 .date-picker-day[aria-pressed="true"] { background:#087747; color:white; }
 .date-picker-day:disabled { cursor:not-allowed; }
 .date-picker-availability { font-size:12px; line-height:1.6; margin:12px 0 0; }
+
+/* Shared picker: only whole-period eligible choices; selected sites are draggable. */
+.site-choice-editor { min-width:0; width:100%; }
+.site-choice-tools { display:flex;align-items:center;gap:6px;margin:8px 0; }
+.site-choice-tools select { flex:1;min-width:0;width:0; }
+.site-choice-tools button { flex:0 0 auto;padding:0 12px;min-height:44px; }
+.site-choice-list.room-list { display:grid;grid-template-columns:1fr;gap:4px; }
+.site-choice-list .site-choice-row { display:flex;align-items:center;gap:6px;min-height:48px;padding:3px 6px;margin:0; }
+.site-choice-row .room-name { display:flex;flex-wrap:wrap;align-items:center;gap:4px;flex:1;min-width:0;overflow-wrap:anywhere; }
+.site-choice-row .room-rank { flex:0 0 auto;font-size:17px;color:var(--green); }
+.site-choice-row .availability { font-size:11px;white-space:normal; }
+.site-choice-row button { width:44px;min-width:44px;height:44px;min-height:44px;padding:0;flex:0 0 44px; }
+.site-choice-row.dragging { background:#e2f2e8; }
+.site-choice-empty,.site-choice-message { font-size:12px;line-height:1.6;margin:6px 0;color:var(--muted); }
+#roomList > .site-choice-editor { grid-column:1/-1; }

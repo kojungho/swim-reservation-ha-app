@@ -88,7 +88,7 @@ test("PC·폰에서 모드별 탭·다중 일정 등록·개별 시작과 중지
     assert.equal(await page.locator("#bookingProfileSelect1").isVisible(), true);
     assert.equal(await page.locator("#roomList .room-drag-handle").count(), 0);
     assert.equal(await page.locator("#roomList .room-rank").count(), 0);
-    assert.match(await page.locator("#roomSectionTitle").innerText(), /객실 선택/);
+    assert.match(await page.locator("#roomSectionTitle").innerText(), /사이트 선택/);
     await page.locator("#addPlanButton").click();
     await page.waitForFunction(() => document.querySelectorAll("#executionPlanList .execution-plan").length === 3);
     assert.equal(plans[2].kind, "watch");
