@@ -229,7 +229,7 @@
   <button id="siteMapButton" class="site-map-floating" type="button" aria-label="캠핑장 배치도" title="캠핑장 배치도"><svg class="site-map-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2Z M9 3v16 M15 5v16"/></svg><span class="site-map-label">배치도</span></button>
   <button id="scrollTopButton" class="scroll-top-floating" type="button" aria-label="맨 위로" title="맨 위로" hidden><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14 M6 12l6-6 6 6 M12 6v14"/></svg></button>
   <button id="editorResetButton" class="editor-reset-floating secondary" type="button" aria-haspopup="dialog" aria-controls="editorResetDialog">초기화</button>
-  <dialog id="editorResetDialog" class="booking-help-dialog" aria-labelledby="editorResetTitle"><h2 id="editorResetTitle">입력한 예약 정보를 초기화할까요?</h2><p>모든 예약 모드의 미저장 입력·날짜·선택 사이트·예약자 선택을 지웁니다. 저장된 예약자, 등록 일정과 실제 예약은 삭제하거나 중지하지 않습니다.</p><div class="section-actions"><button id="editorResetCancel" class="secondary" type="button">취소</button><button id="editorResetConfirm" class="danger" type="button">입력 전체 초기화</button></div></dialog>
+  <dialog id="editorResetDialog" class="booking-help-dialog" aria-labelledby="editorResetTitle"><h2 id="editorResetTitle">입력한 예약 정보를 초기화할까요?</h2><p>현재 화면의 미저장 입력·날짜·선택 사이트·예약자 선택만 지웁니다. 다른 화면의 작성 내용은 유지합니다. 저장된 예약자, 등록 일정과 실제 예약은 삭제하거나 중지하지 않습니다.</p><div class="section-actions"><button id="editorResetCancel" class="secondary" type="button">취소</button><button id="editorResetConfirm" class="danger" type="button">현재 화면 초기화</button></div></dialog>
   <dialog id="profileRemoveDialog" class="booking-help-dialog" aria-labelledby="profileRemoveTitle"><h2 id="profileRemoveTitle">예약자를 제외할까요?</h2><p id="profileRemoveMessage"></p><div class="section-actions"><button id="profileRemoveCancel" class="secondary" type="button">취소</button><button id="profileRemoveConfirm" class="danger" type="button">현재 일정에서 제외</button></div></dialog>
   <dialog id="datePickerDialog" class="date-picker-dialog" aria-labelledby="datePickerTitle">
     <h2 id="datePickerTitle">날짜 선택</h2>
@@ -246,6 +246,7 @@
   </dialog>
   <dialog id="settingsHelpDialog" class="help-dialog"><div class="site-map-heading"><strong>안내</strong><button id="settingsHelpClose" type="button" aria-label="닫기">×</button></div><p id="settingsHelpText"></p></dialog>
   <dialog id="mapZoomDialog" class="site-map-dialog"><div class="site-map-heading"><strong>사진 확대</strong><button id="mapZoomClose" type="button" aria-label="닫기">×</button></div><img id="mapZoomImage" alt="사이트 위치 사진 확대"></dialog>
+  <script src="stay-calendar.js"></script>
   <script src="ui-settings.js"></script>
   <script src="workspace.js"></script>
   <script src="booking-book.js"></script>

@@ -21,6 +21,7 @@ function captureEditorDraft() {
     editorDrafts[workspaceTab] = { ...editorSnapshot(), completion: previous?.completion || null };
   }
   persistDrafts();
+  updateEditorResetVisibility();
 }
 function restoreEditorDraft(tab) {
   restoringDraft = true;
@@ -64,11 +65,12 @@ function initializeEditorDrafts() {
   document.getElementById('editorResetButton').addEventListener('click', () => dialog.showModal());
   document.getElementById('editorResetCancel').addEventListener('click', () => dialog.close());
   document.getElementById('editorResetConfirm').addEventListener('click', () => {
-    editorDrafts = {};
-    resetPlanEditor();
+    delete editorDrafts[workspaceTab];
+    resetPlanEditor(workspaceTab);
+    updateEditorResetVisibility();
     persistDrafts();
     dialog.close();
-    planMessage('입력 중인 모든 예약 초안을 초기화했습니다. 저장된 예약자·등록 일정·실제 예약은 변경하지 않았습니다.');
+    planMessage('현재 화면의 예약 입력만 초기화했습니다. 다른 화면의 초안은 유지됩니다. 저장된 예약자·등록 일정·실제 예약은 변경하지 않았습니다.');
   });
 }
 function linkDraftToPlan(tab, id, snapshot) {
@@ -93,4 +95,18 @@ function clearCompletedDrafts(entries) {
     } else draft.completion = null; // Never erase newer input when an older booking completes.
     persistDrafts();
   }
+}
+
+
+function updateEditorResetVisibility() {
+  const button=document.getElementById('editorResetButton');
+  if(!button)return;
+  if(!bookingTabs.includes(workspaceTab)){button.hidden=true;return;}
+  const c=readConfig(), names=[...new Set([...defaultRoomOrder,...rooms.map(r=>r.name)])];
+  const dirty=Boolean(editingPlan||c.startDate||c.triggerAt||c.nights!==1||c.adults!==2||c.arrivalTime||c.request||
+    document.getElementById('planName').value||document.getElementById('watchEndsAt').value||
+    document.getElementById('watchInterval').value!=='60'||c.profiles.length>1||
+    c.profiles.some(p=>p.reserverName||p.depositorName||p.phone||p.birthDate||(p.roomPriority||[]).some(r=>r.enabled))||
+    rooms.some((r,i)=>r.enabled||r.name!==names[i]));
+  button.hidden=!dirty;
 }

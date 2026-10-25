@@ -1,8 +1,13 @@
 /* Native adapters: no HA server, tokens or remote UI scripts. */
 let featuresReady=false, phonePeople=[], submissionInterval=5, featureLookupKey='', featureMonthKey='', phoneClock={synced:false,offset:0}, gallerySelected=new Set(), lastLoadedExtras=null;
-let draftByMode={},suppressDraftSwitch=false,clearedDraftAt=0;
+let modeEditorMeta={},draftByMode={},suppressDraftSwitch=false,clearedDraftAt=0;
 const modeTab=mode=>mode==='reserve'?'priority':mode==='watch'?'watch':mode;
 const tabMode=tab=>tab==='priority'?'reserve':tab;
+window.stayCalendar=new StayCalendarModel(async month=>{
+  const until=performance.now()+25000;let result;
+  do{result=api('calendarMonth',{month});if(!result.pending)break;await new Promise(resolve=>setTimeout(resolve,350));}while(performance.now()<until);
+  if(!result?.ok)throw Error('달력 조회 미확인');return {month,openThrough:result.openThrough,days:Object.entries(result.days||{}).map(([date,count])=>({date,availableCount:count,beforeOpen:date>result.openThrough}))};
+},()=>currentSiteTime());
 function phoneDraftSignature(p){return JSON.stringify([p.mode,p.date,p.nights,p.name||'',p.payer||'',p.phone||'',p.rooms||'',p.trigger||0,p.watchUntil||0,p.adults||2,p.arrival||'',p.request||'',p.submitInterval??5,(p.people||[]).map(x=>[x.name||'',x.payer||'',x.phone||'',Array.isArray(x.rooms)?x.rooms.join(', '):x.rooms||''])]);}
 const beforeFeaturesRead=readPlan, beforeFeaturesLoad=loadPlan, beforeFeaturesSwitch=switchTab, beforeFeaturesPoll=poll;
 readPlan=function(){
@@ -18,12 +23,12 @@ loadPlan=function(plan={}){
   beforeFeaturesLoad(plan);phonePeople=(plan.people||[]).map(p=>({...p,rooms:String(p.rooms||'').split(/[,\n]/).map(n=>n.trim()).filter(Boolean)}));
   submissionInterval=plan.submitInterval??5;if($('phoneSubmitInterval'))$('phoneSubmitInterval').value=String(submissionInterval);
   $('watchEndsAt').value=plan.watchUntil?new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date(plan.watchUntil)).replace(' ','T'):'';
-  lastLoadedExtras=plan;if(plan.mode==='multiple'||plan.mode==='profiles-parallel')switchTab(plan.mode);if(featuresReady)renderPhonePeople();suppressDraftSwitch=wasSuppressed;
+  lastLoadedExtras=plan;if(plan.mode==='multiple'||plan.mode==='profiles-parallel')switchTab(plan.mode);if(featuresReady)renderPhonePeople();suppressDraftSwitch=wasSuppressed;if(featuresReady)updatePhoneResetVisibility();
 };
 switchTab=function(tab){
   if(featuresReady&&!suppressDraftSwitch&&tab!==workspaceTab){
-    if(['priority','watch','multiple','profiles-parallel'].includes(workspaceTab)){try{const snapshot=readPlan();draftByMode[snapshot.mode]=structuredClone(snapshot);api('draft',snapshot);}catch(e){showError(e);return;}}
-    const target=draftByMode[tabMode(tab)];if(target){suppressDraftSwitch=true;loadPlan(target);suppressDraftSwitch=false;}
+    if(['priority','watch','multiple','profiles-parallel'].includes(workspaceTab)){try{const snapshot=readPlan();draftByMode[snapshot.mode]=structuredClone(snapshot);modeEditorMeta[snapshot.mode]={title:$('planName').value,id:editingPlan};api('draft',snapshot);}catch(e){showError(e);return;}}
+    const target=draftByMode[tabMode(tab)];if(['priority','watch','multiple','profiles-parallel'].includes(tab)){suppressDraftSwitch=true;loadPlan(target||{mode:tabMode(tab)});suppressDraftSwitch=false;const meta=modeEditorMeta[tabMode(tab)]||{};$('planName').value=meta.title||'';editingPlan=meta.id||'';}
   }
   beforeFeaturesSwitch(tab);if(!featuresReady)return;
   const booking=['priority','watch','multiple','profiles-parallel'].includes(tab);
@@ -35,10 +40,12 @@ switchTab=function(tab){
   $('roomSectionHelp').textContent=tab==='multiple'?'선택한 사이트 각각을 한 번씩 예약합니다. 같은 폰의 세션은 순차 실행합니다.':tab==='watch'?'선택한 사이트 중 빈자리 하나를 예약합니다. 조회 간격은 최소 10분입니다.':'동그라미 숫자 순서대로 사이트 하나가 성공할 때까지 진행합니다.';
   if(tab==='profiles-parallel'&&!phonePeople.length){phonePeople=[{name:$('reserverName').value,payer:$('depositorName').value,phone:$('phone').value,rooms:roomOrder.filter(n=>selected.has(n))}];renderPhonePeople();}
   if(tab==='monthly'&&nativeState.monthly?.month!==$('monthlyMonth').value){requestPhoneMonth();}
+  updatePhoneResetVisibility();
 };
 currentSiteTime=function(){return Date.now()+(phoneClock.synced?phoneClock.offset:0);};
 poll=function(){
   beforeFeaturesPoll();if(!featuresReady)return;
+  runPhonePeriodCheck();
   const state=nativeState;
   if(state.draftClearedAt&&state.draftClearedAt!==clearedDraftAt){clearedDraftAt=state.draftClearedAt;const cleared=state.clearedDraft;if(cleared){delete draftByMode[cleared.mode];try{if(['priority','watch','multiple','profiles-parallel'].includes(workspaceTab)&&phoneDraftSignature(readPlan())===phoneDraftSignature(cleared))loadPlan({mode:cleared.mode});}catch(error){/* Keep an edited, incomplete draft intact. */}}}
   if(state.stage==='PARTIAL'){$('statusBadge').textContent='일부 완료 · 확인 필요';$('statusBadge').className='badge failed';}
@@ -93,7 +100,7 @@ function renderPhoneMonth(result){
   if(result.pending){area.textContent='월별 현황 조회 중…';return;}if(!result.ok){area.textContent=result.error||'조회 실패 · 0곳으로 판단하지 않습니다.';return;}
   const table=node('table',undefined,'monthly-calendar counts-only'),head=node('tr');for(const name of ['일','월','화','수','목','금','토'])head.append(node('th',name));const thead=node('thead');thead.append(head);table.append(thead);
   const body=node('tbody'),[year,month]=result.month.split('-').map(Number),length=new Date(Date.UTC(year,month,0)).getUTCDate(),offset=new Date(Date.UTC(year,month-1,1)).getUTCDay();let row=node('tr');
-  for(let i=0;i<Math.ceil((offset+length)/7)*7;i++){const cell=node('td'),day=i-offset+1;if(day>=1&&day<=length){const date=result.month+'-'+String(day).padStart(2,'0'),count=result.days?.[date],before=date>result.openThrough,past=date<seoulToday(),valid=Number.isInteger(count)&&count>=0;const button=makeButton('',()=>{$('startDate').value=date;$('startDate').dispatchEvent(new Event('change',{bubbles:true}));switchTab('priority');window.scrollTo({top:0,behavior:'smooth'});});button.className='monthly-day';button.disabled=past;button.classList.toggle('past',past);button.append(node('span',String(day),'monthly-day-number'));const label=past?'지난 날짜':before?'오픈 전':valid?count+'곳':'미확인',badge=node('span',label,'monthly-cell monthly-count '+(before||!valid||past?'unknown':count>0?'available':'booked'));button.setAttribute('aria-label',date+' · '+(valid&&!before&&!past?'예약 가능 '+count+'곳':label));button.append(badge);cell.append(button);}row.append(cell);if(i%7===6){body.append(row);row=node('tr');}}
+  for(let i=0;i<Math.ceil((offset+length)/7)*7;i++){const cell=node('td'),day=i-offset+1;if(day>=1&&day<=length){const date=result.month+'-'+String(day).padStart(2,'0'),count=result.days?.[date],before=date>result.openThrough,past=date<seoulToday(),valid=Number.isInteger(count)&&count>=0;const button=makeButton('',()=>{switchTab('priority');$('startDate').value=date;$('startDate').dispatchEvent(new Event('change',{bubbles:true}));window.scrollTo({top:0,behavior:'smooth'});});button.className='monthly-day';button.disabled=past||!before&&valid&&count===0;button.classList.toggle('past',past);button.append(node('span',String(day),'monthly-day-number'));const label=past?'지난 날짜':before?'예정':valid?count+'곳':'미확인',badge=node('span',label,'monthly-cell monthly-count '+(before||!valid||past?'unknown':count>0?'available':'booked'));button.setAttribute('aria-label',date+' · '+(valid&&!before&&!past?'예약 가능 '+count+'곳':label));button.append(badge);cell.append(button);}row.append(cell);if(i%7===6){body.append(row);row=node('tr');}}
   table.append(body);area.append(table);$('phoneMonthStatus').textContent=`예약 허용 체크인 ${result.openThrough}까지 · 숫자는 예약 가능한 사이트 수 · 개별 사이트·연속 박수는 빈자리 조회로 확인`;
 }
 window.refreshPhoneMaps=function(){try{const maps=api('maps');$('siteMapImage').src=maps.selected?'map/'+maps.selected+'.jpg':'site-map.png';$('galleryCount').textContent=maps.photos.length+'/6';const gallery=$('mapGallery');gallery.replaceChildren();for(const id of maps.photos){const card=node('article',undefined,'phone-map-card'),image=node('img');image.src='map/'+id+'.jpg';image.alt='등록한 배치도';image.addEventListener('click',()=>{$('mapZoomImage').src=image.src;$('mapZoomDialog').showModal();});const check=node('input');check.type='checkbox';check.setAttribute('aria-label','사진 삭제 대상 선택');check.checked=gallerySelected.has(id);check.addEventListener('change',()=>{check.checked?gallerySelected.add(id):gallerySelected.delete(id);});card.append(image,check,makeButton(maps.selected===id?'사용 중':'적용',()=>{api('mapAction',{action:'select',id});refreshPhoneMaps();}));gallery.append(card);}const add=makeButton('',()=>api('mapPick'));add.id='galleryAddButton';add.className='gallery-add';add.setAttribute('aria-label','배치도 사진 추가');const plus=node('span','＋','gallery-add-symbol');plus.setAttribute('aria-hidden','true');add.append(plus,node('span',maps.photos.length>=6?'6장 가득 참':'추가'));add.disabled=maps.photos.length>=6;gallery.append(add);$('siteMapUploadButton').disabled=add.disabled;return maps;}catch(e){showError(e);}};
@@ -115,5 +122,38 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('siteMapImage').addEventListener('click',()=>{$('mapZoomImage').src=$('siteMapImage').src;});
   $('bookingHelpDialog').replaceChildren(node('h2','폰 예약 사용 방법'),node('p','단독: 우선순위 중 하나. 다중: 선택한 사이트 각각. 다인: 사람별 우선순위 중 하나. 폰 세션은 순차 실행하며 완료 예약은 유지합니다. 취소 대기는 최소 10분 간격입니다.'),node('p','예약 조회·월별 현황은 읽기 전용이며 온라인 취소는 공식 사이트가 제공하지 않아 전화로 요청해야 합니다. 무통장입금 신청 후 입금은 직접 진행하세요.'),makeButton('닫기',()=>$('bookingHelpDialog').close()));
   featuresReady=true;renderPhonePeople();switchTab(workspaceTab);refreshPhoneMaps();poll();try{api('syncTime');}catch(e){showError(e);}
-  const reset=document.querySelector('.phone-reset-floating');if(reset){const replacement=reset.cloneNode(true);reset.replaceWith(replacement);replacement.addEventListener('click',()=>{if(confirm('모든 예약 모드의 입력을 초기화할까요? 저장 예약자·등록 일정·실제 예약은 유지합니다.')){draftByMode={};api('draftReset');loadPlan({});}});}
+  for(const event of ['input','change','roomorderchange'])document.addEventListener(event,()=>queueMicrotask(updatePhoneResetVisibility));
+  const reset=document.querySelector('.phone-reset-floating');if(reset){const replacement=reset.cloneNode(true);reset.replaceWith(replacement);replacement.addEventListener('click',()=>{if(confirm('현재 화면의 예약 입력만 초기화할까요? 다른 화면의 초안·저장 예약자·등록 일정·실제 예약은 유지합니다.')){const mode=tabMode(workspaceTab);delete draftByMode[mode];delete modeEditorMeta[mode];api('draftReset',{mode});loadPlan({mode});$('planName').value='';editingPlan='';updatePhoneResetVisibility();}});}
+  for(const id of ['startDate','nights','campAdults'])$(id).addEventListener('change',queuePhonePeriodCheck);
+  updatePhoneResetVisibility();
 });
+
+function updatePhoneResetVisibility(){
+  const button=document.querySelector('.phone-reset-floating');if(!button)return;
+  if(!['priority','watch','multiple','profiles-parallel'].includes(workspaceTab)){button.hidden=true;return;}
+  try{
+    const p=readPlan(),emptyPerson=person=>!person.name&&!person.payer&&!person.phone&&!person.rooms?.length;
+    button.hidden=!(p.date||p.trigger||p.watchUntil||p.name||p.payer||p.phone||p.birth||p.consent||p.rooms||p.nights!==1||p.adults!==2||p.arrival||p.request||
+      p.pollSeconds!==600||p.submitInterval!==5||$('planName').value||editingPlan||
+      p.people.length>1||p.people.some(person=>!emptyPerson(person))||
+      roomOrder.some((name,i)=>name!==vault.rooms[i]));
+  }catch(error){button.hidden=false;}
+}
+
+let phonePeriodTimer,phonePeriodQueued='',phonePeriodAttempted='';
+function queuePhonePeriodCheck(){
+  clearTimeout(phonePeriodTimer);phonePeriodTimer=setTimeout(()=>{
+    if(!['priority','watch','multiple','profiles-parallel'].includes(workspaceTab))return;
+    const key=roomQueryKey();if(!$('startDate').value)return;
+    phonePeriodQueued=key;runPhonePeriodCheck();
+  },650);
+}
+function runPhonePeriodCheck(){
+  if(!phonePeriodQueued||nativeState.active||nativeState.lookup?.pending||nativeState.monthly?.pending||!nativeState.notifications||document.hidden||!['priority','watch','multiple','profiles-parallel'].includes(workspaceTab))return;
+  const key=phonePeriodQueued;
+  if(key!==roomQueryKey()){phonePeriodQueued='';return;}
+  phonePeriodQueued='';
+  if(key===phonePeriodAttempted||window.stayCalendar.planned($('startDate').value,Number($('nights').value)))return;
+  phonePeriodAttempted=key;
+  try{api('inspect',readPlan());}catch(error){showError(error);}
+}

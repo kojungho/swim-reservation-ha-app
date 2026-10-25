@@ -538,3 +538,15 @@ button.info-button { font-size: calc(var(--font-button) * 1.3); }
 #screenReloadProceed { text-decoration:none; white-space:nowrap; }
 @media (max-width:600px) { #screenReloadConfirm { align-items:stretch; flex-direction:column; } }
 .app-update { margin-bottom:24px; }
+
+/* Availability is explicit; checkout is end-exclusive. */
+.date-picker-day { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-width:0; }
+.date-picker-day small { display:block; font-size:clamp(9px,2.8vw,13px); white-space:nowrap; font-weight:700; }
+.date-picker-day[data-availability="available"] { background:#e1f4e8; color:#116c47; }
+.date-picker-day[data-availability="closed"] { background:#ebe9e5; color:#9b5246; }
+.date-picker-day[data-availability="planned"] { background:#e8effb; color:#456aa4; }
+.date-picker-day[data-availability="unknown"] { background:#f0f1f1; color:#64706a; }
+.date-picker-day[data-availability="past"] { opacity:.35; }
+.date-picker-day[aria-pressed="true"] { background:#087747; color:white; }
+.date-picker-day:disabled { cursor:not-allowed; }
+.date-picker-availability { font-size:12px; line-height:1.6; margin:12px 0 0; }

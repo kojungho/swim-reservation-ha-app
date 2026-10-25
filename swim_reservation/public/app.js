@@ -1,5 +1,6 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.9";
+const CLIENT_VERSION = "2.15.10";
+window.stayCalendar = new StayCalendarModel(month => request(`monthly-availability?month=${month}`, { timeoutMs: 25000 }), () => Number.isFinite(currentSiteTime()) ? currentSiteTime() : Date.now());
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
 function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, "").replace(/(\d+)순위/g, (_, rank) => rankSymbol(Number(rank))); }
@@ -694,7 +695,7 @@ function renderProfilePriorities() {
       const row = document.createElement("div");
       row.className = `room-row${room.enabled ? " enabled" : ""}`;
       const availability = availabilityByRoom.get(room.name) || "unknown";
-      row.innerHTML = `<label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} ${canSelectRoom(room.name) ? "" : "disabled"} aria-label="예약자 ${profileIndex + 1} ${escapeHtml(room.name)} 선택"></label><div class="room-name"><span class="room-rank">${room.enabled ? `${rank}순위` : "—"}</span>${escapeHtml(room.name)}<span class="availability ${availability}">${AVAILABILITY_LABELS[availability]}</span></div><button class="room-drag-handle" type="button" aria-label="예약자 ${profileIndex + 1} ${escapeHtml(room.name)} 순서 이동"><span class="drag-bars" aria-hidden="true"></span></button>`;
+      row.innerHTML = `<label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} ${canSelectRoom(room.name) ? "" : "disabled"} aria-label="예약자 ${profileIndex + 1} ${escapeHtml(room.name)} 선택"></label><div class="room-name"><span class="room-rank">${room.enabled ? `${rank}순위` : "—"}</span>${escapeHtml(room.name)}<span class="availability ${availability}">${Number(elements.nights.value)>1&&availability==="available"?"연박 가능":Number(elements.nights.value)>1&&availability==="unavailable"?"선택 기간 연박 불가":AVAILABILITY_LABELS[availability]}</span></div><button class="room-drag-handle" type="button" aria-label="예약자 ${profileIndex + 1} ${escapeHtml(room.name)} 순서 이동"><span class="drag-bars" aria-hidden="true"></span></button>`;
       row.querySelector("input").addEventListener("change", event => { room.enabled = event.target.checked; renderProfilePriorities(); });
       const handle = row.querySelector("button");
       handle.addEventListener("pointerdown", event => startRoomDrag(event, row, index, list, priority, renderProfilePriorities));
@@ -789,7 +790,7 @@ function renderRooms() {
     const row = document.createElement("div");
     row.className = `room-row${room.enabled ? " enabled" : ""}`;
     const availability = availabilityByRoom.get(room.name);
-    const availabilityLabel = AVAILABILITY_LABELS[availability] || AVAILABILITY_LABELS.unknown;
+    const availabilityLabel = Number(elements.nights.value)>1 && availability==="available" ? "연박 가능" : Number(elements.nights.value)>1 && availability==="unavailable" ? "선택 기간 연박 불가" : AVAILABILITY_LABELS[availability] || AVAILABILITY_LABELS.unknown;
     row.innerHTML = `
       <label class="room-toggle"><input type="checkbox" ${room.enabled ? "checked" : ""} ${canSelectRoom(room.name) ? "" : "disabled"} aria-label="${escapeHtml(room.name)} 선택"></label>
       <div class="room-name">${multiple ? "" : `<span class="room-rank">${room.enabled ? `${rank}순위` : "—"}</span>`}${escapeHtml(room.name)}${room.newlyDetected ? '<span class="room-detected">신규 자동 추가</span>' : ""}<span class="availability ${availability || "unknown"}">${availabilityLabel}</span></div>
@@ -979,7 +980,7 @@ function updateImmediateBookingVisibility() {
   const now = currentSiteTime();
   const trigger = Date.parse(`${elements.triggerAt.value}+09:00`);
   const opening = Date.parse(`${bookingOpenIso(elements.startDate.value)}+09:00`);
-  const allowed = !editingPlan && ["priority", "multiple", "profiles-parallel"].includes(workspaceTab) &&
+  const allowed = !window.stayCalendar?.planned(elements.startDate.value,Number(elements.nights.value)) && !editingPlan && ["priority", "multiple", "profiles-parallel"].includes(workspaceTab) &&
     Number.isFinite(now) && Number.isFinite(trigger) && Number.isFinite(opening) && trigger <= now && opening <= now;
   elements.runNowButton.hidden = !allowed;
   document.getElementById("triggerDetails").hidden = workspaceTab === "watch" || allowed || !elements.triggerAt.value;
@@ -1229,6 +1230,10 @@ async function refreshAvailability() {
   const requestId = ++availabilityRequest;
   availabilityByRoom.clear();
   const beforeOpen = isBeforeOpen(startDate);
+  if(window.stayCalendar?.planned(startDate,nights)){
+    for(const room of rooms)availabilityByRoom.set(room.name,"before-open");
+    renderRooms();return;
+  }
   if (currentState === "running") {
     if (beforeOpen) for (const room of rooms) availabilityByRoom.set(room.name, "before-open");
     renderRooms();
@@ -1377,6 +1382,21 @@ function initializeDatePicker() {
     return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
   };
   const allowedMonth = value => value >= (target.min.slice(0, 7) || "0001-01") && value <= (target.max.slice(0, 7) || "9999-12");
+  const availabilityEnabled = () => ["startDate", "checkoutDate"].includes(target?.id) && window.stayCalendar;
+  const isWatch = () => typeof workspaceTab !== "undefined" && workspaceTab === "watch";
+  const canChoose = value => !availabilityEnabled() || !window.stayCalendar.pending.has(month) && !window.stayCalendar.pending.has(rangeStart.slice(0,7)) && window.stayCalendar.allow(value, rangeMode ? rangePhase : target.id === "checkoutDate" ? "end" : "start", rangeStart, isWatch());
+  let loadGeneration = 0;
+  const help = document.createElement("p"); help.className = "date-picker-availability"; get("Days").after(help);
+  function loadCounts() {
+    if (!availabilityEnabled()) return;
+    const generation = ++loadGeneration, displayed = month;
+    help.textContent = "예약 현황 조회 중…";
+    const loading = Promise.all([...new Set([month, ...(rangePhase === "end" && rangeStart ? [rangeStart.slice(0, 7)] : [])])].map(value => window.stayCalendar.load(value))).then(() => {
+      if (!dialog.open || generation !== loadGeneration || displayed !== month) return;
+      render();
+    });
+    render();help.textContent = "예약 현황 조회 중…";
+  }
   function render() {
     const [year, number] = month.split("-").map(Number);
     get("Month").textContent = `${year}년 ${number}월`;
@@ -1385,6 +1405,8 @@ function initializeDatePicker() {
     get("Days").hidden = target.type === "month";
     get("TimeField").hidden = target.type !== "datetime-local";
     get("Error").textContent = "";
+    help.hidden = !availabilityEnabled();
+    help.textContent = "초록: 가능한 곳 수 · 마감: 잔여 없음 · 예정: 오픈 전, 대기 등록 가능 · 미확인: 조회 필요. 퇴실일은 숙박일에서 제외합니다.";
     get("Range").hidden = !rangeMode;
     if (rangeMode) {
       get("Title").textContent = rangePhase === "start" ? "입실일 선택" : "퇴실일 선택";
@@ -1410,6 +1432,11 @@ function initializeDatePicker() {
       const value = `${month}-${String(day).padStart(2, "0")}`;
       const button = document.createElement("button");
       button.type = "button"; button.className = "date-picker-day"; button.textContent = day;
+      if (availabilityEnabled()) {
+        const state = window.stayCalendar.day(value).state;
+        button.dataset.availability = state;
+        const count = document.createElement("small"); count.textContent = window.stayCalendar.label(value); button.append(count);
+      }
       button.dataset.date = value; button.setAttribute("aria-label", `${year}년 ${number}월 ${day}일`);
       button.setAttribute("aria-pressed", String(value === selected));
       if (rangeMode) {
@@ -1420,9 +1447,11 @@ function initializeDatePicker() {
       }
       button.disabled = Boolean(target.min && value < target.min.slice(0, 10) || target.max && value > target.max.slice(0, 10));
       if (rangeMode && rangePhase === "end") button.disabled ||= value <= rangeStart || value > stayEndDate(rangeStart, 6);
+      button.disabled ||= !canChoose(value);
       button.addEventListener("click", () => {
+        if (!canChoose(value)) return;
         if (rangeMode) {
-          if (rangePhase === "start") { rangeStart = value; rangeEnd = ""; rangePhase = "end"; render(); get("Checkout").focus(); return; }
+          if (rangePhase === "start") { rangeStart = value; rangeEnd = ""; rangePhase = "end"; render(); loadCounts(); get("Checkout").focus(); return; }
           rangeEnd = value;
           const nights = (Date.parse(`${rangeEnd}T00:00:00Z`) - Date.parse(`${rangeStart}T00:00:00Z`)) / 86400000;
           if (!Number.isInteger(nights) || nights < 1 || nights > 6) return;
@@ -1459,7 +1488,7 @@ function initializeDatePicker() {
     get("Title").textContent = input.type === "month" ? "월 선택" : input.type === "datetime-local" ? "날짜·시각 선택" : "날짜 선택";
     get("Time").value = input.value.split("T")[1] || "00:00:00";
     get("Apply").hidden = input.type === "date";
-    render(); dialog.showModal();
+    render(); dialog.showModal(); loadCounts();
     (get("Days").querySelector('[aria-pressed="true"]:not(:disabled)') || get("Next")).focus();
   }
   // Suppress the OS picker even when its indicator is clicked; retain typed input.
@@ -1468,13 +1497,14 @@ function initializeDatePicker() {
   document.addEventListener("keydown", event => {
     if (eligible(event.target) && (event.key === " " || event.key === "ArrowDown" && event.altKey)) { event.preventDefault(); open(event.target); }
   });
-  get("Prev").addEventListener("click", () => { month = shift(-1); render(); });
-  get("Next").addEventListener("click", () => { month = shift(1); render(); });
+  get("Prev").addEventListener("click", () => { month = shift(-1); render(); loadCounts(); });
+  get("Next").addEventListener("click", () => { month = shift(1); render(); loadCounts(); });
   get("Cancel").addEventListener("click", () => dialog.close());
   get("Checkin").addEventListener("click", () => { rangePhase = "start"; render(); });
-  get("Checkout").addEventListener("click", () => { if (rangeStart) { rangePhase = "end"; render(); } });
+  get("Checkout").addEventListener("click", () => { if (rangeStart) { rangePhase = "end"; render(); loadCounts(); } });
   get("Apply").addEventListener("click", () => {
     let value = target.type === "month" ? month : selected;
+    if (target.type === "date" && !canChoose(value)) { get("Error").textContent = "마감된 숙박일 또는 지난 날짜입니다."; return; }
     if (target.type === "datetime-local") {
       if (!get("Time").value || !get("Time").checkValidity()) { get("Error").textContent = "올바른 시각을 입력해 주세요."; return; }
       value += `T${get("Time").value}`;

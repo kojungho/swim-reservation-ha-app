@@ -18,7 +18,7 @@ import java.io.*;
 /** Bundled add-on presentation; native, server-independent reservation service remains separate. */
 public final class MainActivity extends Activity {
     static final String UI_HOST="phone.swim.invalid";
-    static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","phone-features.js","date-picker.js","site-map.png");
+    static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","phone-features.js","date-picker.js","stay-calendar.js","site-map.png");
     WebView screen;
     AppUpdates updates;
     private LocalStore store;private PhoneRepository repository;
@@ -68,6 +68,7 @@ public final class MainActivity extends Activity {
                 case "checkUpdates":main.post(()->updates.check(true));result="앱 업데이트 확인 중";break;
                 case "syncTime":PhoneReads.time(this);result="서버 시각 동기화 중";break;
                 case "monthly":PhoneReads.monthly(this,data.getString("month"));result="월별 현황 조회 중";break;
+                case "calendarMonth":result=PhoneReads.calendar(this,data.getString("month"));break;
                 case "lookup":{JSONArray profiles=data.optJSONArray("profiles");if(profiles==null)profiles=repository.load().getJSONArray("profiles");JSONArray selected=profiles;main.post(()->{try{CampLookup.begin(this,selected);}catch(Exception e){try{store.saveDocument("lookup-result",new JSONObject().put("pending",false).put("error","예약자 정보·작업 상태를 확인하세요.").put("capturedAt",System.currentTimeMillis()));}catch(Exception ignored){}}});result="예약 내역 조회 중";break;}
                 case "lookupStop":main.post(CampLookup::cancel);result="조회 중지";break;
                 case "maps":result=new MapPhotos(this).state();break;
@@ -75,7 +76,7 @@ public final class MainActivity extends Activity {
                 case "mapAction":{if(store.active())throw new IllegalStateException("예약 작업을 먼저 중지하세요.");String mapAction=data.getString("action");if(mapAction.equals("delete")&&!data.optBoolean("confirmed"))throw new IllegalArgumentException("사진 삭제 확인이 필요합니다.");result=new MapPhotos(this).apply(mapAction,data.getString("id"));break;}
                 case "state":result=runtimeState();break;
                 case "draft":result=repository.saveDraft(data);break;
-                case "draftReset":{JSONObject state=repository.load();state.put("draft",new Plan().json()).put("drafts",new JSONObject()).remove("clearedDraft");store.saveDocument("phone-ui-v1",state);result=state;break;}
+                case "draftReset":{String mode=data.getString("mode");if(!java.util.Set.of("reserve","watch","multiple","profiles-parallel").contains(mode))throw new IllegalArgumentException("예약 화면을 확인하세요.");JSONObject state=repository.load(),drafts=state.optJSONObject("drafts");if(drafts!=null)drafts.remove(mode);JSONObject latest=state.optJSONObject("draft");if(latest!=null&&mode.equals(latest.optString("mode","reserve")))state.put("draft",new Plan().json().put("mode",mode));store.saveDocument("phone-ui-v1",state);result=state;break;}
                 case "ui":result=repository.saveUi(data);break;
                 case "profilePut":result=repository.put("profiles",data);break;
                 case "profileDelete":result=repository.delete("profiles",data.getString("id"));break;

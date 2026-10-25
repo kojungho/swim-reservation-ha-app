@@ -68,7 +68,7 @@ test('이전 예약의 성공 응답은 새로 편집한 초안을 지우지 않
   assert.equal(await page.locator('#planName').inputValue(), '새로운 초안');
 });
 
-test('플로팅 초기화의 확인·취소는 모든 모드 초안만 지우고 모바일 제출 간격은 한 줄이다', { skip: !executablePath }, async t => {
+test('플로팅 초기화의 확인·취소는 현재 모드 초안만 지우고 모바일 제출 간격은 한 줄이다', { skip: !executablePath }, async t => {
   const { page, state } = await setup(t);
   await fill(page, '단독 입력');
   await tab(page, 'multiple'); await fill(page, '다중 입력');
@@ -79,9 +79,10 @@ test('플로팅 초기화의 확인·취소는 모든 모드 초안만 지우고
   await page.locator('#editorResetButton').click();
   await page.locator('#editorResetConfirm').click();
   assert.equal(await page.locator('#planName').inputValue(), '');
+  assert.equal(await page.locator('#editorResetButton').isVisible(),false);
   await tab(page, 'priority');
-  assert.equal(await page.locator('#planName').inputValue(), '');
-  assert.equal(await page.locator('#phone').inputValue(), '');
+  assert.equal(await page.locator('#planName').inputValue(), '단독 입력');
+  assert.equal(await page.locator('#phone').inputValue(), '01000000000');
   assert.equal(state.book.length, 2);
   assert.ok(state.writes.every(path => path === '/api/inspect'));
   await tab(page, 'settings');

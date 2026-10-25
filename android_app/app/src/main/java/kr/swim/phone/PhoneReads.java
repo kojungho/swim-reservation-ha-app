@@ -11,6 +11,24 @@ import org.json.*;
 final class PhoneReads {
     static volatile boolean testMode=false;
     static final java.util.concurrent.ExecutorService worker=java.util.concurrent.Executors.newSingleThreadExecutor();
+    static final java.util.Set<String> calendarJobs=java.util.concurrent.ConcurrentHashMap.newKeySet();
+    static JSONObject calendar(Context c,String month)throws Exception{
+        java.time.YearMonth.parse(month);LocalStore store=new LocalStore(c);JSONObject saved=store.loadDocument("calendar-"+month);
+        long age=saved==null?Long.MAX_VALUE:System.currentTimeMillis()-saved.optLong("capturedAt");
+        if(saved!=null&&age>=0&&age<60000)return saved;
+        if(store.active())return new JSONObject().put("ok",false).put("busy",true).put("month",month);
+        if(calendarJobs.add(month))worker.execute(()->{try{
+            if(new LocalStore(c).active())throw new IllegalStateException("예약 우선");
+            JSONObject raw;
+            if(testMode)raw=new JSONObject().put("ok",true).put("ym",month).put("open",month+"-28").put("days",new JSONObject().put(month+"-01",0).put(month+"-02",4));
+            else{HttpURLConnection connection=open("https://"+PhoneEngine.HOST+"/camp/api.php?a=cal&ym="+month,"GET");try{if(connection.getResponseCode()!=200)throw new IOException();raw=new JSONObject(text(connection));}finally{connection.disconnect();}}
+            if(!raw.optBoolean("ok")||!month.equals(raw.optString("ym")))throw new IOException();java.time.LocalDate.parse(raw.getString("open"));JSONObject source=raw.getJSONObject("days"),days=new JSONObject();
+            for(int i=1;i<=java.time.YearMonth.parse(month).lengthOfMonth();i++){String date=String.format(java.util.Locale.ROOT,"%s-%02d",month,i);Object count=source.opt(date);days.put(date,count instanceof Number&&((Number)count).doubleValue()==((Number)count).intValue()&&((Number)count).intValue()>=0?count:JSONObject.NULL);}
+            store.saveDocument("calendar-"+month,new JSONObject().put("ok",true).put("month",month).put("openThrough",raw.getString("open")).put("days",days).put("capturedAt",System.currentTimeMillis()));
+        }catch(Exception e){try{store.saveDocument("calendar-"+month,new JSONObject().put("ok",false).put("month",month).put("capturedAt",System.currentTimeMillis()));}catch(Exception ignored){}}
+        finally{calendarJobs.remove(month);}});
+        return new JSONObject().put("pending",true).put("month",month);
+    }
     static void monthly(Context c,String month)throws Exception{
         java.time.YearMonth.parse(month);if(new LocalStore(c).active())throw new IllegalStateException("진행·대기 중인 예약을 먼저 중지하세요.");
         LocalStore store=new LocalStore(c);store.saveDocument("monthly-result",new JSONObject().put("pending",true).put("month",month));

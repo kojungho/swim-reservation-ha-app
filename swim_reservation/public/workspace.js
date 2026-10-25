@@ -89,7 +89,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
     if (typeof draftsReady !== 'undefined' && draftsReady) restoreEditorDraft(tab);
     else resetPlanEditor(tab);
   }
-  document.getElementById('editorResetButton').hidden = !['priority', 'multiple', 'profiles-parallel', 'watch'].includes(tab);
+  if (typeof updateEditorResetVisibility === 'function') updateEditorResetVisibility();
   if (modes.includes(tab)) { elements.bookingMode.value = tab; renderRooms(); }
   if (tab === "watch") {
     elements.bookingMode.value = "priority";
@@ -242,6 +242,7 @@ function resetPlanEditor(tab = workspaceTab) {
   document.getElementById("roomDragStatus").textContent = "";
   if (tab === "watch") refreshWatchProfileSelector();
   updateBookingProfileVisibility();
+  if (typeof updateEditorResetVisibility === "function") updateEditorResetVisibility();
 }
 
 async function registerPlan(kind, start) {

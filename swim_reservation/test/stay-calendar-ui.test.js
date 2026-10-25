@@ -1,0 +1,24 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright-core';
+import {mockBookApp} from './fixtures/ui-book-app.js';
+test('앱과 같은 마감·예정·퇴실일 규칙, 연박은 전체 기간 조회 결과로 표시',async t=>{
+ const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());
+ const page=await browser.newPage({viewport:{width:390,height:900}});const state=await mockBookApp(page);
+ await page.route('https://app.test/api/monthly-availability?**',route=>{const month=new URL(route.request().url()).searchParams.get('month');return route.fulfill({json:{month,openThrough:'2026-12-31',days:[{date:month+'-17',availableCount:3},{date:month+'-18',availableCount:0},{date:month+'-19',availableCount:4}]}});});
+ await page.evaluate(()=>{uiSettings.stayRange=true;elements.startDate.value='2026-12-17';updateStayFields();});
+ await page.locator('#startDate').click();await page.waitForFunction(()=>document.querySelector('[data-date="2026-12-17"] small')?.textContent==='3곳');
+ assert.equal(await page.locator('[data-date="2026-12-18"]').isDisabled(),true);
+ await page.locator('[data-date="2026-12-17"]').click();
+ assert.equal(await page.locator('[data-date="2026-12-18"]').isEnabled(),true);
+ assert.equal(await page.locator('[data-date="2026-12-19"]').isDisabled(),true);
+ await page.locator('[data-date="2026-12-18"]').click();assert.equal(await page.locator('#checkoutDate').inputValue(),'2026-12-18');
+ await page.evaluate(()=>{switchWorkspaceTab('watch');elements.startDate.value='2026-12-18';updateStayFields();});
+ await page.locator('#startDate').click();assert.equal(await page.locator('[data-date="2026-12-18"]').isEnabled(),true);await page.locator('#datePickerCancel').click();
+ await page.evaluate(()=>{switchWorkspaceTab('priority');elements.startDate.value='2027-01-17';updateStayFields();});
+ await page.locator('#startDate').click();await page.waitForFunction(()=>document.querySelector('[data-date="2027-01-17"] small')?.textContent==='예정');
+ assert.equal(await page.locator('[data-date="2027-01-17"]').isEnabled(),true);await page.locator('#datePickerCancel').click();
+ await page.evaluate(()=>{elements.startDate.value='2026-12-19';elements.nights.value='2';availabilityByRoom.set(rooms[0].name,'unavailable');availabilityByRoom.set(rooms[1].name,'available');renderRooms();});
+ assert.match(await page.locator('#roomList').innerText(),/연박 가능/);assert.match(await page.locator('#roomList').innerText(),/선택 기간 연박 불가/);
+ assert.deepEqual(state.errors,[]);assert.equal(state.planCalls.length,0);assert.equal(state.writes.some(p=>/run-now|\/start$/.test(p)),false);
+});

@@ -10,9 +10,10 @@ async function setup(browser,width=390,storedUi={}){
       if(action==='load')result=s.vault;else if(action==='state')result=s.state;else if(action==='draft'){s.vault.draft=data;result=s.vault;}else if(action==='ui'){s.vault.ui=data;result=s.vault;}
       else if(action==='profilePut'){s.vault.profiles.push({id:'saved-'+s.vault.profiles.length,...data});result=s.vault;}
       else if(action==='planPut'){s.vault.plans.push({id:'plan-'+s.vault.plans.length,title:data.title||'모의 일정',plan:data.plan});result=s.vault;}
-      else if(action==='draftReset'){s.vault.draft={};s.vault.drafts={};result=s.vault;}
+      else if(action==='draftReset'){s.vault.draft={mode:data.mode};delete (s.vault.drafts||{})[data.mode];result=s.vault;}
       else if(action==='maps')result=s.maps;
       else if(action==='mapAction'){if(data.action==='select')s.maps.selected=data.id;else{s.maps.photos=s.maps.photos.filter(id=>id!==data.id);if(s.maps.selected===data.id)s.maps.selected='';}result=s.maps;}
+      else if(action==='calendarMonth')result={ok:true,month:data.month,openThrough:'2026-12-31',days:{[data.month+'-17']:3,[data.month+'-18']:0,[data.month+'-19']:4,[data.month+'-22']:2}};
       else if(action==='monthly'){s.state.monthly={month:data.month,pending:false,ok:true,openThrough:data.month+'-28',days:{[data.month+'-01']:0,[data.month+'-02']:14},capturedAt:Date.now()};}
       else if(action==='lookup'){s.state.lookup={pending:false,capturedAt:Date.now(),profiles:[{label:'모*자',profileIndex:0,ok:true,count:1}],errors:[],rows:[{profileIndex:0,id:'TEST123-ABC',room:'해_하늘존',status:'입금 대기',stayDate:'2026-12-22',nights:'1박',total:'60,000원',depositDeadline:'12월 1일 10:00'}]};}
       return JSON.stringify({ok:true,data:result});
@@ -58,7 +59,7 @@ test('모드별 입력을 보존하고, 완료 초안만 비우며, 명시적 �
   await page.locator('#reserverName').fill('단독초안');await page.evaluate(()=>switchTab('watch'));await page.locator('#reserverName').fill('대기초안');await page.evaluate(()=>switchTab('priority'));assert.equal(await page.locator('#reserverName').inputValue(),'단독초안');await page.evaluate(()=>switchTab('watch'));assert.equal(await page.locator('#reserverName').inputValue(),'대기초안');
   await page.evaluate(()=>{nativeMock.state.clearedDraft=structuredClone(readPlan());nativeMock.state.draftClearedAt=1;});await page.locator('#reserverName').fill('수정된초안');await page.evaluate(()=>poll());assert.equal(await page.locator('#reserverName').inputValue(),'수정된초안');
   await page.evaluate(()=>{nativeMock.state.clearedDraft=structuredClone(readPlan());nativeMock.state.draftClearedAt=2;poll();});assert.equal(await page.locator('#reserverName').inputValue(),'');
-  await page.locator('#reserverName').fill('초기화대상');await page.locator('.phone-reset-floating').click();assert.equal(await page.locator('#reserverName').inputValue(),'');assert.equal(await page.evaluate(()=>nativeMock.vault.profiles.length),1);assert.equal(await page.evaluate(()=>Object.keys(draftByMode).length),0);assert.deepEqual(errors,[]);await page.close();
+  await page.locator('#reserverName').fill('초기화대상');await page.locator('.phone-reset-floating').click();assert.equal(await page.locator('#reserverName').inputValue(),'');assert.equal(await page.evaluate(()=>nativeMock.vault.profiles.length),1);assert.equal(await page.evaluate(()=>Object.keys(draftByMode).includes('reserve')),true);assert.deepEqual(errors,[]);await page.close();
 });
 test('다인·다중 입력과 등록, 조회·월별·서버 시간·사진 관리가 실제 native 요청과 연결된다',async t=>{
   const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());const{page,errors}=await setup(browser);
@@ -71,4 +72,29 @@ test('다인·다중 입력과 등록, 조회·월별·서버 시간·사진 관
   await page.evaluate(()=>switchTab('monthly'));await page.locator('#monthlyMonth').fill('2026-11');await page.locator('#monthlyQueryButton').click();await page.evaluate(()=>poll());assert.equal(await page.locator('.monthly-count.booked').first().textContent(),'0곳');assert.equal(await page.locator('.monthly-count.available').first().textContent(),'14곳');assert.equal(await page.locator('#monthlyContent .monthly-room-row').count(),0);
   await page.evaluate(()=>{nativeMock.maps={photos:['00000000-0000-4000-8000-000000000001'],selected:''};refreshPhoneMaps();});await page.locator('#siteMapButton').click();await page.getByRole('button',{name:'적용',exact:true}).click();assert.match(await page.locator('#siteMapImage').getAttribute('src'),/^map\//);await page.getByRole('button',{name:'전체 삭제',exact:true}).click();assert.equal(await page.locator('#siteMapImage').getAttribute('src'),'site-map.png');
   assert.deepEqual(errors,[]);assert.equal(await page.evaluate(()=>nativeMock.calls.filter(c=>c.action==='run').length),0);await page.close();
+});
+
+test('가능 수·마감·예정 달력, 퇴실일 제외와 현재 화면만 초기화',async t=>{
+ const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());
+ const {page,errors}=await setup(browser);
+ await page.evaluate(()=>loadPlan({date:'2026-12-17',mode:'reserve'}));
+ await page.locator('#startDate').click();
+ await page.waitForFunction(()=>document.querySelector('[data-date="2026-12-17"] small')?.textContent==='3곳');
+ assert.equal(await page.locator('[data-date="2026-12-18"]').isDisabled(),true);
+ await page.locator('[data-date="2026-12-17"]').click();
+ assert.equal(await page.locator('[data-date="2026-12-18"]').isEnabled(),true);
+ assert.equal(await page.locator('[data-date="2026-12-19"]').isDisabled(),true);
+ await page.locator('[data-date="2026-12-18"]').click();
+ assert.equal(await page.locator('#checkoutDate').inputValue(),'2026-12-18');
+ await page.evaluate(()=>switchTab('watch'));await page.locator('#reserverName').fill('다른 화면');
+ await page.evaluate(()=>switchTab('priority'));await page.locator('.phone-reset-floating').click();
+ assert.equal(await page.locator('.phone-reset-floating').isVisible(),false);
+ await page.evaluate(()=>switchTab('watch'));assert.equal(await page.locator('#reserverName').inputValue(),'다른 화면');
+ await page.evaluate(()=>switchTab('settings'));assert.equal(await page.locator('.phone-reset-floating').isVisible(),false);
+ await page.evaluate(()=>{switchTab('priority');loadPlan({date:'2027-01-17',mode:'reserve'});});
+ await page.locator('#startDate').click();await page.waitForFunction(()=>document.querySelector('[data-date="2027-01-17"] small')?.textContent==='예정');
+ assert.equal(await page.locator('[data-date="2027-01-17"]').isEnabled(),true);
+ await page.locator('#datePickerDialog').screenshot({path:'/tmp/swim-planned-calendar.png'});
+ await page.locator('#datePickerCancel').click();
+ assert.equal(await page.evaluate(()=>nativeMock.calls.some(c=>c.action==='run')),false);assert.deepEqual(errors,[]);await page.close();
 });

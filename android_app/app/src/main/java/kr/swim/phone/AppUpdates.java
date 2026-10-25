@@ -13,13 +13,14 @@ final class AppUpdates {
     interface MetadataSource { JSONObject read()throws Exception; }
     static volatile MetadataSource source=AppUpdates::fetch; // Package-private instrumentation seam; not remotely configurable.
     final Activity activity;
+    final ApkDownload download;
     volatile boolean foreground=false,destroyed=false,running=false;
     boolean manualPending=false;
     volatile AlertDialog dialog;
-    AppUpdates(Activity activity){this.activity=activity;}
-    void resume(){foreground=true;check(false);}
-    void pause(){foreground=false;}
-    void destroy(){destroyed=true;foreground=false;if(dialog!=null)dialog.dismiss();dialog=null;}
+    AppUpdates(Activity activity){this.activity=activity;download=new ApkDownload(activity);}
+    void resume(){foreground=true;if(!download.resume())check(false);}
+    void pause(){foreground=false;download.pause();}
+    void destroy(){destroyed=true;foreground=false;download.destroy();if(dialog!=null)dialog.dismiss();dialog=null;}
     static android.content.SharedPreferences preferences(Context c){return c.getSharedPreferences("phone-update",0);}
     static void requireSupported(Context c){
         if(preferences(c).getInt("minimum",0)>BuildConfig.VERSION_CODE)
@@ -44,7 +45,7 @@ final class AppUpdates {
         }finally{c.disconnect();}
     }
     void check(boolean manual){
-        if(destroyed||!foreground)return;
+        if(destroyed||!foreground||download.working)return;
         if(new LocalStore(activity).active()){
             if(manual)new AlertDialog.Builder(activity).setMessage("예약·대기 작업을 마친 뒤 업데이트를 확인하세요. 진행 중인 작업은 중단하지 않습니다.").setPositiveButton("확인",null).show();
             return;
@@ -69,7 +70,7 @@ final class AppUpdates {
                 AlertDialog.Builder builder=new AlertDialog.Builder(activity).setTitle(required?"필수 호환성 업데이트":"앱 업데이트").setMessage(message);
                 if(newer&&!required)builder.setNegativeButton("나중에",(d,w)->defer(result));
                 else builder.setNegativeButton("닫기",null);
-                if(newer)builder.setPositiveButton("APK 다운로드",(d,w)->{try{activity.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(result.optString("apkUrl"))));}catch(Exception ignored){}});
+                if(newer)builder.setPositiveButton("다운로드 · 설치",(d,w)->download.start(result));
                 dialog=builder.create();
                 if(newer&&!required)dialog.setOnCancelListener(d->defer(result));
                 dialog.setOnDismissListener(d->dialog=null);dialog.show();
