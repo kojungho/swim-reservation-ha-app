@@ -15,9 +15,11 @@ test("예약 정보·취소 대기 설정은 각각 하나의 동일 글꼴 펼�
     assert.equal(await page.locator("#triggerAt").isVisible(), true);
     assert.equal(await page.locator("#epochValue").isVisible(), true);
     const href = await page.locator("#reservationUrl").getAttribute("href");
-    assert.match(href, /^https:\/\/newpension\.logosweb\.or\.kr\/reservation\/reservation1\.php\?id=swim&adaystart=\d+$/);
+    assert.equal(new URL(href).origin, 'https://www.swimozicamp.com');
+    assert.equal(new URL(href).searchParams.get('ci'), '2026-12-20');
+    assert.equal(new URL(href).searchParams.get('co'), '2026-12-21');
     const visits = [];
-    await page.context().route("https://newpension.logosweb.or.kr/**", route => { visits.push(route.request().method()); return route.fulfill({ contentType: "text/html", body: "<title>테스트 링크</title>실제 예약 사이트에 연결하지 않습니다." }); });
+    await page.context().route("https://www.swimozicamp.com/**", route => { visits.push(route.request().method()); return route.fulfill({ contentType: "text/html", body: "<title>테스트 링크</title>실제 예약 사이트에 연결하지 않습니다." }); });
     const [popup] = await Promise.all([page.waitForEvent("popup"), page.locator("#reservationUrl").click()]);
     await popup.waitForLoadState(); assert.equal(popup.url(), href); assert.deepEqual(visits, ["GET"]); await popup.close();
     const time = await page.locator("#triggerAt").inputValue();

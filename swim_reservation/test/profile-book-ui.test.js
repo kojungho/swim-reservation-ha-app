@@ -34,7 +34,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(await page.locator("#saveBookingActor2").isDisabled(), true);
     await page.locator("#bookingProfileSelect2").selectOption("");
     const guest = testGuest(3);
-    for (const [key, value] of Object.entries(guest)) await page.locator("#" + key + "2").fill(value);
+    for (const [key, value] of Object.entries(guest).filter(([key]) => key !== 'birthDate')) await page.locator("#" + key + "2").fill(value);
     assert.equal(await page.locator("#saveBookingActor2").isEnabled(), true);
     await page.locator("#saveBookingActor2").click();
     await page.waitForFunction(() => document.querySelector("#bookingProfileSelect2").options.length === 4);

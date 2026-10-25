@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.14.4";
+const CLIENT_VERSION = "2.15.0";
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
 function shortRoomText(value) { return String(value ?? "").replace(/[_\s-]*(?:하늘존|산맥존)/g, "").replace(/(\d+)순위/g, (_, rank) => rankSymbol(Number(rank))); }
@@ -22,7 +22,7 @@ function applyGuestColor(element, index) {
     element.style.borderColor = `hsl(${hue} 35% 76%)`;
   }
 }
-function canSelectRoom(name) { return availabilityContext === `${elements.startDate.value}/${Number(elements.nights.value)}` && ["available", "available-before-open"].includes(availabilityByRoom.get(name)); }
+function canSelectRoom(name) { return availabilityContext === `${elements.startDate.value}/${Number(elements.nights.value)}` && ["available", "available-before-open", "before-open-no-data"].includes(availabilityByRoom.get(name)); }
 function setRoomSelection(items, enabled) {
   items.forEach(room => { if (!enabled || canSelectRoom(room.name) || workspaceTab === "watch") room.enabled = enabled; });
   editorGeneration++;
@@ -331,7 +331,7 @@ async function loadMonthlyAvailability(force = false) {
   const roomNames = rooms.map(room => room.name);
   let result = { month, opensAt: bookingOpenIso(`${month}-01`), beforeOpen: isBeforeOpen(`${month}-01`), roomNames, capturedAt: Date.now(), progressText: "월별 페이지 조회 중…", days: Array.from({ length: new Date(Date.UTC(year, number, 0)).getUTCDate() }, (_, index) => ({ date: `${month}-${String(index + 1).padStart(2, "0")}`, queryState: "queued", rooms: roomNames.map(name => ({ name, status: "unknown" })) })) };
   renderMonthlyAvailability(result);
-  const sourceUrl = `https://newpension.logosweb.or.kr/reservation/reservation2.php?id=swim&year=${month.slice(0, 4)}&month=${Number(month.slice(5))}`;
+  const sourceUrl = 'https://www.swimozicamp.com/camp/';
   elements.monthlySourceLink.href = sourceUrl;
   try {
     let cache;
@@ -366,6 +366,7 @@ async function loadMonthlyAvailability(force = false) {
       if (id !== monthlyRequest) return;
       if (fetched.month !== month) throw new Error("요청한 달과 다른 현황을 받았습니다.");
       result = fetched;
+      if (result.countsOnly) { renderMonthlyAvailability(result); return; }
     } catch (error) {
       if (controller.signal.aborted || id !== monthlyRequest) return;
       if (error.code === "INSPECTION_BUSY") throw error;
@@ -469,7 +470,7 @@ function renderMonthlyAvailability(result) {
         button.classList.toggle("past", past);
         button.setAttribute("aria-label", past ? `${day.date} 지난 날짜 · 조회 제외` : `${day.date} 선택 후 예약 매크로 화면으로 이동`);
         const labels = { available: ["가", "예약 가능"], booked: ["완", "예약 완료"], pending: ["대", "예약 대기"], unavailable: ["불", "1박 불가"], unknown: ["?", "확인 불가"] };
-        const badges = (past ? [] : day.rooms).map(room => {
+        const badges = result.countsOnly ? `<span class="monthly-cell">${day.beforeOpen ? "오픈 전" : Number.isInteger(day.availableCount) ? `${day.availableCount}곳 가능` : "미확인"}</span>` : (past ? [] : day.rooms).map(room => {
           const status = labels[room.status] ? room.status : "unknown";
           const [mark, label] = labels[status];
           const name = shortRoomText(room.name);
@@ -514,6 +515,9 @@ function loadConfig(config) {
   savedSecondProfile = config.profile2 || {};
   elements.reserverName.value = profile1.reserverName || "";
   elements.depositorName.value = profile1.depositorName || "";
+  document.getElementById("campAdults").value = String(config.adults || 2);
+  document.getElementById("campArrival").value = config.arrivalTime || "";
+  document.getElementById("campRequest").value = config.request || "";
   elements.phone.value = profile1.phone || "";
   elements.birthDate.value = profile1.birthDate || "";
   extraProfiles = profiles.slice(1).map(profile => ({ ...profile }));
@@ -535,6 +539,10 @@ function readConfig() {
     roomPriority: firstProfilePriority
   };
   return {
+    adults: Number(document.getElementById("campAdults").value),
+    arrivalTime: document.getElementById("campArrival").value,
+    request: document.getElementById("campRequest").value,
+    paymentMethod: "bank",
     startDate: elements.startDate.value,
     triggerAt: elements.triggerAt.value,
     nights: Number(elements.nights.value),
@@ -558,7 +566,7 @@ function renderExtraProfiles() {
     panel.className = "second-profile-panel";
     applyGuestColor(panel, index + 1);
     panel.innerHTML = '<h3>예약자 ' + (index + 2) + '</h3><div class="grid two identity-fields"></div><div class="section-actions profile-panel-actions"><button type="button" class="secondary">예약자 제외</button></div>';
-    for (const [key, label] of [["reserverName", "예약자명"], ["depositorName", "입금자명"], ["phone", "휴대폰 번호"], ["birthDate", "생년월일"]]) {
+    for (const [key, label] of [["reserverName", "예약자명"], ["depositorName", "입금자명"], ["phone", "휴대폰 번호"]]) {
       const field = document.createElement("label");
       field.textContent = label;
       const input = document.createElement("input");
@@ -849,7 +857,8 @@ function updateGeneratedValues() {
   const epoch = Math.floor(Date.parse(`${date}T00:00:00+09:00`) / 1000);
   elements.epochValue.textContent = String(epoch);
   elements.openAtValue.textContent = formatOpeningTime(date);
-  const url = `https://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim&adaystart=${epoch}`;
+  const checkout = new Date(Date.parse(`${date}T00:00:00Z`) + Number(elements.nights.value || 1) * 86400000).toISOString().slice(0, 10);
+  const url = `https://www.swimozicamp.com/camp/?ci=${date}&co=${checkout}&ad=${document.getElementById("campAdults").value}&ch=0&in=0`;
   elements.reservationUrl.href = url;
   elements.reservationUrl.textContent = url;
   elements.reservationUrl.removeAttribute("aria-disabled");
@@ -1118,10 +1127,10 @@ function renderReservations(reservations, { container = elements.reservationList
     const row = document.createElement("div");
     row.className = "reservation-row";
     row.innerHTML = `
-      <div><strong>${escapeHtml(shortRoomText(reservation.room))}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span></div>
-      <div><span>결제 금액</span><strong>${escapeHtml(reservation.total)}</strong></div>
-      <div><span>예약 상태</span><strong>${escapeHtml(reservation.status)}</strong></div>
-      ${reservation.cancelable ? '<button type="button" class="reservation-cancel-button danger">예약 취소</button>' : '<span class="cancel-disabled">사이트에서 취소 불가</span>'}`;
+      <div><strong>${escapeHtml(shortRoomText(reservation.room))}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span>${reservation.cancelPolicy === 'contact' ? `<span>예약번호 ${escapeHtml(reservation.id)}</span>` : ''}</div>
+      <div><span>예약 금액</span><strong>${escapeHtml(reservation.total)}</strong></div>
+      <div><span>예약 상태</span><strong>${escapeHtml(reservation.status)}</strong>${reservation.depositDeadline ? `<span>입금 기한 ${escapeHtml(reservation.depositDeadline)}</span>` : ''}</div>
+      ${reservation.cancelable ? '<button type="button" class="reservation-cancel-button danger">예약 취소</button>' : `<span class="cancel-disabled">${reservation.cancelPolicy === 'contact' ? '취소는 캠핑장에 문의해 주세요' : '사이트에서 취소 불가'}</span>`}`;
     const cancelButton = row.querySelector(".reservation-cancel-button");
     cancelButton?.addEventListener("click", () => {
       recordCancelEvent("clicked", reservation.id);

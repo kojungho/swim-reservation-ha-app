@@ -1,6 +1,6 @@
 import { performance } from "node:perf_hooks";
 
-const DEFAULT_URL = "https://newpension.logosweb.or.kr/reservation/reservation1.php?id=swim";
+const DEFAULT_URL = "https://www.swimozicamp.com/camp/";
 const RESYNC_MS = 5 * 60 * 1000;
 
 export class SiteTimeSync {
@@ -44,7 +44,9 @@ export class SiteTimeSync {
   async measureOnce() {
     const startedWall = this.wallNow();
     const startedMono = this.monoNow();
-    const response = await this.fetchImpl(`${this.url}&_time=${startedWall}`, {
+    const target = new URL(this.url);
+    target.searchParams.set('_time', String(startedWall));
+    const response = await this.fetchImpl(target.href, {
       method: "HEAD", cache: "no-store", signal: AbortSignal.timeout(8_000)
     });
     const endedMono = this.monoNow();

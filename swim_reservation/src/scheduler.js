@@ -46,7 +46,7 @@ export class Scheduler {
     this.armedConfig = structuredClone(config);
     if (!restored) {
       const targetAt = triggerEpoch(config.triggerAt);
-      const prewarmMs = preparationLeadMs(config);
+      const prewarmMs = this.engine.supportsPrewarm === false ? 0 : preparationLeadMs(config);
       await this.store.updateStatus({
         state: "waiting",
         stage: "armed",
@@ -124,7 +124,7 @@ export class Scheduler {
     if (!this.armed) return;
     const config = this.armedConfig || await this.store.getConfig();
     const target = triggerEpoch(config.triggerAt);
-    const prewarmMs = preparationLeadMs(config);
+    const prewarmMs = this.engine.supportsPrewarm === false ? 0 : preparationLeadMs(config);
     let remaining = target - this.timeSync.now();
 
     if (!this.prepared && remaining <= prewarmMs && remaining > 0) {

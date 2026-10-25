@@ -45,7 +45,7 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     async function fillBook(number) {
       if (!await page.locator("#bookEditor").isVisible()) await page.locator("#bookNewButton").click();
       const guest = testGuest(number);
-      for (const [key, id] of [["reserverName", "bookReserverName"], ["depositorName", "bookDepositorName"], ["phone", "bookPhone"], ["birthDate", "bookBirthDate"]]) await page.locator("#" + id).fill(guest[key]);
+      for (const [key, id] of [["reserverName", "bookReserverName"], ["depositorName", "bookDepositorName"], ["phone", "bookPhone"]]) await page.locator("#" + id).fill(guest[key]);
     }
     await fillBook(3);
     state.rejectBook = true;

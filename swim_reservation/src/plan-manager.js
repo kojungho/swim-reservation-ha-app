@@ -47,6 +47,8 @@ export class PlanManager {
       if (!/^[a-f0-9-]{36}$/.test(row.id)) throw new Error("일정 저장 파일의 식별값을 확인해 주세요.");
       const legacyWatch = row.kind === "watch" && row.watchVersion !== 2;
       const legacySingle = row.kind !== "watch" && row.config.bookingMode === "priority" && getProfiles(row.config).length > 1;
+      const siteChanged = row.config.siteVersion !== 'swimozicamp-v1';
+      if (siteChanged) row.enabled = false;
       if (legacyWatch) {
         row.config = normalizeWatchConfig(row.config, row.config.bookingMode === "multiple" ? row.config.multipleProfileIndex || 0 : 0);
         row.watchVersion = 2;
@@ -56,10 +58,10 @@ export class PlanManager {
       if (row.kind !== "watch" && row.config.bookingMode === "multiple") row.config = singleBookingConfig(row.config);
       const plan = await this.createRuntime(row);
       this.plans.set(plan.id, plan);
-      if (legacyWatch || legacySingle) {
+      if (legacyWatch || legacySingle || siteChanged) {
         const old = await plan.store.getStatus();
         if (old.state === "running") await plan.store.updateStatus({ state: "failed", stage: "review-required", message: "기존 감시 실행 결과를 예약확인에서 확인하세요. 자동 재제출하지 않습니다." });
-        else if (!["success", "failed"].includes(old.state)) await plan.store.updateStatus({ state: "stopped", stage: "stopped", message: legacySingle ? "1개 예약 모드가 한 명의 예약으로 변경되었습니다. 예약자를 확인한 후 시작하세요." : "취소 대기가 순위 없는 한 객실 예약으로 변경되었습니다. 예약자와 체크한 객실을 확인한 후 시작하세요." });
+        else if (!["success", "failed"].includes(old.state)) await plan.store.updateStatus({ state: "stopped", stage: "stopped", message: siteChanged ? '공식 예약 사이트가 변경되었습니다. 기존 일정은 자동 재개하지 않습니다. 사이트·날짜·예약자를 확인하고 수정 저장해 주세요.' : legacySingle ? "1개 예약 모드가 한 명의 예약으로 변경되었습니다. 예약자를 확인한 후 시작하세요." : "취소 대기가 순위 없는 한 객실 예약으로 변경되었습니다. 예약자와 체크한 객실을 확인한 후 시작하세요." });
       }
       if (!plan.enabled) continue;
       const status = await plan.store.getStatus();
@@ -122,6 +124,7 @@ export class PlanManager {
     return this.locked(async () => {
       const plan = this.get(id);
       if (expectedRevision !== undefined && expectedRevision !== planRevision(plan)) throw new Error("일정이 다른 화면에서 변경되었습니다. 최신 내용을 다시 확인하고 시작해 주세요.");
+      if (plan.scheduler.engine.supportsPrewarm === false && plan.config.siteVersion !== 'swimozicamp-v1') throw new Error('이전 사이트 일정입니다. 수정 저장 후 새 사이트 설정을 확인하고 시작해 주세요.');
       if (plan.enabled || plan.checking || plan.scheduler.running || plan.scheduler.preparing) throw new Error("이미 진행 중인 일정입니다.");
       if ([...this.plans.values()].filter(item => item.enabled).length >= 5) throw new Error("동시 진행 일정은 최대 5개입니다.");
       const generation = ++plan.generation;

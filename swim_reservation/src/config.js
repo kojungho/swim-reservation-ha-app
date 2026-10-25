@@ -46,6 +46,11 @@ export function normalizeConfig(input = {}) {
   const profile2 = profiles[1] || normalizeProfile(input.profile2);
   return {
     startDate: String(input.startDate || ""),
+    siteVersion: 'swimozicamp-v1',
+    adults: Number(input.adults || 2),
+    arrivalTime: String(input.arrivalTime || ''),
+    request: String(input.request || '').slice(0, 1000),
+    paymentMethod: String(input.paymentMethod || 'bank'),
     triggerAt: String(input.triggerAt || ""),
     nights: Number(input.nights),
     bookingMode: ["multiple", "profiles-parallel"].includes(input.bookingMode) ? input.bookingMode : "priority",
@@ -68,6 +73,9 @@ function normalizeRoomName(value) {
 
 export function validateConfig(config, { futureTrigger = false, nowMs = Date.now() } = {}) {
   const errors = [];
+  if (config.adults !== undefined && ![1, 2].includes(config.adults)) errors.push('성인 인원 (1~2명)');
+  if (config.paymentMethod && config.paymentMethod !== 'bank') errors.push('현재 자동 예약은 무통장입금만 가능 (다른 결제는 공식 사이트에서 직접 진행)');
+  if (config.arrivalTime && !['14:00 ~ 15:00', '15:00 ~ 16:00', '16:00 ~ 17:00', '17:00 ~ 18:00', '18:00 ~ 19:00', '19:00 이후'].includes(config.arrivalTime)) errors.push('도착 예정 시간');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(config.startDate) || !Number.isFinite(startEpoch(config.startDate))) {
     errors.push("숙박 시작 날짜");
   }
@@ -113,9 +121,7 @@ export function normalizeProfile(profile = {}) {
 
 export function validateProfile(profile, label, errors) {
   if (!profile?.reserverName) errors.push(`${label} 예약자명`);
-  if (!profile?.depositorName) errors.push(`${label} 입금자명`);
   if (!/^01\d{8,9}$/.test(profile?.phone || "")) errors.push(`${label} 휴대폰 번호`);
-  if (!/^\d{8}$/.test(profile?.birthDate || "")) errors.push(`${label} 생년월일 8자리`);
 }
 
 export function reservationUrl(startDate) {

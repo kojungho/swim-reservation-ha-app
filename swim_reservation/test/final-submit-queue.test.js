@@ -3,6 +3,19 @@ import assert from "node:assert/strict";
 import { FinalSubmitQueue } from "../src/final-submit-queue.js";
 import { ReservationEngine } from "../src/reservation-engine.js";
 
+test('0초 동시 제출은 이미 시작된 요청을 회수하지 못하지만 429 확인 뒤 새 제출은 차단한다', async () => {
+  const queue = new FinalSubmitQueue({ intervalMs: 0 });
+  let release; const gate = new Promise(resolve => { release = resolve; }); let submitted = 0;
+  const first = queue.run(async () => { submitted++; await gate; throw Object.assign(new Error('429'), { code: 'SITE_RATE_LIMIT' }); });
+  const second = queue.run(async () => { submitted++; await gate; return 'already-started'; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(submitted, 2); release();
+  const results = await Promise.allSettled([first, second]);
+  assert.equal(results[0].status, 'rejected'); assert.equal(results[1].status, 'fulfilled');
+  await assert.rejects(queue.run(async () => { submitted++; }), error => error.code === 'SITE_RATE_LIMIT');
+  assert.equal(submitted, 2);
+});
+
 test("0은 지연과 직렬화를 끄고 1초는 최소 1000ms 간격을 적용한다", async () => {
   let release; const gate = new Promise(resolve => { release = resolve; }); let started = 0;
   const disabled = new FinalSubmitQueue({ intervalMs: 0, wait: async () => assert.fail("0초에는 대기하지 않음") });

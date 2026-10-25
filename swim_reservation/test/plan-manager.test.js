@@ -219,7 +219,7 @@ test("기존 모드형 취소 감시는 업데이트 후 자동으로 행동을 
   assert.equal(migrated.config.profiles.length, 1);
   assert.equal(migrated.watchVersion, 2);
   assert.equal((await migrated.store.getStatus()).state, "stopped");
-  assert.match((await migrated.store.getStatus()).message, /확인한 후 시작/);
+  assert.match((await migrated.store.getStatus()).message, /확인한 후 시작|사이트가 변경/);
   assert.equal(calls.length, 0);
 });
 test("예약자별 동시 이외의 일정에는 선택한 한 명만 포함하고 일반 우선순위·복수 객실 모두 한 명을 실행한다", async t => {

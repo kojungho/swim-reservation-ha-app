@@ -42,9 +42,9 @@
       <h3 id="bookEditorTitle">새 예약자 추가</h3>
       <div class="grid two identity-fields">
         <label>예약자명<input id="bookReserverName" autocomplete="off"></label>
-        <label>입금자명<input id="bookDepositorName" autocomplete="off"></label>
+        <label>입금자명 (선택)<input id="bookDepositorName" autocomplete="off" placeholder="미입력 시 예약자명"></label>
         <label>휴대폰 번호<input id="bookPhone" inputmode="numeric" autocomplete="off"></label>
-        <label>생년월일<input id="bookBirthDate" inputmode="numeric" maxlength="8" placeholder="YYYYMMDD" autocomplete="off"></label>
+        <label hidden>기존 생년월일 (미사용)<input id="bookBirthDate" inputmode="numeric" maxlength="8" placeholder="YYYYMMDD" autocomplete="off"></label>
       </div>
       <div class="section-actions"><button id="bookAddButton" type="button" class="secondary" disabled>예약자 저장</button><button id="bookCancelButton" type="button" class="secondary">취소</button></div>
       </div>
@@ -100,15 +100,22 @@
       <div class="booking-selector-actions"><label class="booking-select-field">예약자 저장 목록<select id="bookingProfileSelect1"></select></label><button id="saveProfilesButton" class="secondary" type="button" disabled>예약자 저장</button></div>
       <div id="firstBookingProfileFields" class="grid two identity-fields">
         <label>예약자명<input id="reserverName" autocomplete="off"></label>
-        <label>입금자명<input id="depositorName" autocomplete="off"></label>
+        <label>입금자명 (선택)<input id="depositorName" autocomplete="off" placeholder="미입력 시 예약자명"></label>
         <label>휴대폰 번호<input id="phone" inputmode="numeric" autocomplete="off" placeholder="01012345678"></label>
-        <label>생년월일<input id="birthDate" inputmode="numeric" autocomplete="off" placeholder="YYYYMMDD" maxlength="8"></label>
+        <label hidden>기존 생년월일 (미사용)<input id="birthDate" inputmode="numeric" autocomplete="off" placeholder="YYYYMMDD" maxlength="8"></label>
       </div>
       <div class="section-actions profile-panel-actions"><button id="excludeFirstProfile" class="secondary" type="button" hidden>예약자 제외</button></div>
       </div>
       <div id="extraProfiles"></div>
       <div class="section-actions"><button id="addProfileButton" class="secondary" type="button">+ 예약자 추가</button></div>
       <p id="profileModeHelp">예약자 정보는 최대 20명까지 저장할 수 있습니다.</p>
+      <div class="grid two">
+        <label>성인 인원<select id="campAdults"><option value="1">1명</option><option value="2" selected>2명</option></select></label>
+        <label>도착 예정 시간 (선택)<select id="campArrival"><option value="">선택 안 함</option><option>14:00 ~ 15:00</option><option>15:00 ~ 16:00</option><option>16:00 ~ 17:00</option><option>17:00 ~ 18:00</option><option>18:00 ~ 19:00</option><option>19:00 이후</option></select></label>
+        <label>요청사항 (선택)<textarea id="campRequest" maxlength="1000"></textarea></label>
+      </div>
+      <p>새 공식 사이트 · 자동 예약은 무통장입금만 지원합니다. 실행 시각에 입력·동의·제출합니다. 오픈 전 객실 선택은 후보 지정이며 빈자리를 보장하지 않습니다. 카드·계좌이체 및 전화 취소는 공식 사이트에서 직접 진행해 주세요.</p>
+      <a class="button secondary" href="https://www.swimozicamp.com/camp/lookup.php" target="_blank" rel="noopener noreferrer">공식 예약확인 열기</a>
     </section>
 
     <section id="historyCard" class="card status-card">
@@ -163,7 +170,7 @@
     </section>
     <aside class="notice" id="safetyNotice">
       <strong>안전한 운영을 위해</strong>
-      <p>HA OS 미니 PC의 시간 동기화와 인터넷 연결을 확인하세요. App 포트를 인터넷에 직접 공개하지 말고 Home Assistant Ingress를 통해 접속하세요. 대상 예약 사이트 자체는 HTTP 연결을 사용합니다.</p>
+      <p>HA OS 미니 PC의 시간 동기화와 인터넷 연결을 확인하세요. App 포트를 인터넷에 직접 공개하지 말고 Home Assistant Ingress를 통해 접속하세요. 새 공식 예약 사이트는 HTTPS 연결을 사용합니다.</p>
     </aside>
   </main>
   <dialog id="siteMapDialog" class="site-map-dialog">
@@ -206,14 +213,14 @@
       <ol><li>저장된 예약자를 선택하거나 직접 입력하고 필요한 사람만 추가합니다. 신규 예약자는 ‘예약자 저장’으로 목록에 추가할 수 있습니다.</li><li>각 예약자의 객실 우선순위에서 후보를 체크하고 두 줄 손잡이로 순서를 정합니다. 개인별 순위는 이 모드에서만 사용합니다.</li><li>날짜·박수·실행 시각을 확인하고 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘지금 바로 예약’을 사용할 수 있습니다.</li></ol>
       <p class="booking-help-warning">같은 객실을 여러 사람의 1순위로 선택하면 서로 경쟁할 수 있습니다. 확실한 마감만 다음 순위로 넘어가며, 결과가 불확실하면 그 사람의 추가 제출을 중단합니다.</p>
     </details>
-    <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>미래 시각 예약과 취소 대기는 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 예약 대기는 사이트가 허용하는 경우 정보 입력까지 미리 준비하고, 서버 시간에 맞춰 지정 시각에 최종 제출합니다. 오픈 전 다음 단계 접근이 제한되면 지정 시각에 처음부터 진행합니다. ‘지금 바로 예약’은 실행 시각이 미래이거나 서버 시간이 미확인인 경우 표시하지 않으며 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약자 정보’ 탭은 실제 예약에 사용할 사람들을 관리합니다. 각 모드에 선택 목록은 자동 표시되지만 사람을 선택하기 전에는 입력란을 채우지 않습니다. 일정 등록 후에는 선택과 입력을 초기화합니다. ‘예약 조회’는 저장한 모든 예약자의 내역을 조회합니다. 저장하지 않는 ‘1회성 조회’는 이름과 휴대폰 번호만 입력해 별도로 확인합니다. 등록된 일정의 설정은 이후 편집과 관계없이 유지됩니다.</p></div>
+    <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>미래 시각 예약과 취소 대기는 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 새 사이트는 사전 입력 없이 지정 시각에 예약 화면을 열어 입력·필수 약관 동의·최종 제출합니다. 자동 예약은 무통장입금만 지원하며 제출 결과가 불확실하면 재제출하지 않습니다. ‘지금 바로 예약’은 실행 시각이 미래이거나 서버 시간이 미확인인 경우 표시하지 않으며 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약자 정보’ 탭은 실제 예약에 사용할 사람들을 관리합니다. 각 모드에 선택 목록은 자동 표시되지만 사람을 선택하기 전에는 입력란을 채우지 않습니다. 일정 등록 후에는 선택과 입력을 초기화합니다. ‘예약 조회’는 저장한 모든 예약자의 내역을 조회합니다. 저장하지 않는 ‘1회성 조회’는 이름과 휴대폰 번호만 입력해 별도로 확인합니다. 등록된 일정의 설정은 이후 편집과 관계없이 유지됩니다.</p></div>
   </dialog>
   <dialog id="monthlyDialog" class="monthly-dialog" aria-label="월별 예약 현황">
     <div class="monthly-controls"><button id="monthlyPrevButton" class="secondary" type="button" aria-label="이전 달">‹</button><label><input id="monthlyMonth" aria-label="조회 월" type="month" min="2000-01" max="2100-12"></label><button id="monthlyNextButton" class="secondary" type="button" aria-label="다음 달">›</button><div class="monthly-query-control"><button id="monthlyQueryButton" class="secondary" type="button">조회</button><span id="monthlyQuerySpinner" class="query-spinner" role="status" aria-label="월별 예약 조회 중" hidden></span></div></div>
     <p class="monthly-legend"><span><span class="monthly-room-mark available">가</span> 예약 가능</span><span><span class="monthly-room-mark booked">완</span> 예약 완료</span><span><span class="monthly-room-mark pending">대</span> 예약 대기</span><span><span class="monthly-room-mark unavailable">불</span> 1박 불가</span><span><span class="monthly-room-mark unknown">?</span> 확인 불가</span></p>
     <div id="monthlyContent" class="monthly-content"></div>
     <div id="monthlyDayDetails" class="monthly-day-details" aria-live="polite"></div>
-    <div class="monthly-footer"><a id="monthlySourceLink" class="button secondary" href="https://newpension.logosweb.or.kr/reservation/reservation2.php?id=swim" target="_blank" rel="noopener noreferrer">원본 사이트 이동</a><details class="monthly-prefetch"><summary>조회 간격 설정</summary><p id="monthlyStatus" role="status" aria-live="polite"></p><p id="monthlyCacheHelp">이번 달에서 3개월 뒤인 달만 서버에서 미리 조회합니다. 그 이후 달은 열었을 때 조회합니다.</p><div class="section-actions"><label>자동 조회 간격<select id="monthlyCacheInterval"><option value="0">자동 조회 끄기</option><option value="10">10분</option><option value="30">30분</option><option value="60" selected>1시간</option><option value="180">3시간</option><option value="360">6시간</option><option value="1440">하루</option></select></label><button id="monthlyCacheSave" class="secondary" type="button">설정 저장</button></div><p id="monthlyCacheMessage" role="status"></p></details></div>
+    <div class="monthly-footer"><a id="monthlySourceLink" class="button secondary" href="https://www.swimozicamp.com/camp/" target="_blank" rel="noopener noreferrer">원본 사이트 이동</a><details class="monthly-prefetch"><summary>조회 간격 설정</summary><p id="monthlyStatus" role="status" aria-live="polite"></p><p id="monthlyCacheHelp">이번 달에서 3개월 뒤인 달만 서버에서 미리 조회합니다. 그 이후 달은 열었을 때 조회합니다.</p><div class="section-actions"><label>자동 조회 간격<select id="monthlyCacheInterval"><option value="0">자동 조회 끄기</option><option value="10">10분</option><option value="30">30분</option><option value="60" selected>1시간</option><option value="180">3시간</option><option value="360">6시간</option><option value="1440">하루</option></select></label><button id="monthlyCacheSave" class="secondary" type="button">설정 저장</button></div><p id="monthlyCacheMessage" role="status"></p></details></div>
   </dialog>
   <dialog id="planDetailsDialog" class="booking-help-dialog" aria-labelledby="planDetailsTitle"><div class="booking-help-heading"><h2 id="planDetailsTitle">일정 상세</h2><button id="planDetailsClose" type="button" class="secondary">닫기</button></div><div id="planList" class="history-list"></div><p id="planDetailsMessage" role="status"></p></dialog>
   <button id="siteMapButton" class="site-map-floating" type="button" aria-label="캠핑장 배치도" title="캠핑장 배치도"><svg class="site-map-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2Z M9 3v16 M15 5v16"/></svg><span class="site-map-label">배치도</span></button>

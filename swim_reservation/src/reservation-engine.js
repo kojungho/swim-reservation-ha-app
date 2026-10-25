@@ -756,7 +756,7 @@ export class ReservationEngine {
       room,
       status,
       config: childConfig,
-      engine: new ReservationEngine({ store: scopedStore, executablePath: this.executablePath, browserProvider: () => this.ensureBrowser(), traceContext: { mode: "multiple", room } })
+      engine: new this.constructor({ store: scopedStore, executablePath: this.executablePath, browserProvider: () => this.ensureBrowser(), traceContext: { mode: "multiple", room } })
     };
   }
 
@@ -781,7 +781,7 @@ export class ReservationEngine {
       profileIndex: profileEntry.index,
       status,
       config: childConfig,
-      engine: new ReservationEngine({ store: scopedStore, executablePath: this.executablePath, browserProvider: () => this.ensureBrowser(), traceContext: { mode: config.bookingMode, profileIndex: profileEntry.index, rank, room } })
+      engine: new this.constructor({ store: scopedStore, executablePath: this.executablePath, browserProvider: () => this.ensureBrowser(), traceContext: { mode: config.bookingMode, profileIndex: profileEntry.index, rank, room } })
     };
   }
 

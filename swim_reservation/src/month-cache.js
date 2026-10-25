@@ -9,8 +9,8 @@ export function prefetchMonth(now) {
 
 // Read-only, one date at a time, independent of the booking engines and browser UI.
 export class MonthCache {
-  constructor({ dataDir, inspect, now = Date.now, canInspect = () => true, knownRooms = async () => [] }) {
-    Object.assign(this, { inspect, now, canInspect, knownRooms });
+  constructor({ dataDir, inspect, now = Date.now, canInspect = () => true, knownRooms = async () => [], countsOnly = false }) {
+    Object.assign(this, { inspect, now, canInspect, knownRooms, countsOnly });
     this.file = path.join(dataDir, "month-cache.json");
     this.intervalMinutes = 60;
     this.result = null;
@@ -24,7 +24,7 @@ export class MonthCache {
     try {
       const saved = JSON.parse(await readFile(this.file, "utf8"));
       if ([0, 10, 30, 60, 180, 360, 1440].includes(saved.intervalMinutes)) this.intervalMinutes = saved.intervalMinutes;
-      if (saved.result?.month === prefetchMonth(this.now()) && Array.isArray(saved.result.days)) {
+      if (saved.result?.month === prefetchMonth(this.now()) && Array.isArray(saved.result.days) && (!this.countsOnly || saved.result.siteVersion === 'swimozicamp-v1')) {
         this.result = saved.result;
         this.finishedAt = Number(saved.finishedAt) || 0;
       }
@@ -83,6 +83,16 @@ export class MonthCache {
   }
   async scan(month, signal) {
     const names = await this.knownRooms();
+    if (this.countsOnly) {
+      const result = await this.inspect({ month, nowMs: this.now(), knownRooms: names }, signal);
+      if (signal.aborted || result.month !== month || !result.countsOnly) throw new Error('월별 잔여 수 조회를 완료하지 못했습니다.');
+      this.result = result;
+      this.finishedAt = this.now();
+      this.retryAt = 0;
+      this.message = '날짜별 잔여 수 조회 완료 (객실별 상태는 제공되지 않음)';
+      await this.persist();
+      return;
+    }
     const [year, number] = month.split("-").map(Number);
     let fresh = { month, opensAt: bookingOpenIso(`${month}-01`), beforeOpen: true, roomNames: names, capturedAt: this.now(), days: Array.from({ length: new Date(Date.UTC(year, number, 0)).getUTCDate() }, (_, index) => ({ date: `${month}-${String(index + 1).padStart(2, "0")}`, rooms: names.map(name => ({ name, status: "unknown" })) })) };
     try { fresh = await this.inspect({ month, nowMs: this.now(), knownRooms: names }, signal); }

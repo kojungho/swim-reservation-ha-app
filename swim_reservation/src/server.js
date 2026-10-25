@@ -2,19 +2,20 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { normalizeConfig, normalizeProfile, validateProfile, reservationUrl, triggerEpoch, validateConfig, getProfiles } from "./config.js";
-import { ReservationEngine } from "./reservation-engine.js";
+import { normalizeConfig, normalizeProfile, validateProfile, triggerEpoch, validateConfig, getProfiles } from "./config.js";
+import { campUrl, SITE_VERSION, initCatalog } from './camp-site.js';
+const reservationUrl = startDate => campUrl({ startDate, nights: 1 });
+import { ReservationEngine } from "./camp-engine.js";
 import { Scheduler } from "./scheduler.js";
 import { Store } from "./store.js";
-import { reservationCheckUrl } from "./reservation-check.js";
-import { ReservationManager } from "./reservation-manager.js";
+import { reservationCheckUrl, ReservationManager } from "./camp-manager.js";
 import { SiteTimeSync } from "./site-time.js";
 import { InspectionService } from "./inspection-service.js";
 import { SiteMap } from "./site-map.js";
 import { UiSettings } from "./ui-settings.js";
 import { lookupProfiles } from "./profile-lookup.js";
 import { normalizeLookupProfiles } from "./lookup-profiles.js";
-import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./monthly-availability.js";
+import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./camp-monthly.js";
 import { PlanManager, singleBookingConfig } from "./plan-manager.js";
 import { MonthCache } from "./month-cache.js";
 import { SubmissionSettings } from "./submission-settings.js";
@@ -51,6 +52,7 @@ const plans = new PlanManager({ dataDir: DATA_DIR, timeSync,
 });
 const reservationManager = new ReservationManager({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", log: (...args) => store.recordLog(...args) });
 const monthCache = new MonthCache({ dataDir: DATA_DIR, now: () => timeSync.now(),
+  countsOnly: true,
   inspect: (config, signal) => inspections.inspect(config, signal),
   knownRooms: async () => (await store.getConfig()).roomPriority.map(room => room.name),
   canInspect: () => !scheduler.running && !scheduler.preparing && !plans.busy &&
@@ -59,13 +61,16 @@ const monthCache = new MonthCache({ dataDir: DATA_DIR, now: () => timeSync.now()
 });
 
 await store.init();
+await initCatalog(path.join(DATA_DIR, 'camp-sites.json'));
 await store.getLookupProfiles();
 await store.recordLog("info", "startup", "쉼오지 예약 도우미를 시작했습니다.").catch(() => {});
 await timeSync.sync().catch((error) => console.error(`서버 시간 초기 동기화 실패: ${error.message}`));
 timeSync.start();
 const legacyStatus = await store.getStatus();
 const legacyConfig = legacyStatus.armedConfig || await store.getConfig();
-if (legacyStatus.state === "waiting" && legacyConfig.bookingMode === "priority" && getProfiles(legacyConfig).length > 1) {
+if (legacyStatus.state === 'waiting' && legacyStatus.armedConfig?.siteVersion !== SITE_VERSION) {
+  await store.updateStatus({ state: 'stopped', stage: 'site-changed', message: '예약 사이트가 변경되어 기존 대기를 중지했습니다. 날짜·사이트·예약자를 확인하고 다시 등록해 주세요.' });
+} else if (legacyStatus.state === "waiting" && legacyConfig.bookingMode === "priority" && getProfiles(legacyConfig).length > 1) {
   await store.updateStatus({ state: "stopped", stage: "stopped", message: "기존 다인 순차 대기를 중지했습니다. 예약자 한 명 또는 다인 예약 모드를 확인하고 새 일정으로 시작하세요." });
 } else await scheduler.restore().catch(async (error) => {
   console.error(`예약 대기 복원 실패: ${error.message}`);
@@ -236,7 +241,7 @@ const server = http.createServer(async (request, response) => {
       catch (error) { return json(response, 400, { error: error.message }); }
       const result = await lookupProfiles(profiles, reservationManager);
       const { reservations, lookupErrors } = result;
-      await store.recordLog(lookupErrors.length ? "error" : "info", "reservation-check", `예약확인 ${reservations.length}건, 조회 실패 ${lookupErrors.length}명.`, { lookupErrors: lookupErrors.map(({ profile, ...item }) => item) });
+      await store.recordLog(lookupErrors.length ? "error" : "info", "reservation-check", `예약확인 ${reservations.length}건, 조회 실패 ${lookupErrors.length}명.`, { lookupErrors: lookupErrors.map(({ profileIndex, message }) => ({ profileIndex, message })) });
       return json(response, 200, result);
     }
     const cancelMatch = /^\/api\/reservations\/(\d+)\/cancel$/.exec(url.pathname);
@@ -356,7 +361,7 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, process.env.HOST || "0.0.0.0", () => {
   console.log(`쉼오지 예약 도우미가 ${server.address().port} 포트에서 실행 중입니다.`);
 });
 

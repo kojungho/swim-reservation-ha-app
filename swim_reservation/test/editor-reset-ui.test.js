@@ -56,7 +56,7 @@ test("PC·폰의 일정 입력은 등록 성공·탭 이동 시 초기화하고 
       await page.locator("#reserverName").fill("새예약자");
       await page.locator("#depositorName").fill("새입금자");
       await page.locator("#phone").fill("01023456789");
-      await page.locator("#birthDate").fill("19910101");
+      assert.equal(await page.locator("#birthDate").isVisible(), false);
       await page.locator("#roomList input[type=checkbox]").first().check();
     };
     await page.goto("https://app.test/");
