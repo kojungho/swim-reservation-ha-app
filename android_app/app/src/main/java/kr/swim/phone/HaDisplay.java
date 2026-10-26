@@ -39,7 +39,7 @@ final class HaDisplay {
   if(display.optInt("schema")!=1||display.optJSONObject("settings")==null||!display.optString("photoSha256").matches("[a-f0-9]{64}"))throw new IOException("공개 설정 형식 불일치");
   JSONObject source=display.getJSONObject("settings"),settings=new JSONObject();
   JSONObject menus=source.optJSONObject("appMenus"),safeMenus=new JSONObject(),labels=source.optJSONObject("appMenuLabels"),safeLabels=new JSONObject();
-  for(String mode:new String[]{"priority","multiple","profiles-parallel","watch"}){
+  for(String mode:new String[]{"priority","multiple","profiles-parallel","watch","book","people","monthly","logs"}){
    if(menus!=null&&menus.opt(mode) instanceof Boolean)safeMenus.put(mode,menus.getBoolean(mode));
    if(labels!=null&&labels.opt(mode) instanceof String){String label=labels.getString(mode).trim();if(!label.isEmpty()&&label.length()<=40&&!label.matches(".*[\\p{Cntrl}].*"))safeLabels.put(mode,label);}
   }

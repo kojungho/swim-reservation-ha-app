@@ -30,6 +30,14 @@ def source():
 
 
 class ProjectionTest(unittest.TestCase):
+    def test_all_app_menu_flags_pass_but_unknown_private_keys_do_not(self):
+        raw = source()
+        raw["settings"]["appMenus"].update(book=False, people=False, monthly=False, logs=False, privateToken="secret")
+        safe = public.project(raw, png())["settings"]["appMenus"]
+        for key in ("book", "people", "monthly", "logs"):
+            self.assertFalse(safe[key])
+        self.assertNotIn("privateToken", safe)
+
     def test_whitelist_only_even_with_sensitive_extra_fields(self):
         raw = source()
         raw.update(profiles=["private"], logs=["private"], token="private", url="https://evil.test")

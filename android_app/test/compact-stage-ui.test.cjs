@@ -11,7 +11,9 @@ test('앱·애드온 제목 펼침·필수 한 줄·상단 링크·오픈 전 �
   else {await page.locator('#reserverName').fill('');await page.locator('#phone').fill('');await page.locator('#startDate').fill('2027-01-17');await page.locator('#startDate').dispatchEvent('change');}
   await page.waitForFunction(()=>document.querySelectorAll('.booking-step-title')[1].getAttribute('aria-disabled')==='false');
   await page.waitForTimeout(100);assert.equal(await page.locator('#triggerAt').isVisible(),true);
-  assert.equal((await page.locator('#triggerAt').locator('..').textContent()).trim(),'예약 실행 시간');
+  assert.equal((await page.locator('#triggerAt').locator('..').textContent()).trim(),'예약 실행 시간(오픈 예정일)');
+  assert.equal(await page.locator('#triggerAt').evaluate(el=>el.readOnly),true);
+  assert.equal(await page.locator('#stayOpeningDate').isVisible(),false);
   await page.locator('#reserverName').fill('자동 전환 검증');await page.locator('#phone').fill('01000000000');
   const popup=page.locator('.site-choice-dialog');await popup.waitFor({state:'visible'});
   assert.equal(await page.locator('.booking-step-title').nth(2).getAttribute('aria-expanded'),'true');

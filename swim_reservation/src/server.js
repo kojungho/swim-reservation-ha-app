@@ -85,7 +85,7 @@ if (legacyStatus.state === 'waiting' && legacyStatus.armedConfig?.siteVersion !=
 });
 await plans.init();
 await monthCache.init();
-monthCache.start();
+await monthCache.configure(0); // Monthly availability is on-demand only; no background timer.
 
 const server = http.createServer(async (request, response) => {
   try {
@@ -140,10 +140,9 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/api/month-cache" && request.method === "GET") return json(response, 200, monthCache.status());
     if (url.pathname === "/api/month-cache" && request.method === "PUT") {
-      try { return json(response, 200, await monthCache.configure((await readJsonBody(request)).intervalMinutes)); }
-      catch (error) { return json(response, 400, { error: error.message }); }
+      return json(response, 410, { error: "자동 조회 간격 기능은 삭제되었습니다. 월별 화면에서 조회하세요." });
     }
-    if (url.pathname === "/api/month-cache/refresh" && request.method === "POST") return json(response, 202, monthCache.refresh());
+    if (url.pathname === "/api/month-cache/refresh" && request.method === "POST") return json(response, 410, { error: "월별 화면에서 조회하세요." });
     if (url.pathname === "/api/plans" && request.method === "GET") return json(response, 200, { entries: await plans.list() });
     if (url.pathname === "/api/plans/stop-all" && request.method === "POST") {
       await Promise.all([...plans.plans.values()].filter(plan => plan.enabled || plan.checking || plan.scheduler.running || plan.scheduler.preparing).map(plan => plans.stop(plan.id)));

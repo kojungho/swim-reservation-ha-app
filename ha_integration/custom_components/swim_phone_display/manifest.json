@@ -1,7 +1,7 @@
 {
   "domain": "swim_phone_display",
   "name": "Swim Phone Public Display",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "documentation": "https://github.com/kojungho/swim-reservation-ha-app/tree/main/ha_integration",
   "codeowners": ["@kojungho"],
   "dependencies": ["http", "hassio"],

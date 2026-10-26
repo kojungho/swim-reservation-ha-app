@@ -4,8 +4,8 @@ window.buildDisplayReceipt=function(value){
  const card=el('div');card.className='reservation-row reservation-compact';
  const identity=el('div');identity.append(el('strong',String(value.room||'').split('_')[0]),el('span',(value.stayDate||'')+' · '+(value.nights||'')));
  const state=el('div');state.className='reservation-compact-state';state.append(el('strong',value.status||'확인 필요'),el('span',value.total||''));
- const details=el('details');details.className='reservation-more';details.append(el('summary','상세'));
- const more=el('div');more.append(el('span','예약번호 '+(value.id||'미확인')));if(value.depositDeadline)more.append(el('span','입금 기한 '+value.depositDeadline));more.append(el('span','취소는 캠핑장에 문의해 주세요.'));details.append(more);card.append(identity,state,details);return card;
+ const details=el('button','상세');details.type='button';details.className='reservation-detail-button';details.setAttribute('aria-expanded','false');
+ const more=el('div');more.className='reservation-more';more.hidden=true;more.append(el('span','예약번호 '+(value.id||'미확인')));if(value.depositDeadline)more.append(el('span','입금 기한 '+value.depositDeadline));more.append(el('span','취소는 캠핑장에 문의해 주세요.'));details.onclick=()=>{more.hidden=!more.hidden;details.setAttribute('aria-expanded',String(!more.hidden));};card.append(identity,state,details,more);return card;
 };
 (() => {
  const byId=id=>document.getElementById(id),phone=!!window.Phone;
@@ -14,12 +14,13 @@ window.buildDisplayReceipt=function(value){
  const notify=text=>window.showFloatingMessage?.(text,{error:true});
  let scheduled=false,initialized=false,bodies=[],lastNoRoom='',haKey='',lastSync=0,autoTimer=0,autoWanted=false,autoKey='';
  window.applyBookingMenus=function(settings={},target=phone?'app':'addon'){
-  const choices=settings[target+'Menus']||{};
-  for(const tab of modes){const item=document.querySelector('[data-workspace-tab="'+tab+'"]');setHidden(item,choices[tab]===false);if(phone){const name=settings.appMenuLabels?.[tab]||({priority:'단독 예약',multiple:'다중 예약','profiles-parallel':'다인 예약',watch:'취소 대기'})[tab];labels[tab]=name;if(item&&item.textContent!==name)item.textContent=name;}}
+  const choices=settings[target+'Menus']||{};if(phone)labels.none='메뉴 없음';
+  const visibleModes=phone?[...modes,'book','people','monthly','logs']:modes;
+  for(const tab of visibleModes){const item=document.querySelector('[data-workspace-tab="'+tab+'"]');setHidden(item,choices[tab]===false);if(phone){const name=settings.appMenuLabels?.[tab]||({priority:'단독 예약',multiple:'다중 예약','profiles-parallel':'다인 예약',watch:'취소 대기'})[tab]||labels[tab];labels[tab]=name;if(item&&item.textContent!==name)item.textContent=name;}}
   if(phone)setHidden(document.querySelector('[data-workspace-tab=settings]'),true);
   const current=typeof workspaceTab==='string'?workspaceTab:'priority';
   if(phone&&byId('workspaceMenuLabel')&&byId('workspaceMenuLabel').textContent!==labels[current])byId('workspaceMenuLabel').textContent=labels[current];
-  if(modes.includes(current)&&choices[current]===false){const next=modes.find(m=>choices[m]!==false)||'people';phone?switchTab(next):switchWorkspaceTab(next);}
+  if((visibleModes.includes(current)&&choices[current]===false)||(phone&&current==='none'&&visibleModes.some(m=>choices[m]!==false))){const next=visibleModes.find(m=>choices[m]!==false)||(phone?'none':'people');phone?switchTab(next):switchWorkspaceTab(next);if(next==='none')byId('workspaceMenuLabel').textContent='메뉴 없음';}
  };
  window.applyDisplaySync=function(state){
   if(!phone)return;
@@ -67,24 +68,23 @@ window.buildDisplayReceipt=function(value){
   const official=document.createElement('a');official.className='official-small official-site-link';official.textContent='공식 예약 사이트';official.href='https://www.swimozicamp.com/camp/';official.target='_blank';official.rel='noopener noreferrer';if(phone)official.addEventListener('click',e=>{e.preventDefault();try{api('openMonthly');}catch(error){showError(error);}});linkRow.append(official);document.querySelector('header').append(linkRow);
   if(!phone){const update=document.createElement('a');update.className='official-small';update.textContent='앱 업데이트';update.href='https://github.com/kojungho/swim-reservation-ha-app/releases/latest';update.target='_blank';update.rel='noopener noreferrer';linkRow.prepend(update);}
   document.querySelectorAll('.one-off-lookup summary').forEach(el=>el.textContent='비회원 조회');
+  document.querySelectorAll('.one-off-lookup').forEach(section=>{section.open=false;const fields=document.createElement('div');fields.className='nonmember-fields';for(const input of section.querySelectorAll('input')){input.placeholder=input.id==='oneOffName'?'예약자명':input.id==='oneOffPhone'?'휴대폰 번호':input.placeholder;input.setAttribute('aria-label',input.getAttribute('aria-label')||'비회원 조회 '+input.placeholder);fields.append(input);}const button=section.querySelector('button');if(button)fields.append(button);section.querySelector('summary').after(fields);for(const el of section.querySelectorAll(':scope>p,:scope>.lookup-fields,:scope>.section-actions'))el.remove();});
   const selector=byId('siteProfileSelect');if(selector){const label=selector.closest('label');for(const text of [...label.childNodes])if(text.nodeType===3)text.textContent='예약자 ';}
   const intro=byId('lookupCard').querySelector(':scope>p:not([id])');if(intro)intro.textContent='선택한 예약자의 내역만 조회합니다.';
   if(phone){
    const connection=document.createElement('div');connection.className='ha-connection';
    const update=document.createElement('button');update.type='button';update.className='official-small';update.textContent='앱 업데이트';update.onclick=()=>api('checkUpdates');
    const state=document.createElement('small');state.id='haConnectionState';linkRow.prepend(update);connection.append(state);document.querySelector('header').append(connection);
-   // Keep device permissions accessible, but no editable display/settings page.
-   const health=byId('phoneHealth')?.closest('#settingsControls');if(health){const permissions=health.querySelector('.phone-permissions');if(permissions){const detail=document.createElement('details');detail.className='device-permissions';const summary=document.createElement('summary');summary.textContent='폰 실행 권한';detail.append(summary,byId('phoneHealth'),permissions);byId('logCard').append(detail);}}
+   // Execution permissions are requested by native dialogs at the point of use.
    setHidden(byId('settingsCard'),true);window.applyDisplaySync(nativeState.haDisplay);
    const previousRead=readPlan;readPlan=function(){const value=previousRead(),interval=nativeState.haDisplay?.cached?.submitIntervalSeconds;if(Number.isInteger(interval)&&interval>=0&&interval<=60)value.submitInterval=interval;return value;};
    const originalSwitch=switchTab;switchTab=function(tab){if(tab==='settings')return;originalSwitch(tab);queue();};
    const originalApply=applyUi;applyUi=function(){originalApply();setHidden(byId('reservationConnectionDetails'),true);};
-   const originalUpdate=updateStayFields;updateStayFields=function(){originalUpdate();const opening=bookingOpenIso(byId('startDate').value);setHidden(byId('stayOpeningDate'),!opening||Date.parse(opening+'+09:00')<=currentSiteTime());};
-   // Execution time stays editable outside the removed generated reservation-info panel.
+   const originalUpdate=updateStayFields;updateStayFields=function(){originalUpdate();setHidden(byId('stayOpeningDate'),true);};
 
    setHidden(byId('reservationConnectionDetails'),true);
   }
-  const trigger=byId('triggerAt')?.closest('label');if(trigger){bodies[0].body.append(trigger);const caption=[...trigger.childNodes].find(n=>n.nodeType===3);if(caption)caption.textContent='예약 실행 시간';}
+  const trigger=byId('triggerAt')?.closest('label');if(trigger){bodies[0].body.append(trigger);const caption=[...trigger.childNodes].find(n=>n.nodeType===3);if(caption)caption.textContent='예약 실행 시간(오픈 예정일)';byId('triggerAt').readOnly=true;byId('triggerAt').setAttribute('aria-readonly','true');byId('triggerAt').tabIndex=-1;}
   const safety=byId('safetyNotice');if(safety){const detail=document.createElement('details'),summary=document.createElement('summary'),text=document.createElement('p');summary.textContent='실행 안전 안내';text.textContent=phone?'전원·네트워크·절전 제한으로 실행이 중단될 수 있습니다. HA와 같은 예약을 동시에 실행하지 마세요.':'서버 전원·네트워크와 시간을 확인하세요. 폰과 같은 예약을 동시에 실행하지 마세요.';detail.append(summary,text);safety.replaceChildren(detail);}
   markLabels();
  }
@@ -100,6 +100,9 @@ window.buildDisplayReceipt=function(value){
   const ready=[true,validDate,validDate&&personReady];
   bodies.forEach((item,i)=>{item.toggle.disabled=!ready[i];const disabled=String(!ready[i]);if(item.toggle.getAttribute('aria-disabled')!==disabled)item.toggle.setAttribute('aria-disabled',disabled);if(!ready[i])setHidden(item.body,true);else if(!item.ready)setHidden(item.body,false);item.ready=ready[i];const expanded=String(!item.body.hidden);if(item.toggle.getAttribute('aria-expanded')!==expanded)item.toggle.setAttribute('aria-expanded',expanded);});
   const trigger=byId('triggerAt')?.closest('label');setHidden(trigger,!validDate||workspaceTab==='watch'||!beforeOpening());
+  setHidden(byId('stayOpeningDate'),true);
+  if(validDate&&beforeOpening()){const opening=bookingOpenIso(date);if(opening)byId('triggerAt').value=opening;}
+  if(phone)setHidden(document.querySelector('[data-phone-run]'),!validDate||beforeOpening()||workspaceTab==='watch');
   document.querySelectorAll('.room-actions').forEach(el=>setHidden(el,true));
   for(const el of bodies[1].body.querySelectorAll('button,a'))if(el.textContent.includes('공식'))setHidden(el,true);
   if(autoWanted&&ready[2]&&modes.includes(workspaceTab)&&!autoTimer){

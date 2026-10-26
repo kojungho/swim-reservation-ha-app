@@ -19,7 +19,8 @@ test('앱과 같은 마감·예정·퇴실일 규칙, 연박은 전체 기간 �
  await page.evaluate(()=>{switchWorkspaceTab('priority');elements.startDate.value='2027-01-17';updateStayFields();});
  await page.locator('#startDate').click();await page.waitForFunction(()=>document.querySelector('[data-date="2027-01-17"] small')?.textContent==='예정');
  assert.equal(await page.locator('[data-date="2027-01-17"]').isEnabled(),true);await page.locator('#datePickerCancel').click();
- await page.evaluate(()=>{elements.startDate.value='2026-12-19';elements.nights.value='2';availabilityContext=elements.startDate.value+'/2';availabilityByRoom.set(rooms[0].name,'unavailable');availabilityByRoom.set(rooms[1].name,'available');renderRooms();});
+ state.availability=state.config.roomPriority.map((room,i)=>({...room,available:i===1,status:i===1?'available':'unavailable'}));
+ await page.evaluate(()=>{elements.reserverName.value='모의예약자';elements.phone.value='01000000000';elements.startDate.value='2026-12-19';elements.nights.value='2';updateStayFields();availabilityContext=elements.startDate.value+'/2';availabilityByRoom.set(rooms[0].name,'unavailable');availabilityByRoom.set(rooms[1].name,'available');renderRooms();});
  assert.ok(!(await availableSiteChoices(page)).includes(state.config.roomPriority[0].name));
  assert.deepEqual(state.errors,[]);assert.equal(state.planCalls.length,0);assert.equal(state.writes.some(p=>/run-now|\/start$/.test(p)),false);
 });

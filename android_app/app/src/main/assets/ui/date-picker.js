@@ -79,7 +79,7 @@ function initializeDatePicker() {
       button.addEventListener("click", () => {
         if (!canChoose(value)) return;
         if (rangeMode) {
-          if (rangePhase === "start") { rangeStart = value; rangeEnd = ""; rangePhase = "end"; render(); loadCounts(); get("Checkout").focus(); return; }
+          if (rangePhase === "start") { rangeStart = value; rangeEnd = ""; rangePhase = "end"; month = stayEndDate(rangeStart,1).slice(0,7); render(); loadCounts(); get("Checkout").focus(); return; }
           rangeEnd = value;
           const nights = (Date.parse(`${rangeEnd}T00:00:00Z`) - Date.parse(`${rangeStart}T00:00:00Z`)) / 86400000;
           if (!Number.isInteger(nights) || nights < 1 || nights > 6) return;

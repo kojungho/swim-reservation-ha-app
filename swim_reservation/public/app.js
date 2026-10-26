@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.19";
+const CLIENT_VERSION = "2.15.20";
 window.stayCalendar = new StayCalendarModel(month => request(`monthly-availability?month=${month}`, { timeoutMs: 25000 }), () => Number.isFinite(currentSiteTime()) ? currentSiteTime() : Date.now());
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
@@ -74,7 +74,7 @@ const elements = Object.fromEntries([
   "siteMapUploadButton", "siteMapFile", "siteMapImage", "siteMapMessage",
   "inspectButton", "reservationSiteButton", "reservationLookupButton", "reservationList", "saveButton", "stopButton", "runNowButton",
   "logList", "refreshLogsButton", "copyLogsButton", "saveLogsButton", "bookingHelpButton", "bookingHelpDialog", "bookingHelpCloseButton", "bookingHelpCurrent",
-  "monthlyDialog", "monthlyPrevButton", "monthlyNextButton", "monthlyMonth", "monthlyQueryButton", "monthlyStatus", "monthlyContent", "monthlySourceLink", "monthlyDayDetails", "monthlyCacheInterval", "monthlyCacheSave", "monthlyCacheHelp", "monthlyCacheMessage"
+  "monthlyDialog", "monthlyPrevButton", "monthlyNextButton", "monthlyMonth", "monthlyQueryButton", "monthlyStatus", "monthlyContent", "monthlySourceLink", "monthlyDayDetails"
 ].map((id) => [id, document.getElementById(id)]));
 
 let rooms = [];
@@ -202,14 +202,7 @@ function bindEvents() {
   document.getElementById("serverTimeClose").addEventListener("click", () => timeDialog.close());
   timeDialog.addEventListener("close", () => document.getElementById("serverTimeButton").focus({ preventScroll: true }));
   elements.monthlyQueryButton.addEventListener("click", () => void loadMonthlyAvailability(true));
-  elements.monthlyCacheSave.addEventListener("click", async () => {
-    elements.monthlyCacheSave.disabled = true;
-    try {
-      const settings = await request("month-cache", { method: "PUT", body: JSON.stringify({ intervalMinutes: Number(elements.monthlyCacheInterval.value) }) });
-      elements.monthlyCacheMessage.textContent = `${settings.targetMonth} 현황: ${settings.intervalMinutes ? `${settings.intervalMinutes}분 간격으로 미리 조회합니다.` : "자동 조회를 껐습니다. 조회 버튼으로 갱신할 수 있습니다."}`;
-    } catch (error) { elements.monthlyCacheMessage.textContent = error.message; }
-    finally { elements.monthlyCacheSave.disabled = false; }
-  });
+  elements.monthlyMonth.addEventListener("change", () => void loadMonthlyAvailability(true));
   elements.monthlyPrevButton.addEventListener("click", () => changeMonthlyMonth(-1));
   elements.monthlyNextButton.addEventListener("click", () => changeMonthlyMonth(1));
   elements.monthlyDialog.addEventListener("click", event => {
@@ -385,29 +378,6 @@ async function loadMonthlyAvailability(force = false) {
   const sourceUrl = 'https://www.swimozicamp.com/camp/';
   elements.monthlySourceLink.href = sourceUrl;
   try {
-    let cache;
-    try { cache = await request("month-cache", { signal: controller.signal }); } catch { /* Older servers retain the existing on-demand view. */ }
-    if (controller.signal.aborted || id !== monthlyRequest) return;
-    if (cache?.result && !cache.result.countsOnly) cache = { ...cache, result: null, running: false };
-    if (cache?.targetMonth) {
-      elements.monthlyCacheInterval.value = String(cache.intervalMinutes);
-      elements.monthlyCacheHelp.textContent = `${cache.targetMonth}만 서버에서 미리 조회해 저장합니다. 기본 1시간 간격이며 예약 준비·실행 중에는 쉽니다. 그 이후 달은 기존처럼 열었을 때 조회합니다.`;
-    }
-    if (cache?.targetMonth === month && (cache.result || cache.intervalMinutes || force)) {
-      if (force || !cache.result && !cache.running && cache.intervalMinutes) cache = await request("month-cache/refresh", { method: "POST", signal: controller.signal });
-      while (!controller.signal.aborted && id === monthlyRequest) {
-        if (cache.result && !cache.result.countsOnly) throw new Error('구사이트 저장 현황은 표시하지 않습니다. 조회 버튼으로 새 현황을 확인해 주세요.');
-        result = cache.result || result;
-        const finished = cache.finishedAt ? new Date(cache.finishedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false }) : "아직 전체 조회가 완료되지 않았습니다";
-        renderMonthlyAvailability({ ...result, capturedAt: cache.result?.capturedAt || 0, progressText: `${cache.running ? result.progressText || "미리 조회 진행 중" : cache.message || "저장된 현황"} · 전체 갱신 ${finished}`, message: "저장된 현황입니다. 조회 버튼을 누르면 즉시 재조회하며 완료까지 시간이 걸릴 수 있습니다." });
-        if (!cache.running) return;
-        await new Promise(resolve => { const done = () => { clearTimeout(timer); controller.signal.removeEventListener("abort", done); resolve(); }; const timer = setTimeout(done, 2000); controller.signal.addEventListener("abort", done, { once: true }); });
-        if (controller.signal.aborted || id !== monthlyRequest) return;
-        cache = await request("month-cache", { signal: controller.signal });
-        if (cache.targetMonth !== month) return;
-      }
-      return;
-    }
     if (month < seoulToday().slice(0, 7)) {
       result.days.forEach(day => { day.queryState = "past"; day.rooms = []; });
       result.progressText = "지난 날짜는 조회하지 않습니다.";
@@ -499,7 +469,7 @@ function renderMonthlyAvailability(result) {
   caption.setAttribute("aria-label", `${result.month} 예약 현황`);
   const monthControls = document.querySelector(".monthly-controls");
   const monthFocused = document.activeElement === elements.monthlyMonth;
-  caption.append(monthControls);
+  elements.monthlyContent.before(monthControls);
   const head = document.createElement("thead");
   const header = document.createElement("tr");
   for (const name of ["일", "월", "화", "수", "목", "금", "토"]) {
@@ -555,7 +525,8 @@ function renderMonthlyAvailability(result) {
     }
     body.append(row);
   }
-  table.append(caption, head, body);
+  table.setAttribute('aria-label', `${result.month} 예약 현황`);
+  table.append(head, body);
   elements.monthlyContent.replaceChildren(table);
   if (monthFocused) elements.monthlyMonth.focus({ preventScroll: true });
   renderMonthlyDayDetails();
@@ -1421,7 +1392,7 @@ function initializeDatePicker() {
       button.addEventListener("click", () => {
         if (!canChoose(value)) return;
         if (rangeMode) {
-          if (rangePhase === "start") { rangeStart = value; rangeEnd = ""; rangePhase = "end"; render(); loadCounts(); get("Checkout").focus(); return; }
+          if (rangePhase === "start") { rangeStart = value; rangeEnd = ""; rangePhase = "end"; month = stayEndDate(rangeStart,1).slice(0,7); render(); loadCounts(); get("Checkout").focus(); return; }
           rangeEnd = value;
           const nights = (Date.parse(`${rangeEnd}T00:00:00Z`) - Date.parse(`${rangeStart}T00:00:00Z`)) / 86400000;
           if (!Number.isInteger(nights) || nights < 1 || nights > 6) return;

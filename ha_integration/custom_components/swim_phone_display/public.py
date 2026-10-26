@@ -5,7 +5,7 @@ import hashlib
 import re
 import time
 
-MODES = ("priority", "multiple", "profiles-parallel", "watch")
+MODES = ("priority", "multiple", "profiles-parallel", "watch", "book", "people", "monthly", "logs")
 FONTS = ("title", "heading", "body", "field", "button", "room", "status", "calendar", "list", "log")
 MAX_PHOTO = 12 * 1024 * 1024
 SLUG = re.compile(r"(?:[a-z0-9]+_)?swim_reservation")

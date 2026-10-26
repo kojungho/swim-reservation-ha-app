@@ -74,8 +74,11 @@ test("실제 API에서 조회용 저장·예약용 저장·일정의 한 명 제
     assert.ok(logs.some(item => item.details?.code === "CLIENT_VERSION_MISMATCH" && item.details.clientVersion === "2.14.0" && item.details.serverVersion === serverVersion));
     assert.equal(logs.filter(item => item.details?.eventId === diagnostic.id).length, 1);
   });
-  assert.equal((await api("month-cache")).intervalMinutes, 60);
-  assert.equal((await api("month-cache", "PUT", { intervalMinutes: 0 })).intervalMinutes, 0);
+  assert.equal((await api("month-cache")).intervalMinutes, 0);
+  for(const [endpoint,method]of [["month-cache","PUT"],["month-cache/refresh","POST"]]){
+    const removed=await fetch(`${api.baseUrl}api/${endpoint}`,{method,headers:{"Content-Type":"application/json"},body:JSON.stringify({intervalMinutes:60})});assert.equal(removed.status,410);await removed.json();
+  }
+  assert.equal((await api("month-cache")).intervalMinutes,0);
   const html = await (await fetch(api.baseUrl)).text();
   const scripts = [...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1]);
   assert.ok(scripts.includes("booking-book.js"));

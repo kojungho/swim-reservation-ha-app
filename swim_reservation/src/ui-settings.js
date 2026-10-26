@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 export const DEFAULT_UI_SETTINGS = {
   addonMenus: {priority:true,multiple:true,"profiles-parallel":true,watch:true},
-  appMenus: {priority:true,multiple:true,"profiles-parallel":true,watch:true},
+  appMenus: {priority:true,multiple:true,"profiles-parallel":true,watch:true,book:true,people:true,monthly:true,logs:true},
   appMenuLabels: {priority:"단독 예약",multiple:"다중 예약","profiles-parallel":"다인 예약",watch:"취소 대기"},
   fonts: { title: 28, heading: 18, body: 14, field: 16, button: 13, room: 14, status: 12, calendar: 12, list: 14, log: 12 },
   serverTime: true, reservationInfo: true, safety: true, watchInfo: true, stayRange: true, dateInputVersion: 1,

@@ -26,8 +26,27 @@
 .lookup-site-controls,.phone-plan-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.lookup-site-controls button,.phone-plan-actions button{padding:9px 12px;min-height:40px}
 .reservation-row{min-height:0!important;padding:10px!important}.reservation-row p,.reservation-row small,.reservation-row details{margin:3px 0}.phone-receipt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;padding:10px;border:1px solid var(--line);border-radius:12px;margin:6px 0}.phone-receipt details{grid-column:1/-1}
 .ha-connection{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:3px}.ha-connection small{font-size:11px}.device-permissions{margin-top:12px}
-.reservation-row.reservation-compact{grid-template-columns:minmax(0,1fr) auto!important;gap:4px!important;padding:8px!important}
-.reservation-compact .reservation-more{display:block;grid-column:1/-1;margin:0}
-.reservation-compact .reservation-more summary{justify-content:flex-start;min-height:26px;padding:0;font-size:12px}
-.reservation-compact .reservation-more:not([open])>div{display:none}.reservation-compact .reservation-more[open]>div{display:grid}
+.reservation-row.reservation-compact{display:grid;grid-template-columns:minmax(0,1fr) auto auto!important;align-items:center;gap:5px!important;padding:8px!important;margin:3px 0}
+.reservation-compact-state{display:grid;gap:2px;text-align:right}
+.reservation-compact .reservation-more{display:grid;grid-column:1/-1;margin:0;gap:3px;font-size:12px}
+.reservation-compact .reservation-more[hidden]{display:none!important}
+.reservation-detail-button{padding:5px 7px!important;min-height:30px!important;font-size:12px;white-space:nowrap}
+.reservation-list{gap:3px}.reservation-list>.reservation-compact{margin:0}
+.one-off-lookup{margin-top:14px;padding-top:0;border-top:0}
+.one-off-lookup>summary{display:list-item;cursor:pointer;padding:10px 12px;background:#edf3ef;border-radius:9px;font-weight:700}
+.nonmember-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto;align-items:center;gap:5px;margin-top:8px;min-width:0}
+.nonmember-fields input{box-sizing:border-box;width:100%;min-width:0;padding:9px 7px;font-size:14px;margin:0}
+.nonmember-fields button{padding:9px 10px;min-height:40px;white-space:nowrap;margin:0}
+#monthlyContent{min-width:0;width:100%;margin-inline:auto}
+.monthly-calendar{width:100%;max-width:100%;margin-inline:auto}
+.monthly-dialog>.monthly-controls{justify-content:center;align-items:center;margin-inline:auto;width:100%;gap:6px}
+.monthly-dialog>.monthly-controls label{flex:0 1 120px;min-width:85px;max-width:120px}
+#triggerAt[readonly]{pointer-events:none;background:#f3f6f4;border:0;box-shadow:none;color:var(--ink)}
+#triggerAt[readonly]::-webkit-calendar-picker-indicator{display:none}
+#stayOpeningDate{display:none!important}
+.reservation-row.reservation-compact{margin:0!important}
+.reservation-person-group{display:grid;gap:3px;padding:8px}.reservation-person-group h3{margin:0 0 3px}
+#phoneLookupResults{gap:3px}
+.monthly-controls #monthlyPrevButton,.monthly-controls #monthlyNextButton{box-sizing:border-box;width:36px;min-width:36px;height:44px;min-height:44px;padding:0!important;display:grid;place-items:center}
+.monthly-controls #monthlyQueryButton{height:44px;min-height:44px;padding:6px 10px}
 

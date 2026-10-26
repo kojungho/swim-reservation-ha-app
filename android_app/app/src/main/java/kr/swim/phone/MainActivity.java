@@ -120,6 +120,7 @@ public final class MainActivity extends Activity {
     private void refreshRuntime(){if(screen!=null&&!isFinishing()&&!isDestroyed())screen.evaluateJavascript("window.refreshPhoneRuntime?.()",null);}
     private void confirmRun(Plan plan,String id){
         if(isFinishing()||isDestroyed()){confirmationPending=false;pendingPlanId="";return;}
+        if(!executionPermissions(plan)){confirmationPending=false;pendingPlanId="";refreshRuntime();return;}
         new AlertDialog.Builder(this).setTitle("폰에서 실제 예약 실행")
             .setMessage(RunNotice.message(plan,SiteClock.now(this)))
             .setNegativeButton("취소",null).setPositiveButton("시작",(d,w)->startPlan(plan,false,id))
@@ -127,7 +128,22 @@ public final class MainActivity extends Activity {
         refreshRuntime();
     }
     private void startPlan(Plan plan,boolean lookup){startPlan(plan,lookup,"");}
-    private void startPlan(Plan plan,boolean lookup,String id){try{PlanScheduler.start(this,plan,lookup,id);}catch(Exception e){message(e.getMessage()==null?"실행 시작 실패":e.getMessage());}finally{refreshRuntime();}}
+    private void startPlan(Plan plan,boolean lookup,String id){try{if(!lookup&&!plan.demo()&&!executionPermissions(plan))return;PlanScheduler.start(this,plan,lookup,id);}catch(Exception e){message(e.getMessage()==null?"실행 시작 실패":e.getMessage());}finally{refreshRuntime();}}
+    private boolean executionPermissions(Plan plan){
+        if(plan.demo())return true;
+        ReservationService.channel(this);
+        NotificationManager manager=getSystemService(NotificationManager.class);
+        boolean notifications=manager.areNotificationsEnabled()&&manager.getNotificationChannel(ReservationService.CHANNEL).getImportance()!=NotificationManager.IMPORTANCE_NONE&&(Build.VERSION.SDK_INT<33||checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED);
+        RunPermissions.Missing missing=RunPermissions.missing(notifications,AlarmReceiver.permitted(this),getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(getPackageName()),plan.watch()||plan.trigger>0);
+        if(missing==null)return true;
+        String reason=missing==RunPermissions.Missing.NOTIFICATIONS?"예약 진행 상태 알림을 허용해 주세요.":missing==RunPermissions.Missing.ALARM?"예약 시각 실행을 위해 알람 권한을 허용해 주세요.":"화면 잠금 중 실행을 위해 배터리 제한 예외를 허용해 주세요.";
+        new AlertDialog.Builder(this).setTitle("실행 권한 필요").setMessage(reason+" 설정 후 시작을 다시 눌러 주세요. 아직 예약을 시작하지 않았습니다.").setNegativeButton("나중에",null).setPositiveButton("설정 열기",(d,w)->safeSettings(()->{
+            if(missing==RunPermissions.Missing.NOTIFICATIONS)startActivity(new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName()).putExtra(Settings.EXTRA_CHANNEL_ID,ReservationService.CHANNEL));
+            else if(missing==RunPermissions.Missing.ALARM&&Build.VERSION.SDK_INT>=31)startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+getPackageName())));
+            else DeviceSettings.openBatterySettings(this);
+        })).show();
+        return false;
+    }
     private void batteryRequest(){
         if(getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())){new AlertDialog.Builder(this).setTitle("배터리 예외가 이미 허용돼 있습니다").setMessage("추가 요청은 필요 없습니다. 제조사별 절전 제한은 시스템 설정에서 확인하세요.").setNegativeButton("닫기",null).setPositiveButton("배터리 설정 열기",(d,w)->safeSettings(()->DeviceSettings.openBatterySettings(this))).show();return;}
         new AlertDialog.Builder(this).setTitle("배터리 예외 허용 요청").setMessage("잠금·절전 중 예약 실행을 위한 예외입니다. 다음 시스템 창에서 직접 허용해 주세요.").setNegativeButton("취소",null).setPositiveButton("허용 요청",(d,w)->safeSettings(()->startActivity(DeviceSettings.batteryRequest(this)))).show();

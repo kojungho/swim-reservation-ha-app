@@ -16,6 +16,7 @@ public class HaDisplayTest{
   JSONObject safe=HaDisplay.project(display(png()));assertFalse(safe.toString().contains("PRIVATE"));assertEquals(0,safe.getInt("submitIntervalSeconds"));assertEquals("대기",safe.getJSONObject("settings").getJSONObject("appMenuLabels").getString("watch"));
   for(Object bad:new Object[]{-1,61,0.5,true,"5"})try{HaDisplay.project(display(png()).put("submitIntervalSeconds",bad));fail("bad interval");}catch(IOException expected){}
  }
+ @Test public void allAppMenuVisibilityKeysSurviveStrictProjection()throws Exception{JSONObject raw=display(png()),menus=raw.getJSONObject("settings").getJSONObject("appMenus");for(String key:new String[]{"book","people","monthly","logs"})menus.put(key,false);menus.put("privateToken","PRIVATE");JSONObject safe=HaDisplay.project(raw).getJSONObject("settings").getJSONObject("appMenus");for(String key:new String[]{"book","people","monthly","logs"})assertFalse(safe.getBoolean(key));assertFalse(safe.has("privateToken"));}
  @Test public void statusNeverExposesLegacyCredentials()throws Exception{
   HaDisplay.vault(c).saveDocument("ha-auth",new JSONObject().put("access_token","secret-access").put("refresh_token","secret-refresh"));
   HaDisplay.vault(c).saveDocument("ha-display",new JSONObject().put("settings",new JSONObject().put("appMenus",new JSONObject().put("watch",false))).put("updatedAt",1));
