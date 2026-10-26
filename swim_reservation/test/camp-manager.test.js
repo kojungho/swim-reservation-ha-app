@@ -174,3 +174,11 @@ test('여러 결과는 각 예약의 전체 구조가 확인될 때만 반환하
     assert.equal(parsed.rows.length, expected === 'list' ? 2 : 0);
   }
 });
+
+test('자동취소와 번호 없는 확정 내역이 섞인 다섯 건을 모두 조회한다', { skip: !executablePath }, async t => {
+ const ids=['TEST000-AA','TEST001-AB','TEST002-AC','TEST003-AD','TEST004-AE'];
+ const f=await setup(t,{result:compactList(ids).replaceAll(ids[3],'').replaceAll(ids[4],'')});
+ const states=['입금대기','입금대기','자동취소','예약확정','예약확정'];
+ f.page.request.post=async(url,options)=>{const i=Number(options.form.pick.slice(-1));return {ok:()=>true,url:()=>reservationCheckUrl(),headers:()=>({'content-type':'text/html'}),text:async()=>campReceipt({id:ids[i],state:states[i],heading:i===2?'예약이 자동 취소되었습니다':'예약확인'})};};
+ const rows=await f.manager.list(profile);assert.equal(rows.length,5);assert.deepEqual(rows.map(r=>r.id),ids);assert.equal(rows[2].status,'자동 취소');assert.equal(rows[2].paymentStatus,'closed');assert.equal(rows[2].cancelable,false);
+});

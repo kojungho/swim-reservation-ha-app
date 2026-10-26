@@ -21,7 +21,7 @@ export function readCampReservations({ expectedName = '', rooms = [], html } = {
     }
     return result;
   };
-  const status = badge => ({ '입금대기': '입금 대기', '예약확정': '예약 확정', '입금확인': '입금 확인', '결제완료': '결제 완료', '예약취소': '예약 취소', '취소완료': '예약 취소', '기한만료': '기한 만료', '예약만료': '기한 만료' })[compact(badge)];
+  const status = badge => ({ '입금대기': '입금 대기', '예약확정': '예약 확정', '입금확인': '입금 확인', '결제완료': '결제 완료', '예약취소': '예약 취소', '자동취소': '자동 취소', '취소완료': '예약 취소', '기한만료': '기한 만료', '예약만료': '기한 만료' })[compact(badge)];
   const parse = (root, head) => {
     const text = clean(head?.textContent);
     const id = text.match(/예약번호\s*[:：]?\s*([A-Z0-9][A-Z0-9-]{5,39})(?![A-Z0-9-])/i)?.[1];

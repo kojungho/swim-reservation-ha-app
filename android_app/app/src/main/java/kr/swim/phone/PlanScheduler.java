@@ -15,7 +15,7 @@ final class PlanScheduler {
         new PhoneRepository(c).bindLegacyRun();
         if(!lookup&&!plan.demo())PhoneRuns.guardUncertain(c,plan);
         int slot=PhoneRuns.allocate(c,lookup,planId);LocalStore store=new LocalStore(c,slot);
-        CampLookup.cancel();
+        if(!PhoneSessions.supported())CampLookup.cancel();
 
         if(!lookup&&!plan.demo())AppUpdates.requireSupported(c);
         plan.validate(lookup);ReservationService.channel(c);

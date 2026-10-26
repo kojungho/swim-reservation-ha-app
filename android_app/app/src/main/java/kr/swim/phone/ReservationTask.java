@@ -44,6 +44,7 @@ final class ReservationTask {
         main.removeCallbacks(watchDue);AlarmReceiver.cancel(context);
         holdCpu();main.removeCallbacks(renew);main.postDelayed(renew,60000);
         try {
+            if(!PhoneSessions.supported())CampLookup.cancel();
             engine=factory.create(context,plan,lookup,new PhoneEngine.Events(){
                 @Override public void stage(String stage,String message){update(stage,message);}
                 @Override public void beforeFinal(){
