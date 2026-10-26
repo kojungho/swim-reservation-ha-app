@@ -150,7 +150,7 @@ function queuePhonePeriodCheck(){
   },650);
 }
 function runPhonePeriodCheck(){
-  if(!phonePeriodQueued||nativeState.active||nativeState.lookup?.pending||nativeState.monthly?.pending||!nativeState.notifications||document.hidden||!['priority','watch','multiple','profiles-parallel'].includes(workspaceTab))return;
+  if(!phonePeriodQueued||nativeState.active||nativeState.confirmationPending||nativeState.lookup?.pending||nativeState.monthly?.pending||!nativeState.notifications||document.hidden||!['priority','watch','multiple','profiles-parallel'].includes(workspaceTab))return;
   const key=phonePeriodQueued;
   if(key!==roomQueryKey()){phonePeriodQueued='';return;}
   phonePeriodQueued='';

@@ -47,6 +47,7 @@ public final class LocalStore {
         if(!prefs.edit().putString("stage",stage).putString("message",message).putBoolean("active",active)
             .putLong("heartbeat",System.currentTimeMillis()).putString("log",log).commit()) throw new IllegalStateException("상태 저장 실패: 안전하게 중지합니다.");
     }
+    public String runPlanId() throws Exception {JSONObject run=loadDocument("run");return run==null?"":run.optString("_planId");}
     public String stage(){return prefs.getString("stage","IDLE");}
     public boolean active(){return prefs.getBoolean("active",false);}
     public long watchDueElapsed(){return prefs.getLong("watch-due-elapsed",0);}

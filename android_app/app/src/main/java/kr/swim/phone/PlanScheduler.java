@@ -9,6 +9,9 @@ import android.os.*;
 /** Future plans are durable alarms, not continuously running services. */
 final class PlanScheduler {
     static synchronized void start(Context c,Plan plan,boolean lookup)throws Exception {
+        start(c,plan,lookup,"");
+    }
+    static synchronized void start(Context c,Plan plan,boolean lookup,String planId)throws Exception {
         LocalStore store=new LocalStore(c);
         CampLookup.cancel();
         if(store.active())throw new IllegalStateException("기존 작업을 먼저 중지해 주세요.");
@@ -17,11 +20,12 @@ final class PlanScheduler {
         requireReady(c,plan,lookup);
         if(lookup)store.availability(plan,java.util.Set.of(),false,true);
         if(!lookup&&!plan.demo()&&store.uncertain())throw new IllegalStateException("이전 최종 제출 결과를 공식 예약 내역에서 먼저 확인해 주세요.");
-        store.save("run",plan);store.watchDueElapsed(0);
+        if(!planId.isEmpty()&&!new PhoneRepository(c).registeredPlan(planId).json().toString().equals(plan.json().toString()))throw new IllegalStateException("일정이 변경됐습니다. 다시 시작해 주세요.");
+        store.saveDocument("run",plan.json().put("_planId",planId).put("_lookup",lookup));store.watchDueElapsed(0);
         c.getSystemService(NotificationManager.class).cancel(2); // Clear the previous result, not an execution notification.
         try {
             if(!lookup&&plan.trigger>SiteClock.now(c)){
-                store.state("WAITING","예약 시각까지 알림 없이 대기 · 실행 시각에만 엔진 시작",true);
+                store.state("WAITING","실행 예정 "+RunNotice.time(plan.trigger)+" (한국 시간) · 예약 대기",true);
                 AlarmReceiver.schedule(c,plan.trigger);
             }else {
                 store.state("STARTING","폰 내부 예약 엔진 시작 준비",true);

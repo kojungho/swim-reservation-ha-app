@@ -11,6 +11,9 @@ async function setup(browser,width=390,storedUi={}){
       else if(action==='profilePut'){s.vault.profiles.push({id:'saved-'+s.vault.profiles.length,...data});result=s.vault;}
       else if(action==='planPut'){s.vault.plans.push({id:'plan-'+s.vault.plans.length,title:data.title||'모의 일정',plan:data.plan});result=s.vault;}
       else if(action==='draftReset'){s.vault.draft={mode:data.mode};delete (s.vault.drafts||{})[data.mode];result=s.vault;}
+      else if(action==='planDelete'){s.vault.plans=s.vault.plans.filter(p=>p.id!==data.id);result=s.vault;}
+      else if(action==='run'){s.state.confirmationPending=true;s.state.pendingPlanId=data.planId||'';}
+      else if(action==='stop'){if(!data.planId||data.planId===s.state.runPlanId){s.state.active=false;s.state.stage='STOPPED';s.state.message='사용자가 중지했습니다.';}}
       else if(action==='maps')result=s.maps;
       else if(action==='mapAction'){if(data.action==='select')s.maps.selected=data.id;else{s.maps.photos=s.maps.photos.filter(id=>id!==data.id);if(s.maps.selected===data.id)s.maps.selected='';}result=s.maps;}
       else if(action==='inspect'&&s.autoAvailability){s.state.availability={key:data.date+'/'+data.nights+'/'+data.adults,ok:true,capturedAt:Date.now(),rooms:s.vault.rooms.map(name=>({name,available:s.autoAvailability.includes(name)}))};}
@@ -92,7 +95,7 @@ test('다인·다중 입력과 등록, 조회·월별·서버 시간·사진 관
 });
 
 test('가능 수·마감·예정 달력, 퇴실일 제외와 현재 화면만 초기화',async t=>{
- const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());
  const {page,errors}=await setup(browser);
  await page.evaluate(()=>loadPlan({date:'2026-12-17',mode:'reserve'}));
  await page.locator('#startDate').click();
@@ -117,7 +120,7 @@ test('가능 수·마감·예정 달력, 퇴실일 제외와 현재 화면만 �
 });
 
 test('날짜별 3곳이어도 같은 사이트로 2박 불가면 추가 목록은 비고, 예정은 전체 후보를 표시한다',async t=>{
- const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());const {page,errors}=await setup(browser);
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());const {page,errors}=await setup(browser);
  await page.evaluate(()=>{
    nativeMock.autoAvailability=[];nativeMock.calendarData={'2026-12':{ok:true,month:'2026-12',openThrough:'2026-12-31',days:{'2026-12-17':3,'2026-12-18':3}}};
    loadPlan({mode:'reserve',date:'2026-12-17',nights:2,rooms:'해_하늘존'});
@@ -140,4 +143,39 @@ test('날짜별 3곳이어도 같은 사이트로 2박 불가면 추가 목록�
  await page.locator('#phonePeople').screenshot({path:'/tmp/swim-phone-site-choice.png'});
  assert.equal(await page.evaluate(()=>nativeMock.calls.some(c=>c.action==='run')),false);assert.deepEqual(errors,[]);
  await page.close();
+});
+
+test('일정 시작 확인·취소, 예약 대기·실행·중지 상태와 일정별 버튼을 연결한다',async t=>{
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true});t.after(()=>browser.close());
+ const {page,errors}=await setup(browser);t.after(()=>page.close());
+ await page.evaluate(()=>{vault.plans=[{id:'first',title:'예약 일정',plan:{...vault.draft,trigger:Date.parse('2026-11-22T00:00:00+09:00')}},{id:'second',title:'다른 일정',plan:{...vault.draft,trigger:0}}];nativeMock.vault=vault;renderPlans();});
+ const first=page.locator('[data-plan-id=first]'),second=page.locator('[data-plan-id=second]');
+ const btn=(card,name)=>card.locator('[data-plan-action='+name+']');
+ assert.equal(await btn(first,'start').isEnabled(),true);assert.equal(await btn(first,'delete').isEnabled(),true);assert.equal(await btn(first,'stop').isDisabled(),true);
+ assert.match(await first.locator('.phone-plan-time').innerText(),/2026-11-22 00:00:00 \(한국 시간\)/);
+ await btn(first,'start').click();assert.deepEqual(await page.evaluate(()=>nativeMock.calls.filter(c=>c.action==='run').at(-1).data),{planId:'first'});
+ assert.equal(await btn(first,'start').isDisabled(),true);assert.equal(await btn(first,'stop').isDisabled(),true);assert.match(await first.locator('[data-plan-status]').innerText(),/시작 확인 중/);
+ await page.evaluate(()=>{Object.assign(nativeMock.state,{confirmationPending:false,pendingPlanId:''});refreshPhoneRuntime();});
+ assert.equal(await btn(first,'start').isEnabled(),true);assert.equal(await btn(first,'delete').isEnabled(),true);assert.equal(await btn(first,'stop').isDisabled(),true);
+ await btn(first,'start').click();await page.evaluate(()=>{Object.assign(nativeMock.state,{confirmationPending:false,pendingPlanId:'',active:true,runPlanId:'first',runTrigger:Date.parse('2026-11-22T00:00:00+09:00'),stage:'WAITING',message:'예약 대기'});refreshPhoneRuntime();});
+ assert.equal(await btn(first,'start').isDisabled(),true);assert.equal(await btn(first,'delete').isDisabled(),true);assert.equal(await btn(first,'stop').isEnabled(),true);
+ assert.equal(await btn(second,'start').isDisabled(),true);assert.equal(await btn(second,'stop').isDisabled(),true);assert.equal(await btn(second,'delete').isEnabled(),true);
+ assert.match(await first.locator('[data-plan-status]').innerText(),/예약 대기 중.*2026-11-22 00:00:00/);
+ assert.equal(await page.locator('[data-phone-run]').isDisabled(),true);assert.equal(await page.locator('[data-phone-stop]').isEnabled(),true);
+ for(const stage of ['STARTING','PREPARING','SUBMITTING','WATCHING']){await page.evaluate(stage=>{nativeMock.state.stage=stage;refreshPhoneRuntime();},stage);assert.equal(await btn(first,'stop').isEnabled(),true);assert.equal(await btn(first,'delete').isDisabled(),true);}
+ await btn(first,'stop').click();assert.deepEqual(await page.evaluate(()=>nativeMock.calls.filter(c=>c.action==='stop').at(-1).data),{planId:'first'});
+ assert.equal(await btn(first,'stop').isDisabled(),true);assert.equal(await btn(first,'start').isEnabled(),true);assert.equal(await btn(first,'delete').isEnabled(),true);assert.equal(await btn(second,'start').isEnabled(),true);
+ assert.match(await first.locator('[data-plan-status]').innerText(),/정지됨/);assert.equal(await page.locator('[data-phone-stop]').isDisabled(),true);
+ for(const stage of ['FAILED','SUCCESS','CHECK_REQUIRED']){await page.evaluate(stage=>{nativeMock.state.stage=stage;refreshPhoneRuntime();},stage);assert.equal(await btn(first,'start').isEnabled(),true);assert.equal(await btn(first,'delete').isEnabled(),true);assert.equal(await btn(first,'stop').isDisabled(),true);}
+ assert.deepEqual(errors,[]);
+});
+test('다시 연 화면도 native 실행 ID로 대기 상태를 복원하고, 조회를 일정 실행으로 표시하지 않는다',async t=>{
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true});t.after(()=>browser.close());
+ const {page,errors}=await setup(browser);t.after(()=>page.close());
+ await page.addInitScript(()=>{nativeMock.vault.plans=[{id:'restored',title:'복원 일정',plan:nativeMock.vault.draft}];Object.assign(nativeMock.state,{active:true,stage:'WAITING',runPlanId:'restored',runTrigger:Date.parse('2026-11-22T00:00:00+09:00')});});
+ await page.reload();await page.waitForFunction(()=>featuresReady);const card=page.locator('[data-plan-id=restored]');
+ assert.equal(await card.locator('[data-plan-action=start]').isDisabled(),true);assert.equal(await card.locator('[data-plan-action=delete]').isDisabled(),true);assert.equal(await card.locator('[data-plan-action=stop]').isEnabled(),true);
+ await page.evaluate(()=>{nativeMock.state.runLookup=true;poll();});assert.equal(await card.locator('[data-plan-action=stop]').isDisabled(),true);assert.match(await card.locator('[data-plan-status]').innerText(),/시작 전/);
+ await page.evaluate(()=>{nativeMock.state.active=false;nativeMock.state.stage='INSPECTED';poll();});assert.equal(await card.locator('[data-plan-action=start]').isEnabled(),true);
+ assert.equal(await page.locator('#executionPlanList').evaluate(e=>e.scrollWidth<=e.clientWidth),true);assert.deepEqual(errors,[]);
 });

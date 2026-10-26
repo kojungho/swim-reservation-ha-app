@@ -23,11 +23,20 @@ final class PhoneRepository {
         if(!java.util.List.of("reserve","watch","multiple","profiles-parallel").contains(p.mode))throw new IllegalArgumentException("지원하지 않는 예약 방식입니다.");
         if(validate)p.validate(false);return p;
     }
+    synchronized Plan registeredPlan(String id)throws Exception{
+        JSONArray entries=load().getJSONArray("plans");
+        for(int i=0;i<entries.length();i++){JSONObject entry=entries.getJSONObject(i);if(entry.getString("id").equals(id))return plan(entry.getJSONObject("plan"),true);}
+        throw new IllegalArgumentException("등록된 일정을 찾지 못했습니다. 목록을 다시 열어 주세요.");
+    }
+    private void requireStoppedPlan(String id)throws Exception{
+        if(!id.isEmpty()&&store.active()&&id.equals(store.runPlanId()))throw new IllegalStateException("진행 중인 일정은 먼저 중지한 뒤 수정·삭제하세요.");
+    }
     synchronized JSONObject saveUi(JSONObject ui)throws Exception{if(ui.toString().length()>8000)throw new IllegalArgumentException("설정 크기 초과");JSONObject state=load();state.put("ui",ui);store.saveDocument("phone-ui-v1",state);return state;}
     synchronized JSONObject put(String kind,JSONObject value)throws Exception{
         if(!kind.equals("plans")&&!kind.equals("profiles"))throw new IllegalArgumentException("지원하지 않는 저장 항목");
         JSONObject state=load();JSONArray entries=state.getJSONArray(kind);String id=value.optString("id");JSONObject saved;
         if(kind.equals("plans")){
+            requireStoppedPlan(id);
             Plan p=plan(value.getJSONObject("plan"),true);String title=value.optString("title").trim();
             if(title.length()>80)throw new IllegalArgumentException("일정 이름은 80자 이내입니다.");
             saved=new JSONObject().put("title",title.isEmpty()?p.date+" "+p.nights+"박":title).put("plan",p.json());
@@ -43,6 +52,7 @@ final class PhoneRepository {
     }
     synchronized JSONObject delete(String kind,String id)throws Exception{
         if(!kind.equals("plans")&&!kind.equals("profiles"))throw new IllegalArgumentException("지원하지 않는 삭제 항목");
+        if(kind.equals("plans"))requireStoppedPlan(id);
         JSONObject state=load();JSONArray entries=state.getJSONArray(kind);for(int i=entries.length()-1;i>=0;i--)if(entries.getJSONObject(i).getString("id").equals(id))entries.remove(i);
         store.saveDocument("phone-ui-v1",state);return state;
     }
