@@ -30,6 +30,7 @@ public class HaDisplayTest{
   int before=PhoneRuns.count(c);MainActivity a=new MainActivity();
   JSONObject response=new JSONObject(a.api(new JSONObject().put("action","showKeyboard").toString()));
   assertTrue(response.getBoolean("ok"));assertEquals(before,PhoneRuns.count(c));
+  assertTrue(new JSONObject(a.api(new JSONObject().put("action","hideKeyboard").toString())).getBoolean("ok"));assertEquals(before,PhoneRuns.count(c));
  }
  @Test public void anonymousGetOnlyCachesPhotoAndPreservesPrivateData()throws Exception{
   byte[] image=png();HaDisplay.vault(c).saveDocument("profiles",new JSONObject().put("private","KEEP"));

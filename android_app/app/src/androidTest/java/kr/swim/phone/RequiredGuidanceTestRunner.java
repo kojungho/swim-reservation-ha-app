@@ -17,6 +17,11 @@ public final class RequiredGuidanceTestRunner extends EngineTestRunner {
    check(js("document.activeElement.id").equals("reserverName"),"reset focuses the first required name field");
    check(js("document.getElementById('floatingMessage').textContent.includes('예약자명')").equals("true"),"reset replaces the previous phone message");
    await(this::keyboardVisible,5000);check(keyboardVisible(),"Android IME is actually visible after reset guidance");
+   js("vault.profiles=[{id:'saved-fixture',name:'저장목록 모의',phone:'01000000000',payer:''}];renderProfiles();document.getElementById('bookingProfileSelect1').focus()");
+   await(()->!keyboardVisible(),5000);check(!keyboardVisible(),"saved selector dismisses IME instead of reopening the missing-name keyboard");
+   check(js("document.activeElement.id").equals("bookingProfileSelect1"),"required validation does not steal saved-selector focus");
+   js("const saved=document.getElementById('bookingProfileSelect1');saved.value='saved-fixture';saved.dispatchEvent(new Event('change',{bubbles:true}))");Thread.sleep(400);
+   check(js("document.getElementById('reserverName').value==='저장목록 모의'&&document.getElementById('phone').value==='01000000000'").equals("true"),"saved profile fills both mandatory identity fields");
    check(!store.active()&&PhoneRuns.count(app)==0,"keyboard/reset never starts a reservation");
    Bundle done=new Bundle();done.putString("stream",assertions+" required guidance assertions passed\n");finish(Activity.RESULT_OK,done);
   }catch(Throwable error){Bundle done=new Bundle();done.putString("stream","FAILED: "+error+"\n");finish(Activity.RESULT_CANCELED,done);}

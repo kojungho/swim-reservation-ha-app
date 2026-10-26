@@ -53,9 +53,15 @@ window.buildDisplayReceipt=function(value){
   if(/phone/i.test(input.id)||input.name==='phone')return !/^01\d{8,9}$/.test(value.replace(/\D/g,''));
   return !input.validity.valid;
  }
- let correctingUntil=0,scrollCheck=0,lastScrollY=0,validationEpoch=0,resettingValidation=false;
+ let correctingUntil=0,scrollCheck=0,lastScrollY=0,validationEpoch=0,resettingValidation=false,choosingProfile=false,lastRequiredMessage='';
+ function savedProfileControl(target){return target?.closest?.('select[id^="bookingProfileSelect"],#watchProfileSelect,#multipleProfileSelect,#phonePeople select,.booking-select-field');}
+ function beginProfileChoice(){
+  if(choosingProfile)return;choosingProfile=true;validationEpoch++;clearTimeout(scrollCheck);clearTimeout(autoTimer);scrollCheck=autoTimer=0;autoWanted=false;
+  const message=byId('floatingMessage');if(message?.querySelector('span')?.textContent===lastRequiredMessage){clearTimeout(message.hideTimer);message.hidden=true;}
+  if(phone){try{api('hideKeyboard');}catch(error){/* Native selector remains usable without the optional IME request. */}}
+ }
  window.beginBookingReset=function(){
-  resettingValidation=true;validationEpoch++;clearTimeout(scrollCheck);clearTimeout(autoTimer);scrollCheck=autoTimer=0;autoWanted=false;autoKey='';correctingUntil=0;pendingName='';autoNamed=false;generatedName='';
+  resettingValidation=true;choosingProfile=false;validationEpoch++;clearTimeout(scrollCheck);clearTimeout(autoTimer);scrollCheck=autoTimer=0;autoWanted=false;autoKey='';correctingUntil=0;pendingName='';autoNamed=false;generatedName='';
   for(const item of bodies)item.body.querySelectorAll('.required-input-error').forEach(input=>{input.classList.remove('required-input-error');input.removeAttribute('aria-invalid');});
   const message=byId('floatingMessage');if(message){clearTimeout(message.hideTimer);message.hidden=true;}
  };
@@ -71,19 +77,23 @@ window.buildDisplayReceipt=function(value){
   return missing;
  }
  function showRequired(input){
-  if(resettingValidation||!missingRequired(input)||document.querySelector('dialog[open]'))return;
+  if(resettingValidation||choosingProfile||savedProfileControl(document.activeElement)||!missingRequired(input)||document.querySelector('dialog[open]'))return;
   if(modes.includes(workspaceTab)&&bodies.some(item=>item.body.contains(input))){for(const item of bodies){const earlier=firstRequired(item);if(earlier){input=earlier;break;}if(item.body.contains(input))break;}}
   autoWanted=false;clearTimeout(autoTimer);autoTimer=0;correctingUntil=performance.now()+1200;
   input.classList.add('required-input-error');input.setAttribute('aria-invalid','true');
   const title=input.closest('label')?.querySelector('.field-label-text,.stay-label-line>span:first-child')?.textContent.replace('(필수)','').trim()||input.getAttribute('aria-label')||input.placeholder||'필수 항목';
-  notify(title+(/phone/i.test(input.id)||input.name==='phone'?' 형식을 확인해 주세요.':' 입력이 필요합니다.'));
+  lastRequiredMessage=title+(/phone/i.test(input.id)||input.name==='phone'?' 형식을 확인해 주세요.':' 입력이 필요합니다.');notify(lastRequiredMessage);
   input.scrollIntoView({block:'center',behavior:'smooth'});input.focus({preventScroll:true});
   if(phone&&!input.readOnly&&input.matches('textarea,input:not([type=date]):not([type=datetime-local]):not([type=number])')){try{api('showKeyboard');}catch(error){/* Focus is retained if the keyboard is unavailable. */}}
  }
  function initializeRequiredValidation(){
   const fields=root=>[...root.querySelectorAll('[data-booking-required]')];
+  const choose=event=>{if(savedProfileControl(event.target))beginProfileChoice();else if(choosingProfile){choosingProfile=false;validationEpoch++;if(savedProfileControl(document.activeElement))document.activeElement.blur();}};
+  document.addEventListener('pointerdown',choose,true);document.addEventListener('focusin',choose,true);
+  document.addEventListener('wheel',choose,{capture:true,passive:true});document.addEventListener('touchmove',choose,{capture:true,passive:true});
+  document.addEventListener('change',event=>{if(savedProfileControl(event.target))queueMicrotask(()=>{choosingProfile=false;validationEpoch++;queue();});},true);
   document.addEventListener('input',event=>{const input=event.target;if(input.classList.contains('required-input-error')&&!missingRequired(input)){input.classList.remove('required-input-error');input.removeAttribute('aria-invalid');}},true);
-  document.addEventListener('focusout',event=>{const input=event.target,epoch=validationEpoch;if(input.dataset.bookingRequired!=='true'||event.relatedTarget?.classList.contains('required-input-error')||event.relatedTarget?.closest('.phone-reset-floating,#editorResetButton,#editorResetConfirm,#editorResetCancel'))return;setTimeout(()=>{if(epoch!==validationEpoch||resettingValidation||!input.isConnected||!modes.includes(workspaceTab)&&!input.closest('#lookupCard,#bookingBookCard'))return;showRequired(input);},0);},true);
+  document.addEventListener('focusout',event=>{const input=event.target,epoch=validationEpoch;if(input.dataset.bookingRequired!=='true'||choosingProfile||savedProfileControl(event.relatedTarget)||event.relatedTarget?.classList.contains('required-input-error')||event.relatedTarget?.closest('.phone-reset-floating,#editorResetButton,#editorResetConfirm,#editorResetCancel'))return;setTimeout(()=>{if(epoch!==validationEpoch||resettingValidation||!input.isConnected||!modes.includes(workspaceTab)&&!input.closest('#lookupCard,#bookingBookCard'))return;showRequired(input);},0);},true);
   const nextStep=event=>{
    const heading=event.target.closest('.booking-step-title');if(!heading||!modes.includes(workspaceTab))return;
    const index=bodies.findIndex(item=>item.toggle===heading);if(index<1)return;
@@ -94,7 +104,7 @@ window.buildDisplayReceipt=function(value){
   document.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')nextStep(event);},true);
   window.addEventListener('scroll',()=>{
    const down=window.scrollY>lastScrollY;lastScrollY=window.scrollY;clearTimeout(scrollCheck);
-   if(resettingValidation||!down||performance.now()<correctingUntil||!modes.includes(workspaceTab))return;
+   if(resettingValidation||choosingProfile||!down||performance.now()<correctingUntil||!modes.includes(workspaceTab))return;
    scrollCheck=setTimeout(()=>{
     if(performance.now()<correctingUntil||document.querySelector('dialog[open]'))return;
     let missing;for(const item of bodies){
