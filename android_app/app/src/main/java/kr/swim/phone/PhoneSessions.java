@@ -7,13 +7,10 @@ import androidx.webkit.*;
 final class PhoneSessions {
     static Boolean testSupported=null; // Tests only; never read from persisted or UI configuration.
     static boolean supported(){if(testSupported!=null)return testSupported;return WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE);}
+    static CookieManager attach(WebView web,Context c){return attach(web,"swim-run-"+RunContext.slot(c));}
     @SuppressLint("RequiresFeature")
-    static CookieManager attach(WebView web,Context c){
-        if(supported()){
-            String name="swim-run-"+RunContext.slot(c);
-            WebViewCompat.setProfile(web,name);
-            return WebViewCompat.getProfile(web).getCookieManager();
-        }
+    static CookieManager attach(WebView web,String name){
+        if(supported()){WebViewCompat.setProfile(web,name);return WebViewCompat.getProfile(web).getCookieManager();}
         return CookieManager.getInstance();
     }
 }
