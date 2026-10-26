@@ -1,0 +1,10 @@
+# Android 0.4.20 (26) / addon 2.15.25
+
+- Saved-guest selectors suspend required-field focus/scroll correction, invalidate pending blur callbacks and dismiss only the current validation toast. Main, additional/addon, phone per-person and watch/multiple guest selectors are covered. Selection/change and subsequent direct-input interaction release the temporary guard; direct required validation remains enabled.
+- Android hideKeyboard cancels delayed showKeyboard callbacks by generation and dismisses the IME when opening a saved selector, preventing the keyboard from stealing selector focus.
+- Saved-selector regression covers app/addon × single/per-person (4 scenarios): show a real required toast, open the saved selector, retain its focus, dismiss the toast and select a saved guest to fill the identity. No run/stop calls.
+- Required/reset/naming/scroll suite: 5 passed. Shared picker regression: 2 passed. Concurrent reconnect fixture stalled and was interrupted; isolated rerun with 30s bound passed both tests. JVM: 44 passed; build and lint successful.
+- Android emulator RequiredGuidanceTestRunner passed 8 assertions, including actual IME visibility for direct name input, actual IME dismissal for the saved selector, retained selector focus and successful synthetic name/phone autofill. No active reservations created. Fixture waits for the dynamically refreshed editor before testing blur; private editor and the temporary hardware-keyboard setting are restored.
+- Replace-install 0.4.19 -> 0.4.20 retained the aggregate shared_prefs/files archive hash `41c53119ec7d5bc354cb5f44845d614febe7061a05019fa78b202641915b1b5d` before UI instrumentation. No uninstall/data clearing.
+- APK 2,837,426 bytes, SHA-256 `e2649876470fe55cd9fd605469a58870ac528cf9294825ad4088bda0615bcbe3`. Existing certificate retained: `027555e7a8662d3029c1c29112723855d40c490e17ea4410985d783ea78a3d19`. Public APK independently downloaded and verified before update registration.
+- APK/shared flow hash matches: `35e1bf146b26502100552f8337cf74f0b5e443a0f3994eeea8f3ea45777ef09f`. No actual campsite reservation, cancellation or payment executed.
