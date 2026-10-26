@@ -35,7 +35,7 @@ switchTab=function(tab){
   const booking=['priority','watch','multiple','profiles-parallel'].includes(tab);
   for(const section of [$('startDate').closest('section'),$('reserverName').closest('section'),$('roomList').closest('section'),$('historyCard')])section.hidden=!booking;
   $('planCard').hidden=!booking;$('phoneUnsupported').hidden=true;
-  $('phonePeople').hidden=tab!=='profiles-parallel';$('firstBookingProfilePanel').hidden=tab==='profiles-parallel';$('roomList').closest('section').hidden=!booking||tab==='profiles-parallel';
+  $('phonePeople').hidden=tab!=='profiles-parallel';$('firstBookingProfilePanel').hidden=tab==='profiles-parallel';$('roomList').closest('section').hidden=!booking;$('roomList').hidden=tab==='profiles-parallel';
   $('phoneBatchNote').hidden=!['multiple','profiles-parallel'].includes(tab);
   $('watchEndsAtField').hidden=false;
   $('roomSectionHelp').textContent=tab==='multiple'?'선택한 사이트 각각을 한 번씩 예약합니다. 같은 폰의 세션은 순차 실행합니다.':tab==='watch'?'선택한 사이트 중 빈자리 하나를 예약합니다. 조회 간격은 최소 10분입니다.':'동그라미 숫자 순서대로 사이트 하나가 성공할 때까지 진행합니다.';
@@ -73,9 +73,8 @@ function makePersonRanks(person,index){
 }
 function renderPhoneRankEditors(){
   phonePruneChoices();
-  document.querySelectorAll('#phonePeople .phone-person-ranks').forEach(wrap=>{
-    const index=Number(wrap.dataset.personIndex),person=phonePeople[index];if(person)wrap.replaceChildren(...makePersonRanks(person,index).childNodes);
-  });
+  const area=$('profilePriorities');area.hidden=workspaceTab!=='profiles-parallel';area.replaceChildren();
+  if(workspaceTab==='profiles-parallel')phonePeople.forEach((person,index)=>{const card=node('div',undefined,'phone-rank-panel');card.append(node('h3','예약자 '+(index+1)),makePersonRanks(person,index));area.append(card);});
   phoneSelectionControls();
 }
 function renderPhonePeople(){
@@ -84,9 +83,9 @@ function renderPhonePeople(){
     const card=node('article',undefined,'phone-person-card'),heading=node('div',undefined,'phone-person-heading');heading.append(node('h3','예약자 '+(index+1)));
     if(phonePeople.length>1){const remove=makeButton('×',()=>{if(confirm('현재 일정에서 예약자 '+(index+1)+'을 제외할까요? 저장된 예약자와 실제 예약은 유지합니다.')){phonePeople.splice(index,1);renderPhonePeople();changedPhoneDraft();}});remove.setAttribute('aria-label','예약자 제외');heading.append(remove);}card.append(heading);
     const saved=node('select');saved.setAttribute('aria-label','예약자 '+(index+1)+' 저장 목록');saved.add(new Option('직접 입력 / 저장 예약자 선택',''));for(const p of vault.profiles)saved.add(new Option(p.name,p.id));saved.addEventListener('change',()=>{const p=vault.profiles.find(p=>p.id===saved.value);if(p){Object.assign(person,{name:p.name,payer:p.payer||'',phone:p.phone});renderPhonePeople();changedPhoneDraft();}});card.append(saved);
-    const fields=node('div',undefined,'grid two identity-fields');for(const[key,label]of[['name','예약자명'],['payer','입금자명 (선택)'],['phone','휴대폰 번호']]){const row=node('label',label),input=node('input');input.value=person[key]||'';input.name=key;input.autocomplete='off';if(key==='phone')input.inputMode='numeric';if(key==='payer')input.placeholder='미입력 시 예약자명';input.addEventListener('input',()=>{person[key]=input.value;});row.append(input);fields.append(row);}card.append(fields,makeButton('예약자 저장',()=>{vault=api('profilePut',{name:person.name,payer:person.payer,phone:person.phone});renderProfiles();renderPhonePeople();}),makePersonRanks(person,index));area.append(card);
+    const fields=node('div',undefined,'grid two identity-fields');for(const[key,label]of[['name','예약자명'],['payer','입금자명 (선택)'],['phone','휴대폰 번호']]){const row=node('label',label),input=node('input');input.value=person[key]||'';input.name=key;input.autocomplete='off';if(key==='phone')input.inputMode='numeric';if(key==='payer')input.placeholder='미입력 시 예약자명';input.addEventListener('input',()=>{person[key]=input.value;});row.append(input);fields.append(row);}card.append(fields,makeButton('예약자 저장',()=>{vault=api('profilePut',{name:person.name,payer:person.payer,phone:person.phone});renderProfiles();renderPhonePeople();}));area.append(card);
   });
-  const add=makeButton('+',()=>{phonePeople.push({name:'',payer:'',phone:'',rooms:[]});renderPhonePeople();changedPhoneDraft();});add.classList.add('phone-person-add');add.setAttribute('aria-label','예약자 추가');add.disabled=phonePeople.length>=vault.rooms.length;area.append(add);phoneSelectionControls();
+  const add=makeButton('+',()=>{phonePeople.push({name:'',payer:'',phone:'',rooms:[]});renderPhonePeople();changedPhoneDraft();});add.classList.add('phone-person-add');add.setAttribute('aria-label','예약자 추가');add.disabled=phonePeople.length>=vault.rooms.length;area.append(add);renderPhoneRankEditors();
 }
 function requestPhoneLookup(profiles){try{profiles??=vault.profiles.filter(p=>p.id===document.getElementById('phoneLookupPerson')?.value);if(!profiles.length)throw Error('예약자를 선택하세요.');featureLookupKey='';api('lookup',profiles?{profiles}:{});$('phoneLookupStatus').textContent='예약 내역 조회 중…';}catch(e){showError(e);}}
 function renderPhoneLookup(result){

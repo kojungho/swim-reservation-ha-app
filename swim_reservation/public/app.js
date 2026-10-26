@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.17";
+const CLIENT_VERSION = "2.15.18";
 window.stayCalendar = new StayCalendarModel(month => request(`monthly-availability?month=${month}`, { timeoutMs: 25000 }), () => Number.isFinite(currentSiteTime()) ? currentSiteTime() : Date.now());
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
@@ -943,8 +943,9 @@ function updateImmediateBookingVisibility() {
   const allowed = !window.stayCalendar?.planned(elements.startDate.value,Number(elements.nights.value)) && !editingPlan && ["priority", "multiple", "profiles-parallel"].includes(workspaceTab) &&
     Number.isFinite(now) && Number.isFinite(trigger) && Number.isFinite(opening) && trigger <= now && opening <= now;
   elements.runNowButton.hidden = !allowed;
-  document.getElementById("triggerDetails").hidden = workspaceTab === "watch" || allowed || !elements.triggerAt.value;
-  elements.triggerAt.closest("label").hidden = workspaceTab === "watch" || allowed;
+  const showExecutionTime = workspaceTab !== "watch" && plannedSiteChoices();
+  document.getElementById("triggerDetails").hidden = !showExecutionTime;
+  elements.triggerAt.closest("label").hidden = !showExecutionTime;
   applyUiVisibility();
   updateStayFields();
   return allowed;

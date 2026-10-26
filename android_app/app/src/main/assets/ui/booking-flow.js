@@ -12,7 +12,7 @@ window.buildDisplayReceipt=function(value){
  const setHidden=(el,value)=>{if(el&&el.hidden!==value)el.hidden=value;};
  const modes=['priority','multiple','profiles-parallel','watch'];
  const notify=text=>window.showFloatingMessage?.(text,{error:true});
- let scheduled=false,initialized=false,bodies=[],lastNoRoom='',haKey='',lastSync=0;
+ let scheduled=false,initialized=false,bodies=[],lastNoRoom='',haKey='',lastSync=0,autoTimer=0,autoWanted=false,autoKey='';
  window.applyBookingMenus=function(settings={},target=phone?'app':'addon'){
   const choices=settings[target+'Menus']||{};
   for(const tab of modes){const item=document.querySelector('[data-workspace-tab="'+tab+'"]');setHidden(item,choices[tab]===false);if(phone){const name=settings.appMenuLabels?.[tab]||({priority:'단독 예약',multiple:'다중 예약','profiles-parallel':'다인 예약',watch:'취소 대기'})[tab];labels[tab]=name;if(item&&item.textContent!==name)item.textContent=name;}}
@@ -36,8 +36,11 @@ window.buildDisplayReceipt=function(value){
   const required=new Set(['startDate','checkoutDate','reserverName','phone','bookReserverName','bookPhone','oneOffName','oneOffPhone','campAdults']);
   document.querySelectorAll('label').forEach(label=>{
    for(const child of label.childNodes)if(child.nodeType===3&&child.textContent.includes('(선택)'))child.textContent=child.textContent.replace(/\s*\(선택\)/g,'');
-   const input=label.querySelector('input,select,textarea');if(input&&(required.has(input.id)||/^(reserverName|phone)\d+$/.test(input.id)||['name','phone'].includes(input.name))&&!label.querySelector('.required-tag')){
-    const tag=document.createElement('small');tag.textContent='(필수)';tag.className='required-tag';label.insertBefore(tag,input);
+   const input=label.querySelector('input,select,textarea');if(input&&(required.has(input.id)||/^(reserverName|phone)\d+$/.test(input.id)||['name','phone'].includes(input.name))){
+    let caption=label.querySelector(':scope>.field-label-text,:scope>.stay-label-line');
+    if(!caption){caption=document.createElement('span');caption.className='field-label-text';const text=[...label.childNodes].filter(n=>n.nodeType===3);label.insertBefore(caption,label.firstChild);for(const node of text)caption.append(node);}
+    const line=caption.classList.contains('stay-label-line')?caption.querySelector('span')||caption:caption;
+    if(!line.querySelector('.required-tag')){const tag=document.createElement('small');tag.textContent='(필수)';tag.className='required-tag';line.append(tag);}
    }
   });
  }
@@ -51,22 +54,25 @@ window.buildDisplayReceipt=function(value){
    const title=section.querySelector('.section-title');title.querySelector('span').textContent=String(i+1);
    const body=document.createElement('div');body.className='booking-step-body';
    for(const child of [...section.children])if(child!==title)body.append(child);
-   const toggle=document.createElement('button');toggle.type='button';toggle.className='step-toggle';toggle.textContent=i===0?'날짜 선택':i===1?'예약자 입력':'사이트 선택 단계';toggle.onclick=()=>{if(toggle.disabled)return;body.hidden=!body.hidden;toggle.setAttribute('aria-expanded',String(!body.hidden));};
-   title.append(toggle);section.append(body);bodies.push({body,toggle,ready:false});
+   const toggle=title;toggle.classList.add('booking-step-title');toggle.setAttribute('role','button');toggle.tabIndex=0;body.id='booking-step-body-'+(i+1);toggle.setAttribute('aria-controls',body.id);
+   const flip=()=>{if(toggle.getAttribute('aria-disabled')==='true')return;body.hidden=!body.hidden;toggle.setAttribute('aria-expanded',String(!body.hidden));};
+   toggle.addEventListener('click',flip);toggle.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();flip();}});
+   section.append(body);bodies.push({body,toggle,ready:false});
   }
   for(const id of ['inspectButton','watchSelectAll','watchDeselectAll'])setHidden(byId(id),true);
   for(const el of document.querySelectorAll('.section-title p,#roomDragHelp,#profileModeHelp,#phoneBatchNote,.log-help,.site-choice-message,.site-choice-empty'))el.classList.add('compact-explanation');
-  if(phone){const links=person.querySelectorAll('.official-small');links.forEach((a,i)=>{if(i)a.hidden=true;});}
+
   const request=byId('campRequest');if(request){request.closest('label').classList.add('full-field');request.rows=2;}
-  for(const button of document.querySelectorAll('button'))if(button.textContent.includes('공식 약관')){button.className='official-small';button.textContent='공식 예약 사이트';}
-  for(const el of document.querySelectorAll('a.button[href*="swimozi"]')){el.className='official-small';el.textContent='공식 예약 사이트';}
+  const linkRow=document.createElement('div');linkRow.className='app-link-row';
+  const official=document.createElement('a');official.className='official-small official-site-link';official.textContent='공식 예약 사이트';official.href='https://www.swimozicamp.com/camp/';official.target='_blank';official.rel='noopener noreferrer';linkRow.append(official);document.querySelector('header').append(linkRow);
+  if(!phone){const update=document.createElement('a');update.className='official-small';update.textContent='앱 업데이트';update.href='https://github.com/kojungho/swim-reservation-ha-app/releases/latest';update.target='_blank';update.rel='noopener noreferrer';linkRow.prepend(update);}
   document.querySelectorAll('.one-off-lookup summary').forEach(el=>el.textContent='비회원 조회');
   const selector=byId('siteProfileSelect');if(selector){const label=selector.closest('label');for(const text of [...label.childNodes])if(text.nodeType===3)text.textContent='예약자 ';}
   const intro=byId('lookupCard').querySelector(':scope>p:not([id])');if(intro)intro.textContent='선택한 예약자의 내역만 조회합니다.';
   if(phone){
    const connection=document.createElement('div');connection.className='ha-connection';
    const update=document.createElement('button');update.type='button';update.className='official-small';update.textContent='앱 업데이트';update.onclick=()=>api('checkUpdates');
-   const state=document.createElement('small');state.id='haConnectionState';connection.append(update,state);document.querySelector('header').append(connection);
+   const state=document.createElement('small');state.id='haConnectionState';linkRow.prepend(update);connection.append(state);document.querySelector('header').append(connection);
    // Keep device permissions accessible, but no editable display/settings page.
    const health=byId('phoneHealth')?.closest('#settingsControls');if(health){const permissions=health.querySelector('.phone-permissions');if(permissions){const detail=document.createElement('details');detail.className='device-permissions';const summary=document.createElement('summary');summary.textContent='폰 실행 권한';detail.append(summary,byId('phoneHealth'),permissions);byId('logCard').append(detail);}}
    setHidden(byId('settingsCard'),true);window.applyDisplaySync(nativeState.haDisplay);
@@ -75,9 +81,10 @@ window.buildDisplayReceipt=function(value){
    const originalApply=applyUi;applyUi=function(){originalApply();setHidden(byId('reservationConnectionDetails'),true);};
    const originalUpdate=updateStayFields;updateStayFields=function(){originalUpdate();const opening=bookingOpenIso(byId('startDate').value);setHidden(byId('stayOpeningDate'),!opening||Date.parse(opening+'+09:00')<=currentSiteTime());};
    // Execution time stays editable outside the removed generated reservation-info panel.
-   const trigger=byId('triggerAt')?.closest('label');if(trigger)bodies[0].body.append(trigger);
+
    setHidden(byId('reservationConnectionDetails'),true);
   }
+  const trigger=byId('triggerAt')?.closest('label');if(trigger){bodies[0].body.append(trigger);const caption=[...trigger.childNodes].find(n=>n.nodeType===3);if(caption)caption.textContent='예약 실행 시간';}
   const safety=byId('safetyNotice');if(safety){const detail=document.createElement('details'),summary=document.createElement('summary'),text=document.createElement('p');summary.textContent='실행 안전 안내';text.textContent=phone?'전원·네트워크·절전 제한으로 실행이 중단될 수 있습니다. HA와 같은 예약을 동시에 실행하지 마세요.':'서버 전원·네트워크와 시간을 확인하세요. 폰과 같은 예약을 동시에 실행하지 마세요.';detail.append(summary,text);safety.replaceChildren(detail);}
   markLabels();
  }
@@ -91,7 +98,17 @@ window.buildDisplayReceipt=function(value){
    else personReady=[{reserverName:byId('reserverName').value,phone:byId('phone').value},...extraProfiles].every(p=>p.reserverName?.trim()&&/^01\d{8,9}$/.test((p.phone||'').replace(/\D/g,'')));
   }
   const ready=[true,validDate,validDate&&personReady];
-  bodies.forEach((item,i)=>{item.toggle.disabled=!ready[i];if(!ready[i])setHidden(item.body,true);else if(!item.ready)setHidden(item.body,false);item.ready=ready[i];const expanded=String(!item.body.hidden);if(item.toggle.getAttribute('aria-expanded')!==expanded)item.toggle.setAttribute('aria-expanded',expanded);});
+  bodies.forEach((item,i)=>{item.toggle.disabled=!ready[i];const disabled=String(!ready[i]);if(item.toggle.getAttribute('aria-disabled')!==disabled)item.toggle.setAttribute('aria-disabled',disabled);if(!ready[i])setHidden(item.body,true);else if(!item.ready)setHidden(item.body,false);item.ready=ready[i];const expanded=String(!item.body.hidden);if(item.toggle.getAttribute('aria-expanded')!==expanded)item.toggle.setAttribute('aria-expanded',expanded);});
+  const trigger=byId('triggerAt')?.closest('label');setHidden(trigger,!validDate||workspaceTab==='watch'||!beforeOpening());
+  document.querySelectorAll('.room-actions').forEach(el=>setHidden(el,true));
+  for(const el of bodies[1].body.querySelectorAll('button,a'))if(el.textContent.includes('공식'))setHidden(el,true);
+  if(autoWanted&&ready[2]&&modes.includes(workspaceTab)&&!autoTimer){
+   const key=identityKey();autoTimer=setTimeout(()=>{autoTimer=0;if(!autoWanted||identityKey()!==key||document.hidden||document.querySelector('dialog[open]'))return;autoWanted=false;if(autoKey===key)return;autoKey=key;
+    setHidden(bodies[2].body,false);bodies[2].toggle.setAttribute('aria-expanded','true');
+    const button=[...bodies[2].body.querySelectorAll('.site-choice-tools button')].find(el=>!el.disabled&&el.getClientRects().length);
+    if(!button)return;setHidden(bodies[2].body,false);bodies[2].toggle.setAttribute('aria-expanded','true');bodies[2].toggle.scrollIntoView({block:'start',behavior:'smooth'});button.click();
+   },650);
+  }
   markLabels();
   if(phone){document.querySelectorAll('#phonePeople .phone-person-card').forEach((card,i)=>{const p=phonePeople[i],valid=validDate&&p?.name?.trim()&&/^01\d{8,9}$/.test((p?.phone||'').replace(/\D/g,''));setHidden(card.querySelector('.phone-person-ranks'),!valid);});}
   for(const id of ['inspectButton','watchSelectAll','watchDeselectAll'])setHidden(byId(id),true);
@@ -100,6 +117,20 @@ window.buildDisplayReceipt=function(value){
   }else if(typeof uiSettings!=='undefined')window.applyBookingMenus(uiSettings);
   const states=(phone?vault.rooms.map(phoneChoiceState):rooms.map(r=>siteChoiceState(r.name)));
   if(states.length&&states.every(s=>['unavailable','booked'].includes(s.kind))){const key=date+'/'+nights;if(lastNoRoom!==key){lastNoRoom=key;notify('선택한 기간에 예약 가능한 사이트가 없습니다.');}}else lastNoRoom='';
+ }
+ function beforeOpening(){
+  const date=byId('startDate').value,nights=Number(byId('nights').value);if(!date)return false;
+  return phone?!!window.stayCalendar?.planned(date,nights)||Date.parse(bookingOpenIso(date)+'+09:00')>currentSiteTime():plannedSiteChoices();
+ }
+ function identityKey(){
+  const people=workspaceTab==='profiles-parallel'?(phone?phonePeople.map(p=>[p.name,p.phone]):[{reserverName:byId('reserverName').value,phone:byId('phone').value},...extraProfiles].map(p=>[p.reserverName,p.phone])):[[byId('reserverName').value,byId('phone').value]];
+  return JSON.stringify([workspaceTab,byId('startDate').value,byId('nights').value,people]);
+ }
+ function userEdited(event){
+  if(!initialized||!modes.includes(workspaceTab))return;
+  if(!bodies.slice(0,2).some(item=>item.body.contains(event.target))||event.target.id==='triggerAt')return;
+  if(event.target.closest('.site-choice-editor'))return;
+  autoWanted=true;clearTimeout(autoTimer);autoTimer=0;queue();
  }
  function queue(){if(!scheduled){scheduled=true;setTimeout(refresh,80);}}
  window.prepareSiteChoice=async()=>{
@@ -111,5 +142,5 @@ window.buildDisplayReceipt=function(value){
   if(plannedSiteChoices()||workspaceTab==='watch')return true;
   await refreshAvailability();return rooms.some(r=>canSelectRoom(r.name));
  };
- document.addEventListener('DOMContentLoaded',()=>{queue();document.addEventListener('input',queue);document.addEventListener('change',queue);document.addEventListener('roomorderchange',queue);new MutationObserver(queue).observe(document.querySelector('main'),{childList:true,subtree:true});setInterval(queue,1200);});
+ document.addEventListener('DOMContentLoaded',()=>{queue();document.addEventListener('input',userEdited,true);document.addEventListener('change',userEdited,true);document.addEventListener('click',e=>{if(e.target.closest('.site-choice-tools button')){autoWanted=false;clearTimeout(autoTimer);autoTimer=0;}});document.addEventListener('roomorderchange',queue);new MutationObserver(queue).observe(document.querySelector('main'),{childList:true,subtree:true});setInterval(queue,1200);});
 })();

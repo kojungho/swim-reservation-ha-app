@@ -4,17 +4,17 @@ test('단계별 필수 입력, 팝업만 일괄선택·삭제, 2열·짧은 이�
  const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());
  for(const width of [320,390,1280]){
   const {page,errors}=await setup(browser,width);t.after(()=>page.close());
-  await page.waitForSelector('.step-toggle');
+  await page.waitForSelector('.booking-step-title');
   await page.evaluate(()=>loadPlan({mode:'reserve',date:'',name:'',phone:'',rooms:''}));
-  await page.waitForFunction(()=>document.querySelectorAll('.step-toggle')[1].disabled);
+  await page.waitForFunction(()=>document.querySelectorAll('.booking-step-title')[1].disabled);
   assert.equal(await page.locator('#reserverName').isVisible(),false);
   await page.evaluate(()=>{loadPlan({mode:'reserve',date:'2027-01-17',name:'',phone:'',rooms:''});});
-  await page.waitForFunction(()=>!document.querySelectorAll('.step-toggle')[1].disabled);
+  await page.waitForFunction(()=>!document.querySelectorAll('.booking-step-title')[1].disabled);
   assert.equal(await page.locator('#roomList').isVisible(),false);
   await page.locator('#reserverName').fill('모의예약자');await page.locator('#phone').fill('01000000000');
-  await page.waitForFunction(()=>!document.querySelectorAll('.step-toggle')[2].disabled);
+  await page.waitForFunction(()=>!document.querySelectorAll('.booking-step-title')[2].disabled);
   assert.equal(await page.locator('#watchSelectAll').isVisible(),false);assert.equal(await page.locator('#inspectButton').isVisible(),false);
-  await page.locator('#roomList').getByRole('button',{name:'사이트 선택',exact:true}).click();
+  // Completion of the required person fields automatically opens the picker.
   const popup=page.locator('.site-choice-dialog');await popup.waitFor();assert.equal(await popup.locator('.site-choice-option').count(),14);
   assert.equal(await popup.locator('.site-choice-option strong').filter({hasText:'존'}).count(),0);assert.equal(await popup.locator('.site-choice-option small').first().textContent(),'오픈 전');
   assert.equal(await popup.locator('.site-choice-options').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length),2);
@@ -32,7 +32,7 @@ test('단계별 필수 입력, 팝업만 일괄선택·삭제, 2열·짧은 이�
   assert.equal(await page.evaluate(()=>nativeMock.calls.filter(c=>c.action==='lookup').at(-1).data.profiles.length),1);
   assert.equal(await page.evaluate(()=>nativeMock.calls.filter(c=>c.action==='lookup').at(-1).data.profiles[0].id),'second');
   assert.equal(await page.getByRole('button',{name:'조회 중지',exact:true}).evaluate(e=>e.classList.contains('danger')),true);
-  assert.equal(await page.locator('#lookupCard summary').textContent(),'비회원 조회');
+  assert.equal(await page.locator('#lookupCard > details > summary').textContent(),'비회원 조회');
   assert.equal(await page.evaluate(()=>nativeMock.calls.some(c=>c.action==='run')),false);assert.deepEqual(errors,[]);
   if(width===390)await page.screenshot({path:'/tmp/swim-flow-phone-0412.png',fullPage:true});
  }
