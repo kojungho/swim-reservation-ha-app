@@ -1,9 +1,9 @@
 {
   "packageId": "kr.swim.phone",
-  "versionCode": 13,
-  "versionName": "0.4.7",
+  "versionCode": 17,
+  "versionName": "0.4.11",
   "minSupportedVersionCode": 5,
   "changeType": "fix",
-  "apkUrl": "https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-v0.4.7/swim-phone-0.4.7.apk",
-  "sha256": "694c664a57c57454f654b937310eb20c4fc3007c8fe1fd9b78bf1419912d14dc"
+  "apkUrl": "https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-v0.4.11/swim-phone-0.4.11.apk",
+  "sha256": "490d37bd71a97d713e4f82116f369d2262af38f967f939d15935f1e9e8407204"
 }
