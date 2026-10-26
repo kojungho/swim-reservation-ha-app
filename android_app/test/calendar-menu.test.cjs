@@ -11,6 +11,7 @@ test('앱·애드온 월말 입실은 다음 달 퇴실 달력으로 이동하�
    await page.locator('#startDate').click();await page.waitForFunction(date=>{const e=document.querySelector('[data-date="'+date+'"]');return e&&!e.disabled;},start);await page.locator('[data-date="'+start+'"]').click();
    await page.waitForFunction(date=>{const e=document.querySelector('[data-date="'+date+'"]');return e&&!e.disabled;},end);assert.match(await page.locator('#datePickerTitle').textContent(),/퇴실/);await page.locator('[data-date="'+end+'"]').click();assert.equal(await page.locator('#checkoutDate').inputValue(),end);
   }
+  if(phone)assert.equal(await page.evaluate(()=>{$('startDate').value='2026-12-22';$('triggerAt').value='2027-01-01T00:00';updateStayFields();return readPlan().trigger;}),0);
   const count=()=>phone?page.evaluate(()=>nativeMock.calls.filter(c=>c.action==='monthly').length):Promise.resolve(reads);
   const tab=async name=>page.evaluate(({phone,name})=>phone?switchTab(name):switchWorkspaceTab(name),{phone,name});
   await tab('monthly');await page.waitForTimeout(300);const first=await count();assert.ok(first>0);await tab('people');await tab('monthly');await page.waitForTimeout(300);assert.ok(await count()>first);

@@ -77,7 +77,7 @@ window.buildDisplayReceipt=function(value){
    const state=document.createElement('small');state.id='haConnectionState';linkRow.prepend(update);connection.append(state);document.querySelector('header').append(connection);
    // Execution permissions are requested by native dialogs at the point of use.
    setHidden(byId('settingsCard'),true);window.applyDisplaySync(nativeState.haDisplay);
-   const previousRead=readPlan;readPlan=function(){const value=previousRead(),interval=nativeState.haDisplay?.cached?.submitIntervalSeconds;if(Number.isInteger(interval)&&interval>=0&&interval<=60)value.submitInterval=interval;return value;};
+   const previousRead=readPlan;readPlan=function(){if(workspaceTab!=='watch')byId('triggerAt').value=beforeOpening()?bookingOpenIso(byId('startDate').value):'';const value=previousRead(),interval=nativeState.haDisplay?.cached?.submitIntervalSeconds;if(Number.isInteger(interval)&&interval>=0&&interval<=60)value.submitInterval=interval;return value;};
    const originalSwitch=switchTab;switchTab=function(tab){if(tab==='settings')return;originalSwitch(tab);queue();};
    const originalApply=applyUi;applyUi=function(){originalApply();setHidden(byId('reservationConnectionDetails'),true);};
    const originalUpdate=updateStayFields;updateStayFields=function(){originalUpdate();setHidden(byId('stayOpeningDate'),true);};

@@ -18,7 +18,7 @@ test('앱·애드온 비회원 한 줄·접힘·상세 오른쪽·월별 가운�
   assert.equal(await page.locator(phone?'[data-phone-run]':'#runNowButton').isVisible(),false);
   await page.evaluate(phone=>{if(phone)switchTab('monthly');else switchWorkspaceTab('monthly');},phone);
   await page.waitForTimeout(200);
-  if(phone)await page.evaluate(()=>renderPhoneMonth({month:document.querySelector('#monthlyMonth').value,ok:true,openThrough:'2026-12-31',days:{}}));
+  if(phone)await page.evaluate(()=>{const result={month:document.querySelector('#monthlyMonth').value,ok:true,openThrough:'2026-12-31',days:{}};nativeMock.state.monthly=result;featureMonthKey=JSON.stringify(result);renderPhoneMonth(result);});
   const center=await page.locator('#monthlyContent').evaluate(e=>{const r=e.getBoundingClientRect(),p=e.parentElement.getBoundingClientRect();return Math.abs((r.left+r.right)-(p.left+p.right))/2;});assert.ok(center<2,'calendar offset '+center);
   if(phone){const table=await page.locator('.monthly-calendar').evaluate(e=>{const r=e.getBoundingClientRect(),p=e.parentElement.getBoundingClientRect();return {center:Math.abs((r.left+r.right)-(p.left+p.right))/2,columns:e.querySelectorAll('thead th').length};});assert.ok(table.center<2);assert.equal(table.columns,7);}
   if(width===390)await page.screenshot({path:phone?'/tmp/swim-phone-0415-month.png':'/tmp/swim-addon-21520-month.png',fullPage:true});
