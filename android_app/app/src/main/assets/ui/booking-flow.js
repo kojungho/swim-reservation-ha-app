@@ -107,6 +107,12 @@ window.buildDisplayReceipt=function(value){
   if(validDate&&beforeOpening()){const opening=bookingOpenIso(date);if(opening)byId('triggerAt').value=opening;}
   if(phone)setHidden(document.querySelector('[data-phone-run]'),!validDate||beforeOpening()||workspaceTab==='watch');
   document.querySelectorAll('.room-actions').forEach(el=>setHidden(el,true));
+  const roomSection=byId('roomList').closest('section');
+  for(const editor of roomSection.querySelectorAll('.site-choice-editor')){
+   const host=editor.closest('#roomList')?roomSection:editor.closest('.second-profile-panel,.phone-rank-panel');if(!host)continue;
+   host.classList.add('site-choice-positioned');const style=getComputedStyle(host);for(const [name,value]of [['--choice-top',style.paddingTop],['--choice-right',style.paddingRight]])if(host.style.getPropertyValue(name)!==value)host.style.setProperty(name,value);
+   const heading=host===roomSection?host.querySelector('.section-title'):host.querySelector(':scope>h3');heading?.classList.add('site-choice-heading');
+  }
   for(const el of bodies[0].body.querySelectorAll('button,a'))if(el.textContent.includes('공식'))setHidden(el,true);
   if(autoWanted&&ready[2]&&modes.includes(workspaceTab)&&!autoTimer){
    const key=identityKey();autoTimer=setTimeout(()=>{autoTimer=0;if(!autoWanted||identityKey()!==key||document.hidden||document.querySelector('dialog[open]'))return;autoWanted=false;if(autoKey===key)return;autoKey=key;

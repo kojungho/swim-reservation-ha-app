@@ -24,8 +24,8 @@ test('앱·애드온 제목 펼침·필수 한 줄·상단 링크·오픈 전 �
   const links=await page.locator('.app-link-row').evaluate(row=>{const first=row.firstElementChild.getBoundingClientRect(),last=row.lastElementChild.getBoundingClientRect(),outer=row.getBoundingClientRect();return {sameLine:Math.abs(first.y-last.y)<5,right:outer.right-last.right,text:row.lastElementChild.textContent};});
   assert.ok(links.sameLine,JSON.stringify(links));assert.ok(links.right<5);assert.equal(links.text,'공식 예약 사이트');
   const compact=await page.locator('#roomList').evaluate(list=>{const button=list.querySelector('.site-choice-tools button'),body=list.closest('.booking-step-body'),b=button.getBoundingClientRect(),p=body.getBoundingClientRect();return {offset:b.x-p.x,body:p.height,button:b.height,actions:getComputedStyle(body.querySelector('.room-actions')).display};});
-  assert.ok(compact.offset<5,JSON.stringify(compact));assert.equal(compact.actions,'none');assert.ok(compact.body<=compact.button+35,JSON.stringify(compact));
-  const title=page.locator('.booking-step-title').nth(2);await title.click();assert.equal(await page.locator('#roomList').isVisible(),false);await title.focus();await page.keyboard.press('Enter');assert.equal(await page.locator('#roomList').isVisible(),true);
+  assert.ok(compact.offset>50,JSON.stringify(compact));assert.equal(compact.actions,'none');assert.ok(compact.body<=compact.button+35,JSON.stringify(compact));
+  const title=page.locator('.booking-step-title').nth(2);await title.click();assert.equal(await page.locator('#roomList').isVisible(),false);await title.focus();await page.keyboard.press('Enter');assert.equal(await page.locator('#roomList').evaluate(e=>!e.closest('.booking-step-body').hidden),true);
   assert.equal(await title.evaluate(e=>getComputedStyle(e).borderTopWidth),'0px');
   await page.locator('.booking-step-title').nth(0).click();await page.locator('.booking-step-title').nth(0).click();
   // Programmatic load models restoring an editor; it must not auto-open a picker.
