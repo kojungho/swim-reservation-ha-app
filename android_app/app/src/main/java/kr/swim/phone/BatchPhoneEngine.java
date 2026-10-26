@@ -14,8 +14,8 @@ final class BatchPhoneEngine {
         if(p.mode.equals("multiple")){for(String room:p.priorities()){Plan task=Plan.from(p.json());task.mode="reserve";task.people=new JSONArray();task.rooms=room;tasks.add(task);}}
         else for(int i=0;i<p.people.length();i++){JSONObject person=p.people.getJSONObject(i);Plan task=Plan.from(p.json());task.mode="reserve";task.people=new JSONArray();task.name=person.getString("name");task.payer=person.optString("payer");task.phone=person.getString("phone");task.rooms=person.getString("rooms");tasks.add(task);}
     }
-    void start(){events.stage("PREPARING","다인·다중 예약 시작 · 폰 세션은 순차 격리 실행 · 제출 간격 "+parent.submitInterval+"초 이상");next();}
-    void next(){if(ended)return;if(index>=tasks.size()){finish(successes==tasks.size()?"SUCCESS":"PARTIAL","다인·다중 결과: 완료 "+successes+" / "+tasks.size()+" · 각 예약은 입금 대기입니다.");return;}
+    void start(){if(tasks.isEmpty()){finish("FAILED",ResultStatus.batchMessage(0,0));return;}events.stage("PREPARING","다인·다중 예약 시작 · 폰 세션은 순차 격리 실행 · 제출 간격 "+parent.submitInterval+"초 이상");next();}
+    void next(){if(ended)return;if(index>=tasks.size()){finish(ResultStatus.batchStage(successes,tasks.size()),ResultStatus.batchMessage(successes,tasks.size()));return;}
         Plan task=tasks.get(index);task.rooms=String.join(", ",task.priorities().stream().filter(room->!claimed.contains(room)).collect(java.util.stream.Collectors.toList()));
         if(task.rooms.isEmpty()){record("NO_ROOM");index++;next();return;}
         long delay=Math.max(0,nextStart-SystemClock.elapsedRealtime());if(delay>0){events.stage("PREPARING","다음 예약 제출 간격 대기");main.postDelayed(this::launch,delay);}else launch();

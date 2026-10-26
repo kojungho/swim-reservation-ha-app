@@ -22,6 +22,7 @@ public final class MainActivity extends Activity {
     WebView screen;
     AppUpdates updates;
     private String pendingMapExport;
+    private volatile long lookupRequest=0;
     private volatile boolean confirmationPending=false;
     private volatile String pendingPlanId="";
     private LocalStore store;private PhoneRepository repository;
@@ -32,7 +33,7 @@ public final class MainActivity extends Activity {
     }
     @SuppressLint({"SetJavaScriptEnabled","AddJavascriptInterface"})
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);pendingMapExport=state==null?null:state.getString("pendingMapExport");store=new LocalStore(this);repository=new PhoneRepository(this);updates=new AppUpdates(this);
+        super.onCreate(state);receiveNotificationIntent(getIntent());pendingMapExport=state==null?null:state.getString("pendingMapExport");store=new LocalStore(this);repository=new PhoneRepository(this);updates=new AppUpdates(this);
         android.widget.FrameLayout root=new android.widget.FrameLayout(this);screen=new WebView(this);root.addView(screen,new android.widget.FrameLayout.LayoutParams(-1,-1));setContentView(root);
         root.setOnApplyWindowInsetsListener((v,insets)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets b=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.ime());v.setPadding(b.left,b.top,b.right,b.bottom);}else v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets.consumeSystemWindowInsets();});
         WebSettings settings=screen.getSettings();settings.setJavaScriptEnabled(true);settings.setDomStorageEnabled(false);settings.setAllowFileAccess(false);settings.setAllowContentAccess(false);settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
@@ -60,6 +61,8 @@ public final class MainActivity extends Activity {
         });
         screen.loadUrl("https://"+UI_HOST+"/index.html");
     }
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);receiveNotificationIntent(intent);refreshRuntime();}
+    private void receiveNotificationIntent(Intent intent){if(intent!=null&&"kr.swim.phone.OPEN_LOOKUP".equals(intent.getAction()))lookupRequest=SystemClock.elapsedRealtimeNanos();}
     private WebResourceResponse denied(){return new WebResourceResponse("text/plain","UTF-8",403,"Blocked",Map.of(),new ByteArrayInputStream(new byte[0]));}
     String api(String raw){
         try{
@@ -108,7 +111,7 @@ public final class MainActivity extends Activity {
         android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
         JSONObject editor=repository.load(),run=store.loadDocument("run");
         repository.bindLegacyRun();PhoneRuns.reconcile(this);
-        return PhoneRuns.snapshot(this).put("confirmationPending",confirmationPending).put("pendingPlanId",pendingPlanId)
+        return PhoneRuns.snapshot(this).put("lookupRequest",lookupRequest).put("confirmationPending",confirmationPending).put("pendingPlanId",pendingPlanId)
             .put("notifications",getSystemService(NotificationManager.class).areNotificationsEnabled()).put("battery",power.isIgnoringBatteryOptimizations(getPackageName())).put("alarm",AlarmReceiver.permitted(this)).put("availability",store.availability()).put("catalog",new JSONArray(RoomCatalog.NAMES)).put("clock",SiteClock.state(this)).put("clockResult",store.loadDocument("clock-result")).put("monthly",store.loadDocument("monthly-result")).put("lookup",store.loadDocument("lookup-result")).put("draftClearedAt",editor.optLong("draftClearedAt")).put("clearedDraft",editor.optJSONObject("clearedDraft"));
     }
     private void refreshRuntime(){if(screen!=null&&!isFinishing()&&!isDestroyed())screen.evaluateJavascript("window.refreshPhoneRuntime?.()",null);}

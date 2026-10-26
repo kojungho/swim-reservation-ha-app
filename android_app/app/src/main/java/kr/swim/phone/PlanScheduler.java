@@ -30,6 +30,7 @@ final class PlanScheduler {
             if(!lookup&&plan.trigger>SiteClock.now(c)){
                 store.state("WAITING","실행 예정 "+RunNotice.time(plan.trigger)+" (한국 시간) · 예약 대기",true);
                 AlarmReceiver.schedule(c,plan.trigger,slot);
+                c.getSystemService(NotificationManager.class).notify(10+slot,ReservationService.notice(c,store.message(),true,slot));
             }else {
                 store.state("STARTING","폰 내부 예약 엔진 시작 준비",true);
                 c.startForegroundService(new Intent(c,ReservationService.class).setAction("RUN").putExtra("lookup",lookup).putExtra("slot",slot));
@@ -40,7 +41,7 @@ final class PlanScheduler {
         NotificationManager n=c.getSystemService(NotificationManager.class);
         if(!n.areNotificationsEnabled()||n.getNotificationChannel(ReservationService.CHANNEL).getImportance()==NotificationManager.IMPORTANCE_NONE
             ||Build.VERSION.SDK_INT>=33&&c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
-            throw new IllegalStateException("실행 알림을 먼저 허용하세요. 시각 대기 중에는 알림을 표시하지 않습니다.");
+            throw new IllegalStateException("실행 알림을 먼저 허용하세요. 예약 대기와 실행 상태를 알림으로 표시합니다.");
         if(!lookup&&(plan.watch()||plan.trigger>0)&&!AlarmReceiver.permitted(c))throw new IllegalStateException("예약·10분 이상 감시 알람 권한을 먼저 허용하세요.");
         if(!lookup&&!plan.demo()&&(plan.watch()||plan.trigger>0)&&!c.getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(c.getPackageName()))
             throw new IllegalStateException("잠금 중 실행을 위해 배터리 제한 예외를 먼저 허용하세요.");
@@ -53,6 +54,6 @@ final class PlanScheduler {
     static synchronized void stopSlot(Context c,int slot){
         LocalStore s=new LocalStore(c,slot);if(!s.active())return;AlarmReceiver.cancel(c,slot);
         if(ReservationService.alive(slot))c.startService(new Intent(c,ReservationService.class).setAction("STOP").putExtra("slot",slot));
-        else {s.watchDueElapsed(0);s.state(s.uncertain()?"CHECK_REQUIRED":"STOPPED","사용자가 대기 일정을 중지했습니다.",false);}
+        else {s.watchDueElapsed(0);s.state(s.uncertain()?"CHECK_REQUIRED":"STOPPED","사용자가 대기 일정을 중지했습니다.",false);c.getSystemService(NotificationManager.class).cancel(10+slot);c.getSystemService(NotificationManager.class).notify(20+slot,ReservationService.notice(c,s.message(),false,slot));}
     }
 }

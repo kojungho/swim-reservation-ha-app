@@ -33,3 +33,12 @@ test('여러 활성 일정은 각자 중지하며 나머지 일정 시작은 5�
  const card=i=>page.locator('[data-plan-id="plan-'+i+'"]');assert.equal(await card(1).locator('[data-plan-action=start]').isDisabled(),true);assert.equal(await card(1).locator('[data-plan-action=stop]').isEnabled(),true);assert.equal(await card(2).locator('[data-plan-action=stop]').isEnabled(),true);assert.equal(await card(3).locator('[data-plan-action=start]').isEnabled(),true);assert.equal(await card(3).locator('[data-plan-action=stop]').isDisabled(),true);
  await page.evaluate(()=>{nativeMock.state.activeCount=5;poll();});assert.equal(await card(6).locator('[data-plan-action=start]').isDisabled(),true);await page.evaluate(()=>{nativeMock.state.activeCount=1;nativeMock.state.legacyUnbound=true;poll();});assert.equal(await card(3).locator('[data-plan-action=start]').isDisabled(),true);assert.equal(await page.locator('[data-phone-stop]').isEnabled(),true);assert.match(await page.locator('#phoneStatus').innerText(),/이전 버전 실행/);assert.deepEqual(errors,[]);
 });
+
+test('알림 조회 동작은 편집 내용을 보존하고 조회 화면을 한 번만 열며 자동 예약하지 않는다',async t=>{
+ const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());const {page,errors}=await setup(browser);t.after(()=>page.close());
+ await page.evaluate(()=>{$('planName').value='보존할 편집';nativeMock.state.lookupRequest=123;poll();});
+ assert.equal(await page.locator('#lookupCard').isVisible(),true);assert.equal(await page.locator('#planName').inputValue(),'보존할 편집');
+ assert.equal(await page.evaluate(()=>nativeMock.calls.some(c=>c.action==='lookup'||c.action==='run')),false);
+ await page.evaluate(()=>{switchTab('priority');poll();});assert.equal(await page.locator('#lookupCard').isVisible(),false);
+ await page.evaluate(()=>{nativeMock.state.lookupRequest=124;poll();});assert.equal(await page.locator('#lookupCard').isVisible(),true);assert.deepEqual(errors,[]);
+});

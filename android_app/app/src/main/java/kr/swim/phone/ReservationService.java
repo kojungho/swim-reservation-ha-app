@@ -12,8 +12,20 @@ public final class ReservationService extends Service {
     static Notification notice(Context c,String text,boolean ongoing){return notice(c,text,ongoing,RunContext.slot(c));}
     static Notification notice(Context c,String text,boolean ongoing,int slot){
         PendingIntent open=PendingIntent.getActivity(c,0,new Intent(c,MainActivity.class),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-        Notification.Builder b=new Notification.Builder(c,ongoing?CHANNEL:RESULT_CHANNEL).setSmallIcon(R.drawable.ic_camp).setContentTitle("쉼오지 폰 예약").setVisibility(Notification.VISIBILITY_PRIVATE).setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text)).setContentIntent(open).setOngoing(ongoing).setOnlyAlertOnce(true);
+        Notification.Builder b=new Notification.Builder(c,ongoing?CHANNEL:RESULT_CHANNEL).setSmallIcon(R.drawable.ic_camp).setContentTitle(notificationTitle(c,slot)).setVisibility(Notification.VISIBILITY_PRIVATE).setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text)).setContentIntent(open).setOngoing(ongoing).setOnlyAlertOnce(true);
+        b.addAction(new Notification.Action.Builder(null,"예약 내역 조회",lookupIntent(c)).build());
         if(ongoing)b.addAction(new Notification.Action.Builder(null,slot<0?"전체 중지":"이 작업 중지",PendingIntent.getService(c,100+slot,new Intent(c,ReservationService.class).setAction("STOP").putExtra("slot",slot),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT)).build());return b.build();
+    }
+    static PendingIntent lookupIntent(Context c){return PendingIntent.getActivity(c,500,new Intent(c,MainActivity.class).setAction("kr.swim.phone.OPEN_LOOKUP").addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);}
+    static String notificationTitle(Context c,int slot){
+        if(slot<0)return "예약 실행 중";
+        LocalStore s=new LocalStore(c,slot);boolean demo=false;try{demo=s.load("run").demo();}catch(Exception ignored){}
+        return ResultStatus.title(s.stage(),demo);
+    }
+    static void lookupResult(Context c,org.json.JSONArray rows,int failures){
+        channel(c);String text=ResultStatus.lookupMessage(rows,failures);
+        Notification n=new Notification.Builder(c,RESULT_CHANNEL).setSmallIcon(R.drawable.ic_camp).setVisibility(Notification.VISIBILITY_PRIVATE).setContentTitle(failures>0?"예약 조회 · 확인 필요":"예약 조회 완료").setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text)).setContentIntent(lookupIntent(c)).setAutoCancel(true).setOnlyAlertOnce(true).build();
+        c.getSystemService(NotificationManager.class).notify(200,n);
     }
     void foreground(){Notification n=notice(this,"예약·조회 "+tasks.size()+"건 실행 중",true,-1);if(Build.VERSION.SDK_INT>=34)startForeground(1,n,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);else startForeground(1,n);}
     @Override public int onStartCommand(Intent intent,int flags,int startId){
