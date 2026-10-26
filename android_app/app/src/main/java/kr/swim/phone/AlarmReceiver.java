@@ -14,7 +14,7 @@ public final class AlarmReceiver extends BroadcastReceiver {
         c.getSystemService(AlarmManager.class).setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,when-SiteClock.offset(c),pending(c,slot));
     }
     static void cancel(Context c){cancel(c,RunContext.slot(c));}
-    static void cancel(Context c,int slot){c.getSystemService(AlarmManager.class).cancel(pending(c,slot));}
+    static void cancel(Context c,int slot){c.getSystemService(AlarmManager.class).cancel(pending(c,slot));ClockSyncReceiver.cancel(c,slot);}
     static void scheduleWatch(Context c,long dueElapsed){
         if(!permitted(c))throw new IllegalStateException("정확한 알람 권한이 필요합니다.");
         c.getSystemService(AlarmManager.class).setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,dueElapsed,pending(c,RunContext.slot(c)));

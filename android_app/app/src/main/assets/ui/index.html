@@ -6,12 +6,13 @@
   <meta name="theme-color" content="#174d39">
   <title>쉼오지 예약 도우미</title>
   <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="phone.css">
+  <link rel="stylesheet" href="booking-flow.css">
 </head>
 <body>
   <main class="shell">
     <header>
       <div>
-        <div class="header-meta"><p class="eyebrow">ANDROID · INDEPENDENT APP</p><button id="serverTimeButton" type="button" aria-haspopup="dialog" aria-controls="serverTimeDialog"><span>서버시간</span><strong id="siteClock">동기화 중</strong></button></div>
+        <div class="header-meta"><p class="eyebrow">ANDROID · INDEPENDENT APP</p><div id="serverTimeButton"><span>서버 시간</span><strong id="siteClock">동기화 대기</strong></div></div>
         <div class="app-title-row"><h1>쉼오지 예약 도우미</h1><button id="bookingHelpButton" class="info-button" type="button" aria-label="예약 모드별 사용 방법" aria-haspopup="dialog" aria-controls="bookingHelpDialog" title="예약 모드별 사용 방법">ⓘ</button><div id="statusBadge" class="badge idle">불러오는 중</div></div>
       </div>
     </header>
@@ -55,7 +56,7 @@
       <p>예약자 정보에 저장한 모든 사람의 예약을 조회합니다.</p>
       <p id="lookupMessage" role="status"></p>
       <div id="savedLookupArea"></div>
-      <details class="one-off-lookup"><summary>1회성 조회</summary><p>저장하지 않고 입력한 한 사람만 조회합니다.</p><div class="grid two lookup-fields"><label>예약자명<input id="oneOffName" autocomplete="off"></label><label>휴대폰 번호<input id="oneOffPhone" inputmode="numeric" autocomplete="off"></label></div><div class="section-actions"><button id="oneOffLookupButton" type="button" class="secondary" disabled>조회</button></div><div id="oneOffReservations" class="reservation-list" hidden></div></details>
+      <details class="one-off-lookup"><summary>비회원 조회</summary><p>저장하지 않고 입력한 한 사람만 조회합니다.</p><div class="grid two lookup-fields"><label>예약자명<input id="oneOffName" autocomplete="off"></label><label>휴대폰 번호<input id="oneOffPhone" inputmode="numeric" autocomplete="off"></label></div><div class="section-actions"><button id="oneOffLookupButton" type="button" class="secondary" disabled>조회</button></div><div id="oneOffReservations" class="reservation-list" hidden></div></details>
     </section>
 
     <section id="planCard" class="card">
@@ -242,5 +243,6 @@
   <script src="phone.js"></script>
   <script src="date-picker.js"></script>
   <script src="phone-features.js"></script>
+  <script src="booking-flow.js"></script>
 </body>
 </html>

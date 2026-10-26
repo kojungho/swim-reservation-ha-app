@@ -35,7 +35,8 @@ function initializeWorkspace() {
   const lookupControl = document.createElement("div"); lookupControl.className = "lookup-request-control";
   const spinner = document.createElement("span"); spinner.id = "reservationLookupSpinner"; spinner.className = "query-spinner"; spinner.hidden = true; spinner.setAttribute("role", "status"); spinner.setAttribute("aria-label", "예약 조회 중");
   lookupControl.append(elements.reservationLookupButton, spinner);
-  actions.append(elements.siteProfileSelect.closest("label"), elements.reservationSiteButton, lookupControl);
+  const stop=document.createElement("button");stop.type="button";stop.textContent="조회 중지";stop.className="danger";stop.id="lookupStopButton";stop.disabled=true;stop.onclick=()=>stopSavedLookup();
+  actions.append(elements.siteProfileSelect.closest("label"), elements.reservationSiteButton, lookupControl,stop);
   document.getElementById("savedLookupArea").append(actions, elements.reservationList);
   elements.multipleProfileSelect.addEventListener("change", updateBookingProfileVisibility);
   document.getElementById("watchProfileSelect").addEventListener("change", updateBookingProfileVisibility);
@@ -144,7 +145,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
   document.querySelectorAll("main.shell > section.card:not([hidden]) .section-title > span").forEach((span, index) => { span.textContent = String(index + 1); });
   if (tab === "people" && entering) void (async () => {
     setReservationLookupLoading(1);
-    try { await loadBookingBook(); refreshLookupSiteSelector(); await loadReservations(); }
+    try { await loadBookingBook(); refreshLookupSiteSelector(); }
     finally { setReservationLookupLoading(-1); }
   })().catch(error => {
     elements.reservationList.hidden = false;
@@ -182,7 +183,7 @@ function refreshLookupSiteSelector() {
 }
 
 let oneOffLookupRequest = 0;
-let oneOffLookupRunning = false;
+let oneOffLookupRunning = false,oneOffLookupController=null;
 function updateOneOffLookupButton() {
   document.getElementById("oneOffLookupButton").disabled = busy || oneOffLookupRunning || !document.getElementById("oneOffName").value.trim() || !/^01\d{8,9}$/.test(document.getElementById("oneOffPhone").value.replace(/\D/g, ""));
 }
@@ -197,13 +198,14 @@ async function lookupOneOff(profile) {
   const id = ++oneOffLookupRequest;
   const container = document.getElementById("oneOffReservations");
   container.hidden = false; container.textContent = `${profile.reserverName} 조회 중…`;
-  oneOffLookupRunning = true; updateOneOffLookupButton();
+  oneOffLookupController?.abort();const controller=new AbortController();oneOffLookupController=controller;
+  oneOffLookupRunning = true; updateOneOffLookupButton();setReservationLookupLoading(1);
   try {
-    const result = await request("reservations", { method: "POST", body: JSON.stringify({ profiles: [profile] }) });
+    const result = await request("reservations", { method: "POST", signal:controller.signal, body: JSON.stringify({ profiles: [profile] }) });
     if (id !== oneOffLookupRequest) return;
     renderReservations(result.reservations || [], { container, profiles: [profile], errors: result.lookupErrors || [], reload: () => lookupOneOff(profile) });
-  } catch (error) { if (id === oneOffLookupRequest){container.textContent="";window.showFloatingMessage?.(`조회 실패: ${error.message}`,{error:true});} }
-  finally { if (id === oneOffLookupRequest) { oneOffLookupRunning = false; updateOneOffLookupButton(); } }
+  } catch (error) { if (id === oneOffLookupRequest&&!controller.signal.aborted){container.textContent="";window.showFloatingMessage?.(`조회 실패: ${error.message}`,{error:true});} }
+  finally { if (id === oneOffLookupRequest) { oneOffLookupRunning = false; updateOneOffLookupButton();setReservationLookupLoading(-1); } }
 }
 
 function planMessage(text,error=false) { const node=document.getElementById("planMessage");node.textContent=shortRoomText(text);node.hidden=error;if(error)window.showFloatingMessage?.(shortRoomText(text),{error:true}); }
@@ -449,7 +451,7 @@ function renderExecutionPlans() {
       await refreshPlans();
     });
     const state = document.createElement("small"); state.textContent = `${bookingModeName(entry)} · ${planStateLabel(entry)}`;
-    const timing = document.createElement("span"); timing.className = "execution-plan-time"; timing.textContent = planStartTime(entry);
+    const timing = document.createElement("span"); timing.className = "execution-plan-time"; timing.textContent = planStartTime(entry); timing.hidden=planIsActive(entry);
     const progress = document.createElement("span"); progress.className = "execution-plan-progress"; progress.setAttribute("role", "status"); progress.textContent = entry.status?.message || "";
     const controls = document.createElement("div"); controls.className = "execution-plan-controls";
     for (const [action, title] of [["start", "시작"], ["stop", "중지"], ["delete", "삭제"]]) {

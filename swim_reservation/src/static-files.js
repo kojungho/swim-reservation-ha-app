@@ -6,6 +6,8 @@ export async function serveStatic(pathname, response) {
   const routes = {
     "/": ["index.html", "text/html; charset=utf-8"],
     "/index.html": ["index.html", "text/html; charset=utf-8"],
+    "/booking-flow.js": ["booking-flow.js", "text/javascript; charset=utf-8"],
+    "/booking-flow.css": ["booking-flow.css", "text/css; charset=utf-8"],
     "/toast.js": ["toast.js", "text/javascript; charset=utf-8"],
     "/app.js": ["app.js", "text/javascript; charset=utf-8"],
     "/workspace.js": ["workspace.js", "text/javascript; charset=utf-8"],
@@ -23,4 +25,3 @@ export async function serveStatic(pathname, response) {
   response.writeHead(200, { "Content-Type": route[1], "Cache-Control": "no-store" });
   response.end(body);
 }
-

@@ -44,6 +44,7 @@ final class PhoneReads {
             store.saveDocument("monthly-result",new JSONObject().put("pending",false).put("ok",true).put("month",month).put("openThrough",raw.getString("open")).put("days",days).put("capturedAt",System.currentTimeMillis()));
         }catch(Exception e){try{store.saveDocument("monthly-result",new JSONObject().put("pending",false).put("ok",false).put("month",month).put("error","월별 조회 실패 · 0곳으로 판단하지 않습니다."));}catch(Exception ignored){}}});
     }
+    static void syncTimeNow(Context c)throws Exception{long start=System.currentTimeMillis(),date;if(testMode)date=start-500;else{HttpURLConnection connection=open("https://"+PhoneEngine.HOST+"/camp/","HEAD");connection.setConnectTimeout(3000);connection.setReadTimeout(3000);try{if(connection.getResponseCode()!=200)throw new IOException();date=connection.getDate();}finally{connection.disconnect();}}SiteClock.save(c,date,start,System.currentTimeMillis());}
     static void time(Context c)throws Exception{
         LocalStore current=new LocalStore(c);if(PhoneRuns.executing(c))throw new IllegalStateException("실행 중에는 시각 동기화를 하지 않습니다.");
         worker.execute(()->{LocalStore store=new LocalStore(c);try{long start=System.currentTimeMillis();long date;

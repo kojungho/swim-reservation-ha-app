@@ -105,19 +105,21 @@ export class ReservationManager {
     return rows;
   }
 
-  async withPage(action) {
+  async withPage(action, {signal} = {}) {
     const browser = await chromium.launch({
       executablePath: this.executablePath,
       headless: true,
       args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--lang=ko-KR"]
     });
+    const cancel=()=>{void browser.close().catch(()=>{});};
     try {
+      signal?.addEventListener("abort",cancel,{once:true});signal?.throwIfAborted();
       const context = await browser.newContext({ locale: "ko-KR", timezoneId: "Asia/Seoul", userAgent: chromiumUserAgent(browser) });
       const page = await context.newPage();
       page.setDefaultTimeout(10_000);
       return await action(page);
     } finally {
-      await browser.close();
+      signal?.removeEventListener("abort",cancel);await browser.close();
     }
   }
 }

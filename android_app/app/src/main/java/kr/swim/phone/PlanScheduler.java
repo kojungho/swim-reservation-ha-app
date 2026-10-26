@@ -12,10 +12,11 @@ final class PlanScheduler {
         start(c,plan,lookup,"");
     }
     static synchronized void start(Context c,Plan plan,boolean lookup,String planId)throws Exception {
+        if(lookup){PhoneInspection.start(c,plan);return;}
         new PhoneRepository(c).bindLegacyRun();
         if(!lookup&&!plan.demo())PhoneRuns.guardUncertain(c,plan);
         int slot=PhoneRuns.allocate(c,lookup,planId);LocalStore store=new LocalStore(c,slot);
-        if(!PhoneSessions.supported())CampLookup.cancel();
+        if(!PhoneSessions.supported()){CampLookup.cancel();PhoneInspection.cancel();}
 
         if(!lookup&&!plan.demo())AppUpdates.requireSupported(c);
         plan.validate(lookup);ReservationService.channel(c);
@@ -29,7 +30,7 @@ final class PlanScheduler {
         try {
             if(!lookup&&plan.trigger>SiteClock.now(c)){
                 store.state("WAITING","실행 예정 "+RunNotice.time(plan.trigger)+" (한국 시간) · 예약 대기",true);
-                AlarmReceiver.schedule(c,plan.trigger,slot);
+                AlarmReceiver.schedule(c,plan.trigger,slot);ClockSyncReceiver.arm(c,plan.trigger,slot);
                 c.getSystemService(NotificationManager.class).notify(10+slot,ReservationService.notice(c,store.message(),true,slot));
             }else {
                 store.state("STARTING","폰 내부 예약 엔진 시작 준비",true);
@@ -46,12 +47,13 @@ final class PlanScheduler {
         if(!lookup&&!plan.demo()&&(plan.watch()||plan.trigger>0)&&!c.getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(c.getPackageName()))
             throw new IllegalStateException("잠금 중 실행을 위해 배터리 제한 예외를 먼저 허용하세요.");
     }
-    static synchronized void stop(Context c){for(int n=0;n<=PhoneRuns.LIMIT;n++)stopSlot(c,n);}
+    static synchronized void stop(Context c){PhoneInspection.cancel();for(int n=0;n<=PhoneRuns.LIMIT;n++)stopSlot(c,n);}
     static synchronized void stopPlan(Context c,String id)throws Exception{
         for(int n=0;n<=PhoneRuns.LIMIT;n++){LocalStore s=new LocalStore(c,n);if(s.active()&&id.equals(s.runPlanId())){stopSlot(c,n);return;}}
         throw new IllegalStateException("이 일정은 진행 중이 아닙니다.");
     }
     static synchronized void stopSlot(Context c,int slot){
+        if(PhoneInspection.alive(slot)){PhoneInspection.cancel();return;}
         LocalStore s=new LocalStore(c,slot);if(!s.active())return;AlarmReceiver.cancel(c,slot);
         if(ReservationService.alive(slot))c.startService(new Intent(c,ReservationService.class).setAction("STOP").putExtra("slot",slot));
         else {s.watchDueElapsed(0);s.state(s.uncertain()?"CHECK_REQUIRED":"STOPPED","사용자가 대기 일정을 중지했습니다.",false);c.getSystemService(NotificationManager.class).cancel(10+slot);c.getSystemService(NotificationManager.class).notify(20+slot,ReservationService.notice(c,s.message(),false,slot));}

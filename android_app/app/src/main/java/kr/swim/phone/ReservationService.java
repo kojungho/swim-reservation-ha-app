@@ -22,12 +22,8 @@ public final class ReservationService extends Service {
         LocalStore s=new LocalStore(c,slot);boolean demo=false;try{demo=s.load("run").demo();}catch(Exception ignored){}
         return ResultStatus.title(s.stage(),demo);
     }
-    static void lookupResult(Context c,org.json.JSONArray rows,int failures){
-        channel(c);String text=ResultStatus.lookupMessage(rows,failures);
-        Notification n=new Notification.Builder(c,RESULT_CHANNEL).setSmallIcon(R.drawable.ic_camp).setVisibility(Notification.VISIBILITY_PRIVATE).setContentTitle(failures>0?"예약 조회 · 확인 필요":"예약 조회 완료").setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text)).setContentIntent(lookupIntent(c)).setAutoCancel(true).setOnlyAlertOnce(true).build();
-        c.getSystemService(NotificationManager.class).notify(200,n);
-    }
-    void foreground(){Notification n=notice(this,"예약·조회 "+tasks.size()+"건 실행 중",true,-1);if(Build.VERSION.SDK_INT>=34)startForeground(1,n,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);else startForeground(1,n);}
+    static void lookupResult(Context c,org.json.JSONArray rows,int failures){c.getSystemService(NotificationManager.class).cancel(200);}
+    void foreground(){Notification n=notice(this,"예약 "+tasks.size()+"건 실행 중",true,-1);if(Build.VERSION.SDK_INT>=34)startForeground(1,n,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);else startForeground(1,n);}
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         String action=intent==null?"RECOVER":intent.getAction();int slot=intent==null?0:intent.getIntExtra("slot",0);
         if("STOP".equals(action)){if(slot<0){for(ReservationTask t:new ArrayList<>(tasks.values()))t.stop();PlanScheduler.stop(this);}else {ReservationTask task=tasks.get(slot);if(task!=null)task.stop();else PlanScheduler.stopSlot(this,slot);}return START_NOT_STICKY;}

@@ -63,5 +63,5 @@ final class PhoneRuns {
     }
     private static int priority(JSONObject r){if(r.optBoolean("lookup"))return 0;return r.optString("stage").equals("SUBMITTING")?3:r.optString("stage").equals("WAITING")||r.optString("stage").equals("WATCHING")?1:2;}
     static void reschedule(Context c)throws Exception{for(int n=0;n<=LIMIT;n++){LocalStore s=new LocalStore(c,n);if(s.active()&&s.stage().equals("WAITING"))AlarmReceiver.schedule(c,s.load("run").trigger,n);}}
-    static void reconcile(Context c){for(int n=0;n<=LIMIT;n++){ResultStatus.repairLegacyResult(c,n);LocalStore s=new LocalStore(c,n);if(s.active()&&!s.stage().equals("WAITING")&&!ReservationService.alive(n)&&System.currentTimeMillis()-s.heartbeat()>10000)s.state(s.uncertain()?"CHECK_REQUIRED":"STOPPED","실행 서비스 종료 확인 · 자동 재제출 없이 중지",false);}}
+    static void reconcile(Context c){for(int n=0;n<=LIMIT;n++){ResultStatus.repairLegacyResult(c,n);LocalStore s=new LocalStore(c,n);if(s.active()&&!s.stage().equals("WAITING")&&!ReservationService.alive(n)&&!PhoneInspection.alive(n)&&System.currentTimeMillis()-s.heartbeat()>10000)s.state(s.uncertain()?"CHECK_REQUIRED":"STOPPED","실행 서비스 종료 확인 · 자동 재제출 없이 중지",false);}}
 }

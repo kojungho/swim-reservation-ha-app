@@ -1,17 +1,19 @@
 /* Shared app/add-on site picker. Counts never establish a same-site stay. */
-window.createSiteChoiceEditor = function createSiteChoiceEditor({items,canSelect,status,label=name=>String(name).replace('_',' · '),prefix='',onChange,ranked=true,message=''}) {
+window.createSiteChoiceEditor = function createSiteChoiceEditor({items,canSelect,status,label=name=>String(name).split('_')[0],prefix='',onChange,ranked=true,message=''}) {
   const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
   const wrap=node('div',undefined,'site-choice-editor'),tools=node('div',undefined,'site-choice-tools');
-  const add=node('button','사이트 선택','secondary');add.type='button';add.setAttribute('aria-haspopup','dialog');
+  const add=node('button','사이트 선택','secondary');add.disabled=items.length>0&&items.every(i=>['unavailable','booked'].includes(status(i.name).kind));add.type='button';add.setAttribute('aria-haspopup','dialog');
   const pickerSource={wrap,items,canSelect,status,label,onChange,add};
   if(window.activeSiteChoicePopup?.prefix===prefix){window.activeSiteChoicePopup.source=pickerSource;window.activeSiteChoicePopup.render();}
-  add.addEventListener('click',()=>{
+  add.addEventListener('click',async()=>{
+    if(window.prepareSiteChoice&&!await window.prepareSiteChoice())return;
+    if(window.activeSiteChoicePopup)return;
     const dialog=node('dialog',undefined,'site-choice-dialog'),heading=node('h2','캠핑사이트 선택'),count=node('p'),grid=node('div',undefined,'site-choice-options'),actions=node('div',undefined,'site-choice-dialog-actions');
-    const chosen=new Set(items.filter(i=>i.enabled).map(i=>i.name));count.setAttribute('aria-live','polite');
-    const popup={prefix,source:pickerSource,dialog,render:null};window.activeSiteChoicePopup=popup;
+    const sourceNow=wrap.isConnected?pickerSource:(window.latestSiteChoices?.get(prefix)||pickerSource);const chosen=new Set(sourceNow.items.filter(i=>i.enabled).map(i=>i.name));count.setAttribute('aria-live','polite');
+    const popup={prefix,source:sourceNow,dialog,render:null};window.activeSiteChoicePopup=popup;
     const update=()=>count.textContent=chosen.size+'개 선택 · 완료를 누르면 한 번에 적용됩니다.';
     popup.render=()=>{const source=popup.source;grid.replaceChildren();update();
-      for(const item of source.items){const row=node('label',undefined,'site-choice-option'),check=node('input'),body=node('span'),state=source.status(item.name);check.type='checkbox';check.value=item.name;check.checked=chosen.has(item.name);check.disabled=!chosen.has(item.name)&&!item.enabled&&!source.canSelect(item.name);row.dataset.available=String(!check.disabled);check.setAttribute('aria-label',source.label(item.name));body.append(node('strong',source.label(item.name)),node('small',state.label,'availability '+state.kind));check.addEventListener('change',()=>{check.checked?chosen.add(item.name):chosen.delete(item.name);update();});row.append(check,body);grid.append(row);}
+      for(const item of source.items){if(!source.canSelect(item.name)){chosen.delete(item.name);continue;}const row=node('label',undefined,'site-choice-option'),check=node('input'),body=node('span'),state=source.status(item.name);check.type='checkbox';check.value=item.name;check.checked=chosen.has(item.name);check.disabled=!chosen.has(item.name)&&!item.enabled&&!source.canSelect(item.name);row.dataset.available=String(!check.disabled);check.setAttribute('aria-label',source.label(item.name));body.append(node('strong',source.label(item.name)),node('small',state.label,'availability '+state.kind));check.addEventListener('change',()=>{check.checked?chosen.add(item.name):chosen.delete(item.name);update();});row.append(check,body);grid.append(row);}
     };popup.render();
     const cancel=node('button','취소','secondary'),done=node('button','완료','primary');cancel.type=done.type='button';cancel.onclick=()=>dialog.close();
     done.onclick=()=>{
@@ -21,7 +23,8 @@ window.createSiteChoiceEditor = function createSiteChoiceEditor({items,canSelect
       for(const item of source.items)item.enabled=chosen.has(item.name);
       const selected=[...old,...added];source.items.splice(0,source.items.length,...selected,...source.items.filter(i=>!i.enabled));window.activeSiteChoicePopup=null;dialog.close();source.onChange();
     };
-    actions.append(cancel,done);dialog.append(heading,count,grid,actions);document.body.append(dialog);
+    const all=node('button','전체 선택','secondary'),clear=node('button','전체 삭제','danger');all.type=clear.type='button';all.onclick=()=>{for(const i of popup.source.items)if(popup.source.canSelect(i.name))chosen.add(i.name);popup.render();};clear.onclick=()=>{chosen.clear();popup.render();};
+    actions.append(cancel,done);const bulk=node('div',undefined,'site-choice-bulk');bulk.append(all,clear);dialog.append(heading,bulk,count,grid,actions);document.body.append(dialog);
     const observer=new MutationObserver(()=>{if(!popup.source.wrap.isConnected)dialog.close();});observer.observe(document.body,{childList:true,subtree:true});
     dialog.addEventListener('close',()=>{observer.disconnect();if(window.activeSiteChoicePopup===popup)window.activeSiteChoicePopup=null;dialog.remove();if(popup.source.add.isConnected)popup.source.add.focus({preventScroll:true});},{once:true});dialog.showModal();
   });
@@ -60,11 +63,12 @@ window.createSiteChoiceEditor = function createSiteChoiceEditor({items,canSelect
       move(current[to]);const focusLabel=drag.getAttribute('aria-label');onChange();
       [...document.querySelectorAll('.site-choice-row .room-drag-handle')].find(b=>b.getAttribute('aria-label')===focusLabel)?.focus({preventScroll:true});
     });
-    row.append(text,remove,drag);list.append(row);
+    row.append(drag,text,remove);list.append(row);
   });
   wrap.append(list);
   const note=node('p',message,'site-choice-message');note.hidden=!message;note.setAttribute('role','status');wrap.append(note);
+  window.latestSiteChoices??=new Map();window.latestSiteChoices.set(prefix,pickerSource);
   return wrap;
 };
 
-if(!document.getElementById('site-choice-dialog-style')){const style=document.createElement('style');style.id='site-choice-dialog-style';style.textContent=`.site-choice-dialog{box-sizing:border-box;width:min(520px,calc(100vw - 24px));max-height:80dvh;padding:20px;border:1px solid var(--line,#dae4df);border-radius:22px;background:var(--card,#fff);color:var(--ink,#18392a)}.site-choice-dialog::backdrop{background:#10231b80}.site-choice-dialog h2{margin:0 0 8px;font-size:20px}.site-choice-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}.site-choice-option{display:flex;align-items:center;gap:8px;padding:12px 8px;border:1px solid var(--line,#d8e3dc);border-radius:12px;min-width:0;cursor:pointer}.site-choice-option:has(input:checked){border-color:var(--green,#28734d);background:#e7f5ec}.site-choice-option[data-available=false]{opacity:.5;cursor:default}.site-choice-option input{width:20px;height:20px;flex:none;accent-color:var(--green,#28734d)}.site-choice-option span{display:grid;gap:6px;min-width:0}.site-choice-option strong{font-size:13px;overflow-wrap:anywhere}.site-choice-option small{font-size:11px;white-space:normal}.site-choice-dialog-actions{display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:-20px;background:var(--card,#fff);padding:12px 0}.site-choice-dialog-actions button{min-width:76px;min-height:44px}.site-choice-tools{justify-content:flex-end}`;document.head.append(style);}
+if(!document.getElementById('site-choice-dialog-style')){const style=document.createElement('style');style.id='site-choice-dialog-style';style.textContent=`.site-choice-dialog{box-sizing:border-box;width:min(520px,calc(100vw - 24px));max-height:80dvh;padding:14px;border:1px solid var(--line,#dae4df);border-radius:22px;background:var(--card,#fff);color:var(--ink,#18392a)}.site-choice-dialog::backdrop{background:#10231b80}.site-choice-dialog h2{margin:0 0 8px;font-size:20px}.site-choice-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;margin:6px 0}.site-choice-option{display:flex;align-items:center;gap:5px;padding:6px;border:1px solid var(--line,#d8e3dc);border-radius:12px;min-width:0;cursor:pointer}.site-choice-option:has(input:checked){border-color:var(--green,#28734d);background:#e7f5ec}.site-choice-option[data-available=false]{opacity:.5;cursor:default}.site-choice-option input{width:20px;height:20px;flex:none;accent-color:var(--green,#28734d)}.site-choice-option span{display:flex;align-items:center;justify-content:space-between;gap:3px;min-width:0;flex:1}.site-choice-option strong{white-space:nowrap}.site-choice-bulk{display:flex;gap:6px}.site-choice-dialog>p{font-size:12px;margin:6px 0}.site-choice-bulk button{padding:6px 10px;min-height:34px}.site-choice-option strong{font-size:13px;overflow-wrap:anywhere}.site-choice-option small{font-size:11px;white-space:normal}.site-choice-dialog-actions{display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:-20px;background:var(--card,#fff);padding:12px 0}.site-choice-dialog-actions button{min-width:76px;min-height:44px}.site-choice-tools{justify-content:flex-end}`;document.head.append(style);}

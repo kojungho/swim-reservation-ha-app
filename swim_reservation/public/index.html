@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#174d39">
   <title>쉼오지 예약 도우미</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="booking-flow.css">
 </head>
 <body>
   <main class="shell">
@@ -59,7 +60,7 @@
       <p>예약자 정보에 저장한 모든 사람의 예약을 조회합니다.</p>
       <p id="lookupMessage" role="status"></p>
       <div id="savedLookupArea"></div>
-      <details class="one-off-lookup"><summary>1회성 조회</summary><p>저장하지 않고 입력한 한 사람만 조회합니다.</p><div class="grid two lookup-fields"><label>예약자명<input id="oneOffName" autocomplete="off"></label><label>휴대폰 번호<input id="oneOffPhone" inputmode="numeric" autocomplete="off"></label></div><div class="section-actions"><button id="oneOffLookupButton" type="button" class="secondary" disabled>조회</button></div><div id="oneOffReservations" class="reservation-list" hidden></div></details>
+      <details class="one-off-lookup"><summary>비회원 조회</summary><p>저장하지 않고 입력한 한 사람만 조회합니다.</p><div class="grid two lookup-fields"><label>예약자명<input id="oneOffName" autocomplete="off"></label><label>휴대폰 번호<input id="oneOffPhone" inputmode="numeric" autocomplete="off"></label></div><div class="section-actions"><button id="oneOffLookupButton" type="button" class="secondary" disabled>조회</button></div><div id="oneOffReservations" class="reservation-list" hidden></div></details>
     </section>
 
     <section id="planCard" class="card">
@@ -254,5 +255,6 @@
   <script src="booking-book.js"></script>
   <script src="editor-drafts.js"></script>
   <script src="app.js"></script>
+  <script src="booking-flow.js"></script>
 </body>
 </html>

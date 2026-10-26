@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.16";
+const CLIENT_VERSION = "2.15.17";
 window.stayCalendar = new StayCalendarModel(month => request(`monthly-availability?month=${month}`, { timeoutMs: 25000 }), () => Number.isFinite(currentSiteTime()) ? currentSiteTime() : Date.now());
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
@@ -29,8 +29,8 @@ function plannedSiteChoices(){
 }
 function siteChoiceState(name){
   if(!elements.startDate.value)return {kind:'unknown',label:'입실·퇴실일 선택 필요'};
-  if(workspaceTab==='watch')return {kind:'unknown',label:plannedSiteChoices()?'예정 · 취소 대기 후보':'취소 대기 후보'};
-  if(plannedSiteChoices())return {kind:'before-open-no-data',label:'예정 · 오픈 전 후보'};
+  if(workspaceTab==='watch')return {kind:'unknown',label:plannedSiteChoices()?'오픈 전':'취소 대기'};
+  if(plannedSiteChoices())return {kind:'before-open-no-data',label:'오픈 전'};
   const kind=availabilityContext===`${elements.startDate.value}/${Number(elements.nights.value)}`?availabilityByRoom.get(name)||'unknown':'unknown';
   return {kind,label:kind==='available'&&Number(elements.nights.value)>1?'연박 가능':kind==='unavailable'&&Number(elements.nights.value)>1?'선택 기간 연박 불가':AVAILABILITY_LABELS[kind]||'미확인'};
 }
@@ -62,9 +62,9 @@ function setRoomSelection(items, enabled) {
 }
 function renderRoomSelectionControls() {
   const groups = workspaceTab !== "watch" && elements.bookingMode.value === "profiles-parallel" ? [firstProfilePriority, ...extraProfiles.map(profile => profile.roomPriority || [])] : [rooms];
-  document.getElementById("watchSelectAll").hidden = false;
+  document.getElementById("watchSelectAll").hidden = true;
   document.getElementById("watchSelectAll").disabled = workspaceTab !== "watch" && !groups.some(items => items.some(room => canSelectRoom(room.name) && !room.enabled));
-  document.getElementById("watchDeselectAll").hidden = !groups.some(items => items.some(room => room.enabled));
+  document.getElementById("watchDeselectAll").hidden = true;
 }
 const elements = Object.fromEntries([
   "startDate", "triggerAt", "nights", "bookingMode", "epochValue", "openAtValue", "reservationUrl", "roomList", "roomSectionTitle", "roomSectionHelp", "reserverName",
@@ -1007,25 +1007,31 @@ async function maybeAutoLookupReservations(status) {
 }
 
 let savedLookupRequest = 0;
-let savedLookupPending = 0;
+let savedLookupPending = 0,savedLookupController=null;
+function stopSavedLookup(){savedLookupRequest++;savedLookupController?.abort();savedLookupController=null;oneOffLookupRequest++;oneOffLookupController?.abort();oneOffLookupRunning=false;updateOneOffLookupButton();savedLookupPending=0;setReservationLookupLoading(0);showMessage("조회 중지");}
 function setReservationLookupLoading(delta) {
   savedLookupPending = Math.max(0, savedLookupPending + delta);
   const loading = savedLookupPending > 0;
+  const stop=document.getElementById("lookupStopButton");if(stop)stop.disabled=!loading;
+  elements.reservationLookupButton.disabled=loading;
   const spinner = document.getElementById("reservationLookupSpinner");
   if (spinner) spinner.hidden = !loading;
   elements.reservationList.setAttribute("aria-busy", String(loading));
 }
 async function loadReservations() {
   const id = ++savedLookupRequest;
-  const profiles = bookingBook.map(bookingIdentity);
+  const selected=Number(elements.siteProfileSelect.value)-1;
+  const profiles = bookingBook[selected]?[bookingIdentity(bookingBook[selected])]:[];
+  if(!profiles.length){showMessage("예약자를 선택하세요.",true);return;}
+  savedLookupController?.abort();const controller=new AbortController();savedLookupController=controller;
   setReservationLookupLoading(1);
   try {
-    const result = await request("reservations");
+    const result = await request("reservations",{method:"POST",signal:controller.signal,body:JSON.stringify({profiles})});
     if (id !== savedLookupRequest) return result;
     const queried = result.lookupStatuses?.length ? result.lookupStatuses.map(item => item.profile || profiles[item.profileIndex]) : profiles;
     renderReservations(result.reservations || [], { profiles: queried, errors: result.lookupErrors || [] });
     return result;
-  } finally { setReservationLookupLoading(-1); }
+  } catch(error){if(controller.signal.aborted)return;throw error;} finally { if(id===savedLookupRequest)setReservationLookupLoading(-1); }
 }
 
 function renderStatus(status) {
@@ -1137,7 +1143,7 @@ function renderReservations(reservations, { container = elements.reservationList
     row.className = "reservation-row";
     if (reservation.cancelPolicy === 'contact') row.classList.add('reservation-compact');
     if (reservation.cancelPolicy === 'contact') {
-      row.innerHTML = `<div><strong>${escapeHtml(shortRoomText(reservation.room))}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span></div><div class="reservation-compact-state"><strong>${escapeHtml(reservation.status)}</strong><span>${escapeHtml(reservation.total)}</span></div><details class="reservation-more"><summary>상세</summary><div><span>예약번호 ${escapeHtml(reservation.id)}</span>${reservation.depositDeadline ? `<span>입금 기한 ${escapeHtml(reservation.depositDeadline)}</span>` : ''}<span class="cancel-disabled">취소는 캠핑장에 문의해 주세요</span></div></details>`;
+      row.replaceChildren(...window.buildDisplayReceipt(reservation).childNodes);
     } else {
     row.innerHTML = `
       <div><strong>${escapeHtml(shortRoomText(reservation.room))}</strong><span>${escapeHtml(reservation.stayDate)} · ${escapeHtml(reservation.nights)}</span>${reservation.cancelPolicy === 'contact' ? `<span>예약번호 ${escapeHtml(reservation.id)}</span>` : ''}</div>
@@ -1242,8 +1248,8 @@ function setButtonsDisabled(disabled) {
 
 async function refreshLogs() {
   const result = await request("logs?limit=300");
-  const entries = result.entries || [];
-  currentLogText = entries.slice().reverse().map(formatLogEntry).join("\n");
+  const entries = [...(result.entries || [])].sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
+  currentLogText = entries.map(formatLogEntry).join("\n");
   elements.logList.replaceChildren();
   if (!entries.length) {
     const empty = document.createElement("p");

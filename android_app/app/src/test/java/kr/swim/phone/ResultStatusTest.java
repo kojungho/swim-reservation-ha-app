@@ -42,6 +42,6 @@ public class ResultStatusTest {
  }
  @Test public void lookupNotificationDoesNotReplaceScheduleResult()throws Exception{
   NotificationManager m=c.getSystemService(NotificationManager.class);m.notify(21,ReservationService.notice(c,"예약 결과 확인 필요",false,1));
-  ReservationService.lookupResult(c,new JSONArray(),1);assertNotNull(Shadows.shadowOf(m).getNotification(21));Notification n=Shadows.shadowOf(m).getNotification(200);assertEquals("예약 조회 · 확인 필요",n.extras.getCharSequence(Notification.EXTRA_TITLE));assertTrue(n.extras.getCharSequence(Notification.EXTRA_TEXT).toString().contains("예약 유무를 확인하지 못했습니다"));
+  ReservationService.lookupResult(c,new JSONArray(),1);assertNotNull(Shadows.shadowOf(m).getNotification(21));assertNull(Shadows.shadowOf(m).getNotification(200));
  }
 }

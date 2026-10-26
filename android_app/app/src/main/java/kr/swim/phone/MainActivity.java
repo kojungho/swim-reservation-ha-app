@@ -18,7 +18,7 @@ import java.io.*;
 /** Bundled add-on presentation; native, server-independent reservation service remains separate. */
 public final class MainActivity extends Activity {
     static final String UI_HOST="phone.swim.invalid";
-    static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","toast.js","phone-features.js","date-picker.js","stay-calendar.js","site-choice.js","site-map.png");
+    static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","toast.js","phone-features.js","booking-flow.js","booking-flow.css","ha-map.png","date-picker.js","stay-calendar.js","site-choice.js","site-map.png");
     WebView screen;
     AppUpdates updates;
     private String pendingMapExport;
@@ -42,6 +42,7 @@ public final class MainActivity extends Activity {
         screen.setWebViewClient(new WebViewClient(){
             @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
                 if(!localUi(request.getUrl(),request.isForMainFrame()))return denied();
+                if(request.getUrl().getPath().equals("/ha-map.png")){try{return new WebResourceResponse("image/png",null,new FileInputStream(HaDisplay.photo(MainActivity.this)));}catch(Exception e){return denied();}}
                 if(request.getUrl().getPath().startsWith("/map/")){try{String id=request.getUrl().getLastPathSegment().replace(".jpg","");return new WebResourceResponse("image/jpeg",null,new FileInputStream(new MapPhotos(MainActivity.this).file(id)));}catch(Exception e){return denied();}}
                 String path=request.getUrl().getLastPathSegment();String type=path.endsWith(".js")?"application/javascript":path.endsWith(".css")?"text/css":path.endsWith(".png")?"image/png":"text/html";
                 try{return new WebResourceResponse(type,"UTF-8",200,"OK",Map.of("Cache-Control","no-store","Content-Security-Policy","default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"),getAssets().open("ui/"+path));}catch(IOException e){return denied();}
@@ -77,10 +78,11 @@ public final class MainActivity extends Activity {
                 case "calendarMonth":result=PhoneReads.calendar(this,data.getString("month"),data.optBoolean("force"));break;
                 case "lookup":{JSONArray profiles=data.optJSONArray("profiles");if(profiles==null)profiles=repository.load().getJSONArray("profiles");JSONArray selected=profiles;main.post(()->{try{CampLookup.begin(this,selected);}catch(Exception e){if(CampLookup.active!=null){message("이미 예약 내역을 조회 중입니다.");return;}try{store.saveDocument("lookup-result",new JSONObject().put("pending",false).put("error",e instanceof IllegalArgumentException||e instanceof IllegalStateException?e.getMessage():"예약조회 초기화 실패 · 앱을 다시 열어 주세요.").put("capturedAt",System.currentTimeMillis()));}catch(Exception ignored){}}});result="예약 내역 조회 중";break;}
                 case "lookupStop":main.post(CampLookup::cancel);result="조회 중지";break;
-                case "maps":result=new MapPhotos(this).state();break;
-                case "mapPick":main.post(()->{if(PhoneRuns.anyActive(this)){message("예약 작업 중에는 사진을 바꾸지 마세요.");return;}Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);try{startActivityForResult(picker,45);}catch(Exception e){message("사진 선택 화면을 열지 못했습니다.");}});result="사진 선택";break;
-                case "mapExport":{String id=data.getString("id");Intent save=mapExportIntent(id);main.post(()->{if(pendingMapExport!=null){message("사진 저장 위치를 먼저 선택하거나 취소해 주세요.");return;}pendingMapExport=id;try{startActivityForResult(save,46);}catch(Exception e){pendingMapExport=null;message("사진 저장 화면을 열지 못했습니다.");}});result="사진 저장 위치 선택";break;}
-                case "mapAction":{if(PhoneRuns.anyActive(this))throw new IllegalStateException("예약 작업을 먼저 중지하세요.");String mapAction=data.getString("action");if(mapAction.equals("delete")&&!data.optBoolean("confirmed"))throw new IllegalArgumentException("사진 삭제 확인이 필요합니다.");result=new MapPhotos(this).apply(mapAction,data.getString("id"));break;}
+                case "maps":result=new JSONObject().put("photos",new JSONArray()).put("selected","");break;
+                case "haSync":HaDisplay.sync(this,false);result="HA 표시 동기화";break;
+                case "mapPick":case "mapExport":case "mapAction":throw new IllegalStateException("사진은 애드온에서만 관리합니다.");
+
+
                 case "state":result=runtimeState();break;
                 case "draft":result=repository.saveDraft(data);break;
                 case "draftReset":{String mode=data.getString("mode");if(!java.util.Set.of("reserve","watch","multiple","profiles-parallel").contains(mode))throw new IllegalArgumentException("예약 화면을 확인하세요.");JSONObject state=repository.load(),drafts=state.optJSONObject("drafts");if(drafts!=null)drafts.remove(mode);JSONObject latest=state.optJSONObject("draft");if(latest!=null&&mode.equals(latest.optString("mode","reserve")))state.put("draft",new Plan().json().put("mode",mode));store.saveDocument("phone-ui-v1",state);result=state;break;}
@@ -111,8 +113,8 @@ public final class MainActivity extends Activity {
         android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
         JSONObject editor=repository.load(),run=store.loadDocument("run");
         repository.bindLegacyRun();PhoneRuns.reconcile(this);
-        return PhoneRuns.snapshot(this).put("lookupRequest",lookupRequest).put("confirmationPending",confirmationPending).put("pendingPlanId",pendingPlanId)
-            .put("notifications",getSystemService(NotificationManager.class).areNotificationsEnabled()).put("battery",power.isIgnoringBatteryOptimizations(getPackageName())).put("alarm",AlarmReceiver.permitted(this)).put("availability",store.availability()).put("catalog",new JSONArray(RoomCatalog.NAMES)).put("clock",SiteClock.state(this)).put("clockResult",store.loadDocument("clock-result")).put("monthly",store.loadDocument("monthly-result")).put("lookup",store.loadDocument("lookup-result")).put("draftClearedAt",editor.optLong("draftClearedAt")).put("clearedDraft",editor.optJSONObject("clearedDraft"));
+        return PhoneRuns.snapshot(this).put("haDisplay",HaDisplay.status(this)).put("lookupRequest",lookupRequest).put("confirmationPending",confirmationPending).put("pendingPlanId",pendingPlanId)
+            .put("notifications",getSystemService(NotificationManager.class).areNotificationsEnabled()).put("battery",power.isIgnoringBatteryOptimizations(getPackageName())).put("alarm",AlarmReceiver.permitted(this)).put("availability",new LocalStore(this,6).availability()).put("inspectBusy",PhoneInspection.alive(6)).put("catalog",new JSONArray(RoomCatalog.NAMES)).put("clock",SiteClock.state(this)).put("clockResult",store.loadDocument("clock-result")).put("monthly",store.loadDocument("monthly-result")).put("lookup",store.loadDocument("lookup-result")).put("draftClearedAt",editor.optLong("draftClearedAt")).put("clearedDraft",editor.optJSONObject("clearedDraft"));
     }
     private void refreshRuntime(){if(screen!=null&&!isFinishing()&&!isDestroyed())screen.evaluateJavascript("window.refreshPhoneRuntime?.()",null);}
     private void confirmRun(Plan plan,String id){
@@ -132,8 +134,8 @@ public final class MainActivity extends Activity {
     private void safeSettings(Runnable action){try{action.run();}catch(Exception e){message("설정 화면을 열지 못했습니다. 시스템 앱 정보에서 직접 확인해 주세요.");}}
     private void open(Uri uri){try{startActivity(new Intent(Intent.ACTION_VIEW,uri));}catch(Exception e){message("브라우저를 열지 못했습니다.");}}
     private void message(String text){if(!isFinishing()&&screen!=null)screen.evaluateJavascript("window.showFloatingMessage?.("+JSONObject.quote(text)+",{error:true})",null);}
-    @Override protected void onResume(){super.onResume();if(store!=null)PhoneRuns.reconcile(this);if(updates!=null)updates.resume();refreshRuntime();}
-    @Override protected void onPause(){if(updates!=null)updates.pause();super.onPause();}
+    @Override protected void onResume(){super.onResume();if(store!=null)PhoneRuns.reconcile(this);if(updates!=null)updates.resume();HaDisplay.sync(this,false);refreshRuntime();}
+    @Override protected void onPause(){PhoneInspection.cancel();if(updates!=null)updates.pause();super.onPause();}
     Intent mapExportIntent(String id)throws Exception{
         new MapPhotos(this).registeredFile(id);
         return new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("image/jpeg").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"swim-map-"+id+".jpg");

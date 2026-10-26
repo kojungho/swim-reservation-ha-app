@@ -1,5 +1,6 @@
 import {serveStatic} from "./static-files.js";
 import http from "node:http";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -114,6 +115,7 @@ const server = http.createServer(async (request, response) => {
       await store.recordLog("info", "submission-settings", `다인·다중 예약 최종 제출 간격을 ${settings.intervalSeconds}초로 저장했습니다.`, settings);
       return json(response, 200, settings);
     }
+    if(url.pathname==="/api/phone-display"&&request.method==="GET"){const image=await siteMap.read();return json(response,200,{schema:1,settings:await uiSettings.read(),submitIntervalSeconds:(await submissionSettings.read()).intervalSeconds,photoSha256:createHash("sha256").update(image).digest("hex")});}
     if (url.pathname === "/api/ui-settings" && request.method === "GET") return json(response, 200, await uiSettings.read());
     if (url.pathname === "/api/ui-settings" && request.method === "PUT") {
       try { return json(response, 200, await uiSettings.save(await readJsonBody(request))); }
@@ -251,7 +253,9 @@ const server = http.createServer(async (request, response) => {
       let profiles;
       try { profiles = request.method === "POST" ? normalizeLookupProfiles((await readJsonBody(request)).profiles) : await store.getSavedProfiles(); }
       catch (error) { return json(response, 400, { error: error.message }); }
-      const result = await lookupProfiles(profiles, reservationManager);
+      const controller=new AbortController();const cancel=()=>{if(!response.writableEnded)controller.abort();};response.once("close",cancel);
+      let result;try{result=await lookupProfiles(profiles,reservationManager,"예약자",{signal:controller.signal});}catch(error){if(controller.signal.aborted)return;throw error;}finally{response.off("close",cancel);}
+      if(controller.signal.aborted)return;
       const { reservations, lookupErrors } = result;
       await store.recordLog(lookupErrors.length ? "error" : "info", "reservation-check", `예약확인 ${reservations.length}건, 조회 실패 ${lookupErrors.length}명.`, { lookupErrors: lookupErrors.map(({ profileIndex, message }) => ({ profileIndex, message })) });
       return json(response, 200, result);

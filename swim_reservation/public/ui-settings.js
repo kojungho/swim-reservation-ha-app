@@ -1,4 +1,6 @@
 const uiDefaults = {
+  appMenuLabels:{priority:"단독 예약",multiple:"다중 예약","profiles-parallel":"다인 예약",watch:"취소 대기"},
+  addonMenus:{priority:true,multiple:true,"profiles-parallel":true,watch:true},appMenus:{priority:true,multiple:true,"profiles-parallel":true,watch:true},
   fonts: { title: 28, heading: 18, body: 14, field: 16, button: 13, room: 14, status: 12, calendar: 12, list: 14, log: 12 },
   serverTime: true, reservationInfo: true, safety: true, watchInfo: true, stayRange: true, dateInputVersion: 1,
   menuCorner: "top-right", mapCorner: "bottom-right", menuSpacing: 6, mapIcon: true, floatingSize: 46
@@ -39,6 +41,9 @@ async function initializeUiSettings() {
     const info = help(description); info.setAttribute("aria-label", `${name} 설명`);
     title.append(label, info); wrapper.append(title, input); grid.append(wrapper);
   };
+  for(const [target,title]of [["addonMenus","애드온 메뉴"],["appMenus","앱 메뉴"]]){const grid=section(title);uiSettings[target]??={priority:true,multiple:true,"profiles-parallel":true,watch:true};for(const [key,label]of [["priority","단독 예약"],["multiple","다중 예약"],["profiles-parallel","다인 예약"],["watch","취소 대기"]]){const input=document.createElement("input");input.type="checkbox";input.id=target+"-"+key;input.checked=uiSettings[target][key]!==false;input.onchange=()=>{uiSettings[target][key]=input.checked;window.applyBookingMenus?.(uiSettings);};row(grid,label,"이 화면의 메뉴만 표시하거나 숨깁니다. 저장 일정과 실행 중 작업은 유지됩니다.",input);}}
+  const names=section("앱 메뉴 이름");
+  for(const [key,label]of Object.entries(uiDefaults.appMenuLabels)){const input=document.createElement("input");input.id="appMenuLabel-"+key;input.type="text";input.maxLength=20;input.required=true;input.value=uiSettings.appMenuLabels?.[key]||label;input.oninput=()=>{uiSettings.appMenuLabels??={...uiDefaults.appMenuLabels};uiSettings.appMenuLabels[key]=input.value;};row(names,label,"앱에 표시할 이름 · 1~20자",input);}
   const fonts = section("글자 크기");
   for (const [key, name] of Object.entries(fontNames)) {
     const input = document.createElement("input"); input.type = "number"; input.id = `font-${key}`; input.min = "10"; input.max = key === "title" ? "42" : "24"; input.step = "1"; input.value = uiSettings.fonts[key];
@@ -111,12 +116,15 @@ async function initializeUiSettings() {
 }
 
 function renderUiSettings() {
+  for(const [key,label]of Object.entries(uiDefaults.appMenuLabels)){const input=document.getElementById("appMenuLabel-"+key);if(input)input.value=uiSettings.appMenuLabels?.[key]||label;}
+  for(const target of ["addonMenus","appMenus"])for(const key of ["priority","multiple","profiles-parallel","watch"]){const input=document.getElementById(target+"-"+key);if(input)input.checked=uiSettings[target]?.[key]!==false;}
   for (const key of Object.keys(fontNames)) document.getElementById(`font-${key}`).value = uiSettings.fonts[key];
   for (const key of ["serverTime", "reservationInfo", "safety", "watchInfo", "stayRange", "mapIcon"]) document.getElementById(`setting-${key}`).checked = uiSettings[key];
   for (const key of ["menuCorner", "mapCorner", "menuSpacing", "floatingSize"]) document.getElementById(`setting-${key}`).value = uiSettings[key];
 }
 
 function applyUiVisibility() {
+  window.applyBookingMenus?.(uiSettings);
   document.getElementById("serverTimeButton").hidden = !uiSettings.serverTime;
   document.getElementById("safetyNotice").hidden = !uiSettings.safety;
   document.getElementById("reservationConnectionDetails").hidden = !uiSettings.reservationInfo || workspaceTab === "watch";

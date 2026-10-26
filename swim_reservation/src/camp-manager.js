@@ -7,7 +7,7 @@ import { maskedProfile, operationTrace, diagnosticError } from './camp-trace.js'
 export function reservationCheckUrl() { return `${CAMP_ROOT}lookup.php`; }
 export class ReservationManager extends LegacyManager {
   async cancel() { throw new Error('새 사이트에는 확인된 온라인 취소 기능이 없습니다. 공식 안내에 따라 캠핑장에 연락해 주세요.'); }
-  async list(profile, { profileIndex } = {}) {
+  async list(profile, { profileIndex, signal } = {}) {
     const trace = operationTrace(this.log, { profile: maskedProfile(profile), ...(Number.isInteger(profileIndex) ? { profileIndex } : {}) });
     try { return await trace.step('lookup-session', () => this.withPage(async page => {
       const responseError = response => {
@@ -18,7 +18,7 @@ export class ReservationManager extends LegacyManager {
       page.on('response', responseError);
       try { return await this.load(page, profile, trace); }
       finally { page.off('response', responseError); }
-    })); }
+    }, {signal})); }
     finally { await trace.flush(); }
   }
   async load(page, profile, trace = operationTrace(this.log, { profile: maskedProfile(profile) })) {
