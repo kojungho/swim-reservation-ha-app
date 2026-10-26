@@ -1,0 +1,10 @@
+# Android 0.4.18 (24) / addon 2.15.23
+
+- Both clients use identical shared booking-flow.js/CSS. Required-field focus exit and next-step entry highlight the missing field, focus/scroll to it and display a floating message. Invalid phone formats are included; optional payer is excluded. Correct input clears the highlight. Open dialogs are not interrupted.
+- A real mouse-wheel test, without focusing the missing inputs first, verifies that passing a collapsed incomplete section reopens it and returns to the missing field in both clients.
+- History title is 예약 대기 일정 등록 및 예약 이력. 예약 대기 일정 명칭 input appears only before opening; an immediate plan uses the Korean reservation execution/registration day, not the check-in date. Switching back to a future opening retains its previously entered pending name. Existing saved plan names are not migrated.
+- Final required-field/naming UI tests: 3 passed. Targeted UI regression with shared site picker and guided flow: 6 passed. Addon plan-manager synthetic tests: 18 passed. Android JVM: 43 passed; assembleDebug and lintDebug succeeded.
+- APK 2,844,735 bytes, SHA-256 `b3e60bf1d1423a65c8dd20234051611ac86e646203eb0213d484865cca91a615`. Final APK bundled flow hash matches source (`71be0433e782cbfdd0d1a048ecee00b3c713d0cc58d990e8a04a4e5cf8cf7479`).
+- Existing certificate retained: SHA-256 `027555e7a8662d3029c1c29112723855d40c490e17ea4410985d783ea78a3d19`. Published APK was downloaded independently and signature/hash verified before update registration.
+- Emulator 0.4.17 -> 0.4.18 replace-install succeeded. Aggregate shared_prefs/files archive hash before and after install was identical: `0e8f8880d14977a7e2f455dc96611e7d1b75906579ab04925b9dc6ae38e0e3af`. No uninstall or data clearing; this checks replacement installation persistence, not a physical phone install.
+- No actual campsite reservation, cancellation or payment was executed. Public display/menu synchronization interval remains unchanged; this release does not implement the separately discussed faster settings synchronization.
