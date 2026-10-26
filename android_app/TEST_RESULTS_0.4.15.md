@@ -12,3 +12,13 @@
 - APK: 2,927,678 bytes; SHA-256 `cf01e66bcde460e8a293ab26ab9afb3e8171d41a7383b1944d5502c1e4cc7148`.
 - Existing certificate SHA-256 retained: `027555e7a8662d3029c1c29112723855d40c490e17ea4410985d783ea78a3d19`.
 - Actual campsite booking/cancellation/payment were not executed. Physical phone installation requires the user's installer approval.
+
+## Live verification
+
+- Final image workflow 40334071961 (source aed00106abb0c930b296a81af4369d1e769c748f) completed for amd64, aarch64 and multi-architecture publishing. The existing builders emitted optional `latest` image verification warnings; the versioned release and deployed source hashes were checked separately.
+- HA public-display integration 1.0.1 installed with previous files preserved as `.before-0415`; config check passed and Core restart completed. Anonymous display returns all eight menu flags. Private HA states endpoint still returns 401.
+- Addon backup-enabled update 2.15.19 -> 2.15.20 completed, state started. Backup count 580 -> 581.
+- Saved plan IDs/configuration/enabled flags retain canonical SHA-256 `30ac3743c4d932cdc50c0d5bdb7a0fe2d8c18026d638a3d5d6c41fc4bcddff29`. Existing 2026-11-01 00:00 KST schedule restored to waiting/armed; stopped/completed plans remained stopped/completed. No start API was called.
+- Deployed shared booking-flow.js matches source/APK SHA-256 `1e56981958de0a898516b441cef26d663369a829f46064b3b77d6b2ecec0cf51`.
+- Live monthly prefetch status: intervalMinutes 0, running false, nextAt null. Existing menu selections retained; new information/lookup/monthly/log flags default visible.
+- Public 0.4.15 APK re-downloaded and hash/signature verified; update manifest is versionCode 21, minimum supported version 5, changeType fix.
