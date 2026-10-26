@@ -1,4 +1,5 @@
 /* Native adapters: no HA server, tokens or remote UI scripts. */
+let handledLookupRequest=0;
 let featuresReady=false, phonePeople=[], submissionInterval=5, featureLookupKey='', featureMonthKey='', phoneClock={synced:false,offset:0}, gallerySelected=new Set(), lastLoadedExtras=null;
 let modeEditorMeta={},draftByMode={},suppressDraftSwitch=false,clearedDraftAt=0;
 const modeTab=mode=>mode==='reserve'?'priority':mode==='watch'?'watch':mode;
@@ -48,6 +49,7 @@ poll=function(){
   if(previousAvailability!==JSON.stringify(availabilitySnapshot||{}))renderPhoneRankEditors();
   runPhonePeriodCheck();
   const state=nativeState;
+  if(state.lookupRequest&&state.lookupRequest!==handledLookupRequest){handledLookupRequest=state.lookupRequest;switchTab("people");$("lookupCard").scrollIntoView({block:"start",behavior:"smooth"});}
   if(state.draftClearedAt&&state.draftClearedAt!==clearedDraftAt){clearedDraftAt=state.draftClearedAt;const cleared=state.clearedDraft;if(cleared){delete draftByMode[cleared.mode];try{if(['priority','watch','multiple','profiles-parallel'].includes(workspaceTab)&&phoneDraftSignature(readPlan())===phoneDraftSignature(cleared))loadPlan({mode:cleared.mode});}catch(error){/* Keep an edited, incomplete draft intact. */}}}
   if(state.stage==='PARTIAL'){$('statusBadge').textContent='일부 완료 · 확인 필요';$('statusBadge').className='badge failed';}
   if(Array.isArray(state.catalog)){const added=state.catalog.filter(n=>!roomOrder.includes(n));if(added.length){vault.rooms=[...new Set([...vault.rooms,...state.catalog])];roomOrder.push(...added);renderRooms();}}

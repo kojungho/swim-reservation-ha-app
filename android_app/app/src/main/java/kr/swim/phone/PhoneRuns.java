@@ -26,7 +26,7 @@ final class PhoneRuns {
         for(int n=1;n<=LIMIT;n++){LocalStore s=new LocalStore(c,n);if(!s.active()&&!s.uncertain())return n;}
         throw new IllegalStateException("사용 가능한 예약 세션이 없습니다. 미확인 제출 내역을 확인하세요.");
     }
-    static void requireRestartable(JSONObject row){if(row.optBoolean("uncertain")||java.util.Set.of("SUCCESS","PARTIAL").contains(row.optString("stage")))throw new IllegalStateException("완료 또는 제출 결과 확인이 필요한 일정입니다. 공식 내역을 확인한 뒤 필요한 항목만 새 일정으로 등록하세요.");}
+    static void requireRestartable(JSONObject row){if(row.optString("stage").equals("CHECK_REQUIRED")||row.optBoolean("uncertain")||java.util.Set.of("SUCCESS","PARTIAL").contains(row.optString("stage")))throw new IllegalStateException("완료 또는 제출 결과 확인이 필요한 일정입니다. 공식 내역을 확인한 뒤 필요한 항목만 새 일정으로 등록하세요.");}
     static void guardUncertain(Context c,Plan plan)throws Exception{
         for(int n=0;n<=LIMIT;n++){LocalStore s=new LocalStore(c,n);if(!s.uncertain())continue;Plan old=s.load("run");
             java.time.LocalDate a=java.time.LocalDate.parse(plan.date),b=java.time.LocalDate.parse(old.date);
@@ -63,5 +63,5 @@ final class PhoneRuns {
     }
     private static int priority(JSONObject r){if(r.optBoolean("lookup"))return 0;return r.optString("stage").equals("SUBMITTING")?3:r.optString("stage").equals("WAITING")||r.optString("stage").equals("WATCHING")?1:2;}
     static void reschedule(Context c)throws Exception{for(int n=0;n<=LIMIT;n++){LocalStore s=new LocalStore(c,n);if(s.active()&&s.stage().equals("WAITING"))AlarmReceiver.schedule(c,s.load("run").trigger,n);}}
-    static void reconcile(Context c){for(int n=0;n<=LIMIT;n++){LocalStore s=new LocalStore(c,n);if(s.active()&&!s.stage().equals("WAITING")&&!ReservationService.alive(n)&&System.currentTimeMillis()-s.heartbeat()>10000)s.state(s.uncertain()?"CHECK_REQUIRED":"STOPPED","실행 서비스 종료 확인 · 자동 재제출 없이 중지",false);}}
+    static void reconcile(Context c){for(int n=0;n<=LIMIT;n++){ResultStatus.repairLegacyResult(c,n);LocalStore s=new LocalStore(c,n);if(s.active()&&!s.stage().equals("WAITING")&&!ReservationService.alive(n)&&System.currentTimeMillis()-s.heartbeat()>10000)s.state(s.uncertain()?"CHECK_REQUIRED":"STOPPED","실행 서비스 종료 확인 · 자동 재제출 없이 중지",false);}}
 }
