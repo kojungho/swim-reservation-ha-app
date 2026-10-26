@@ -397,7 +397,7 @@ function planRunNotice(entry) {
   const behavior = entry.kind === "watch"
     ? `${entry.intervalSeconds}초 간격으로 조회하며 빈자리 발견 시 예약합니다. 감시 종료: ${String(entry.watchDeadlineAt || entry.watchEndsAt || `${entry.config.startDate}T00:00:00`).replace("T", " ")} (한국 시간).`
     : "예약 엔진이 실행된 뒤 조회·입력·필수 동의와 최종 제출을 진행하므로 실제 제출·완료 시각은 달라질 수 있습니다.";
-  return `${timing}\n${behavior}\n\nHA 서버에서 실행합니다. 서버 전원 꺼짐·절전, 애드온 중지·재시작, 인터넷 단절·예약 사이트 오류, 실행 시각 경과로 예약이 진행되지 않을 수 있습니다. 실행·예약 성공을 보장하지 않습니다.\n무통장입금 신청 후 입금은 직접 해야 합니다. 같은 예약을 폰 앱과 동시에 실행하지 마세요.`;
+  return `${timing}\n${behavior}\n\nHA 서버에서 실행합니다. 서버 전원 꺼짐·절전, 애드온 중지·재시작, 인터넷 단절·예약 사이트 오류, 실행 시각 경과로 예약이 진행되지 않을 수 있습니다. 실행·예약 성공을 보장하지 않습니다.`;
 }
 function planStateLabel(entry) {
   if (planIsActive(entry)) {

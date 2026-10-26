@@ -25,7 +25,14 @@ public final class RunNoticeTest {
     @Test public void batteryAndFailureConditionsRemainInEveryMode(){
         for(String mode:new String[]{"reserve","watch","multiple","profiles-parallel"}){
             Plan p=plan();p.mode=mode;String text=RunNotice.message(p,NOW);
-            for(String condition:new String[]{"대기는 알람만","배터리 소모","강제 중지","전원 꺼짐","정확한 알람","인터넷 연결","10초","입금은 직접"})assertTrue(mode+": "+condition,text.contains(condition));
+            for(String condition:new String[]{"배터리 사용","강제 중지","전원 꺼짐","정확한 알람","인터넷 연결","10초"})assertTrue(mode+": "+condition,text.contains(condition));
+            assertFalse(text.contains("무통장입금"));assertFalse(text.contains("HA와 동시에"));
         }
+    }
+    @Test public void batteryNoticeSeparatesBriefSyncFromActualExecution(){
+        Plan p=plan();p.trigger=NOW+2*3600000L;String text=RunNotice.batteryNotice(p,NOW);
+        assertTrue(text.contains("2026-10-26 12:00:00 (한국 시간)부터"));assertTrue(text.contains("실행 1시간 전 (2026-10-26 11:00:00, 한국 시간)"));assertTrue(text.contains("브라우저를 계속 실행하지 않고 알람으로 대기"));
+        p.trigger=NOW+1800000L;assertTrue(RunNotice.batteryNotice(p,NOW).contains("대기 등록 직후"));
+        p.trigger=0;p.mode="watch";text=RunNotice.batteryNotice(p,NOW);assertTrue(text.contains("시작을 누른 직후부터"));assertTrue(text.contains("조회 사이에는 CPU 절전"));assertFalse(text.contains("실행 1시간 전"));
     }
 }

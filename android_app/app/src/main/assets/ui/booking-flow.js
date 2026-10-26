@@ -85,7 +85,7 @@ window.buildDisplayReceipt=function(value){
    setHidden(byId('reservationConnectionDetails'),true);
   }
   const trigger=byId('triggerAt')?.closest('label');if(trigger){bodies[0].body.append(trigger);const caption=[...trigger.childNodes].find(n=>n.nodeType===3);if(caption)caption.textContent='예약 실행 시간(오픈 예정일)';byId('triggerAt').readOnly=true;byId('triggerAt').setAttribute('aria-readonly','true');byId('triggerAt').tabIndex=-1;}
-  const safety=byId('safetyNotice');if(safety){const detail=document.createElement('details'),summary=document.createElement('summary'),text=document.createElement('p');summary.textContent='실행 안전 안내';text.textContent=phone?'전원·네트워크·절전 제한으로 실행이 중단될 수 있습니다. HA와 같은 예약을 동시에 실행하지 마세요.':'서버 전원·네트워크와 시간을 확인하세요. 폰과 같은 예약을 동시에 실행하지 마세요.';detail.append(summary,text);safety.replaceChildren(detail);}
+  const safety=byId('safetyNotice');if(safety){const detail=document.createElement('details'),summary=document.createElement('summary'),text=document.createElement('p');summary.textContent='실행 안전 안내';text.textContent=phone?'전원·네트워크·절전 제한으로 실행이 중단될 수 있습니다.':'서버 전원·네트워크와 시간을 확인하세요.';detail.append(summary,text);safety.replaceChildren(detail);}
   markLabels();
  }
  function refresh(){
@@ -101,6 +101,8 @@ window.buildDisplayReceipt=function(value){
   bodies.forEach((item,i)=>{item.toggle.disabled=!ready[i];const disabled=String(!ready[i]);if(item.toggle.getAttribute('aria-disabled')!==disabled)item.toggle.setAttribute('aria-disabled',disabled);if(!ready[i])setHidden(item.body,true);else if(!item.ready)setHidden(item.body,false);item.ready=ready[i];const expanded=String(!item.body.hidden);if(item.toggle.getAttribute('aria-expanded')!==expanded)item.toggle.setAttribute('aria-expanded',expanded);});
   const trigger=byId('triggerAt')?.closest('label');setHidden(trigger,!validDate||workspaceTab==='watch'||!beforeOpening());
   setHidden(byId('stayOpeningDate'),true);
+  setHidden(byId('stayNightsDisplay'),!validDate||!uiSettings.stayRange);
+  if(!validDate&&byId('stayNightsDisplay').textContent)byId('stayNightsDisplay').textContent='';
   if(validDate&&beforeOpening()){const opening=bookingOpenIso(date);if(opening)byId('triggerAt').value=opening;}
   if(phone)setHidden(document.querySelector('[data-phone-run]'),!validDate||beforeOpening()||workspaceTab==='watch');
   document.querySelectorAll('.room-actions').forEach(el=>setHidden(el,true));

@@ -180,7 +180,7 @@ function updateStayFields(force = false) {
   if (force || checkout.dataset.derived !== end) { checkout.value = end; checkout.dataset.derived = end; }
   document.getElementById("checkoutField").hidden = !uiSettings.stayRange;
   document.getElementById("nightsField").hidden = uiSettings.stayRange;
-  document.getElementById("stayNightsDisplay").hidden = !uiSettings.stayRange;
+  document.getElementById("stayNightsDisplay").hidden = !elements.startDate.value || !uiSettings.stayRange;
   document.getElementById("stayNightsDisplay").textContent = elements.startDate.value ? `${elements.nights.value}박` : "—";
   const opening = bookingOpenIso(elements.startDate.value);
   const badge = document.getElementById("stayOpeningDate");
