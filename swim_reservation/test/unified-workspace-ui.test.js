@@ -45,10 +45,10 @@ test("예약자 추가 폼·수정 저장·첫 예약자 제외·사람별 색�
     assert.equal(await page.locator("#bookEditor").isVisible(), false);
     await page.locator("#bookNewButton").click(); assert.equal(await page.locator("#bookAddButton").isDisabled(), true);
     await page.locator("#bookCancelButton").click();
-    await page.getByRole("button", { name: "저장예약자1 정보 수정", exact: true }).click();
+    await page.getByRole("button", { name: "저장예약자일 정보 수정", exact: true }).click();
     await page.locator("#bookReserverName").fill("수정예약자");
     state.rejectBook = true; await page.locator("#bookAddButton").click();
-    assert.equal(state.book[0].reserverName, "저장예약자1"); assert.equal(await page.locator("#bookEditor").isVisible(), true);
+    assert.equal(state.book[0].reserverName, "저장예약자일"); assert.equal(await page.locator("#bookEditor").isVisible(), true);
     state.rejectBook = false; await page.locator("#bookAddButton").click();
     await page.waitForFunction(() => document.querySelector("#bookingBookList").textContent.includes("수정예약자"));
     assert.equal(state.book.length, 2); assert.equal(state.book[0].roomPriority[0].name, "달_하늘존");
@@ -61,7 +61,7 @@ test("예약자 추가 폼·수정 저장·첫 예약자 제외·사람별 색�
     assert.notEqual(colors[0], colors[1]);
     await page.locator("#excludeFirstProfile").click();
     await page.locator('#profileRemoveConfirm').click();
-    assert.equal(await page.locator("#reserverName").inputValue(), "저장예약자2");
+    assert.equal(await page.locator("#reserverName").inputValue(), "저장예약자이");
     assert.deepEqual(await page.evaluate(() => firstProfilePriority[0]), { name: "샘_산맥존", enabled: true });
     assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 0);
     assert.equal(state.book.length, 2);

@@ -51,7 +51,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(state.plans[0].config.profiles.length, 2);
     assert.equal(state.plans[0].config.profiles[1].reserverName, guest.reserverName);
     await openPlanDetails(page);
-    assert.deepEqual(await page.locator("#planList .plan-profile-targets p").allTextContents(), ["저장예약자1 : ① 해", "저장예약자3 : ① 달"]);
+    assert.deepEqual(await page.locator("#planList .plan-profile-targets p").allTextContents(), ["저장예약자일 : ① 해", "저장예약자삼 : ① 달"]);
     await page.locator("#planDetailsClose").click();
     assert.equal(await page.locator("#reserverName").inputValue(), testGuest(1).reserverName);
     assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 1);
@@ -59,7 +59,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(state.book.length, 3);
     await openPlanDetails(page, 0);
     await page.locator("#planList .plan-entry").getByRole("button", { name: "설정 불러오기", exact: true }).click();
-    await page.waitForFunction(() => document.querySelector("#reserverName2")?.value === "저장예약자3");
+    await page.waitForFunction(() => document.querySelector("#reserverName2")?.value === "저장예약자삼");
     await page.locator("#workspaceMenuButton").click();
     await page.locator('[data-workspace-tab="multiple"]').click();
     await page.locator("#bookingProfileSelect1").selectOption("2");

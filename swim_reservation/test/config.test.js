@@ -77,8 +77,8 @@ test("예약자 2명 사용 시 두 정보를 독립 저장하고 예약자 2도
   const config = normalizeConfig({
     startDate: "2026-11-07", triggerAt: "2026-09-01T00:00:00", nights: 1,
     roomPriority: [{ name: "해_하늘존", enabled: true }], useSecondProfile: true,
-    profile1: { reserverName: "예약자1", depositorName: "입금자1", phone: "01011112222", birthDate: "19900101" },
-    profile2: { reserverName: "예약자2", depositorName: "입금자2", phone: "01033334444", birthDate: "19920202" }
+    profile1: { reserverName: "예약자하나", depositorName: "입금자1", phone: "01011112222", birthDate: "19900101" },
+    profile2: { reserverName: "예약자둘", depositorName: "입금자2", phone: "01033334444", birthDate: "19920202" }
   });
   assert.equal(config.profile1.phone, "01011112222");
   assert.equal(config.profile2.phone, "01033334444");

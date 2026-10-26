@@ -1,4 +1,8 @@
 /* Shared compact booking flow. Display-only; no start, submit or cancel actions. */
+window.validPersonName=function(value){
+ if(typeof value!=='string')return false;const name=value.trim().normalize('NFC');
+ return name.length>0&&name.length<=50&&!/[\u1100-\u11ff\u3130-\u318f\ua960-\ua97f\ud7b0-\ud7ff]/u.test(name)&&/^\p{L}[\p{L}\p{M}]*(?:[ '\u2019·-]\p{L}[\p{L}\p{M}]*)*$/u.test(name);
+};
 window.buildDisplayReceipt=function(value){
  const el=(tag,text)=>{const item=document.createElement(tag);if(text!==undefined)item.textContent=text;return item;};
  const card=el('div');card.className='reservation-row reservation-compact';
@@ -50,9 +54,12 @@ window.buildDisplayReceipt=function(value){
   if(!input||input.disabled||input.readOnly&&input.id==='triggerAt'||!input.getClientRects().length)return false;
   const value=input.value.trim();
   if(!value)return true;
+  if(nameInput(input))return !validPersonName(value);
   if(/phone/i.test(input.id)||input.name==='phone')return !/^01\d{8,9}$/.test(value.replace(/\D/g,''));
   return !input.validity.valid;
  }
+ const composingNames=new WeakSet();
+ function nameInput(input){return /^(reserverName|bookReserverName|oneOffName)\d*$/.test(input.id)||input.name==='name';}
  let correctingUntil=0,scrollCheck=0,lastScrollY=0,validationEpoch=0,resettingValidation=false,choosingProfile=false,lastRequiredMessage='';
  function savedProfileControl(target){return target?.closest?.('select[id^="bookingProfileSelect"],#watchProfileSelect,#multipleProfileSelect,#phonePeople select,.booking-select-field');}
  function beginProfileChoice(){
@@ -77,22 +84,24 @@ window.buildDisplayReceipt=function(value){
   return missing;
  }
  function showRequired(input){
-  if(resettingValidation||choosingProfile||savedProfileControl(document.activeElement)||!missingRequired(input)||document.querySelector('dialog[open]'))return;
+  if(resettingValidation||choosingProfile||composingNames.has(input)||savedProfileControl(document.activeElement)||!missingRequired(input)||document.querySelector('dialog[open]'))return;
   if(modes.includes(workspaceTab)&&bodies.some(item=>item.body.contains(input))){for(const item of bodies){const earlier=firstRequired(item);if(earlier){input=earlier;break;}if(item.body.contains(input))break;}}
   autoWanted=false;clearTimeout(autoTimer);autoTimer=0;correctingUntil=performance.now()+1200;
   input.classList.add('required-input-error');input.setAttribute('aria-invalid','true');
   const title=input.closest('label')?.querySelector('.field-label-text,.stay-label-line>span:first-child')?.textContent.replace('(필수)','').trim()||input.getAttribute('aria-label')||input.placeholder||'필수 항목';
-  lastRequiredMessage=title+(/phone/i.test(input.id)||input.name==='phone'?' 형식을 확인해 주세요.':' 입력이 필요합니다.');notify(lastRequiredMessage);
+  lastRequiredMessage=nameInput(input)&&input.value.trim()?title+'은 자음·모음이 아닌 완성된 이름으로 입력해 주세요.':title+(/phone/i.test(input.id)||input.name==='phone'?' 형식을 확인해 주세요.':' 입력이 필요합니다.');notify(lastRequiredMessage);
   input.scrollIntoView({block:'center',behavior:'smooth'});input.focus({preventScroll:true});
   if(phone&&!input.readOnly&&input.matches('textarea,input:not([type=date]):not([type=datetime-local]):not([type=number])')){try{api('showKeyboard');}catch(error){/* Focus is retained if the keyboard is unavailable. */}}
  }
  function initializeRequiredValidation(){
   const fields=root=>[...root.querySelectorAll('[data-booking-required]')];
+  document.addEventListener('compositionstart',event=>{if(nameInput(event.target)){composingNames.add(event.target);validationEpoch++;clearTimeout(autoTimer);autoTimer=0;queue();}},true);
+  document.addEventListener('compositionend',event=>{if(nameInput(event.target)){composingNames.delete(event.target);queue();if(document.activeElement!==event.target)queueMicrotask(()=>showRequired(event.target));}},true);
   const choose=event=>{if(savedProfileControl(event.target))beginProfileChoice();else if(choosingProfile){choosingProfile=false;validationEpoch++;if(savedProfileControl(document.activeElement))document.activeElement.blur();}};
   document.addEventListener('pointerdown',choose,true);document.addEventListener('focusin',choose,true);
   document.addEventListener('wheel',choose,{capture:true,passive:true});document.addEventListener('touchmove',choose,{capture:true,passive:true});
   document.addEventListener('change',event=>{if(savedProfileControl(event.target))queueMicrotask(()=>{choosingProfile=false;validationEpoch++;queue();});},true);
-  document.addEventListener('input',event=>{const input=event.target;if(input.classList.contains('required-input-error')&&!missingRequired(input)){input.classList.remove('required-input-error');input.removeAttribute('aria-invalid');}},true);
+  document.addEventListener('input',event=>{const input=event.target;if(!event.isComposing&&!composingNames.has(input)&&input.classList.contains('required-input-error')&&!missingRequired(input)){input.classList.remove('required-input-error');input.removeAttribute('aria-invalid');}},true);
   document.addEventListener('focusout',event=>{const input=event.target,epoch=validationEpoch;if(input.dataset.bookingRequired!=='true'||choosingProfile||savedProfileControl(event.relatedTarget)||event.relatedTarget?.classList.contains('required-input-error')||event.relatedTarget?.closest('.phone-reset-floating,#editorResetButton,#editorResetConfirm,#editorResetCancel'))return;setTimeout(()=>{if(epoch!==validationEpoch||resettingValidation||!input.isConnected||!modes.includes(workspaceTab)&&!input.closest('#lookupCard,#bookingBookCard'))return;showRequired(input);},0);},true);
   const nextStep=event=>{
    const heading=event.target.closest('.booking-step-title');if(!heading||!modes.includes(workspaceTab))return;
@@ -166,11 +175,12 @@ window.buildDisplayReceipt=function(value){
   scheduled=false;initialize();if(!initialized)return;
   const date=byId('startDate').value,end=byId('checkoutDate').value,nights=Number(byId('nights').value);
   const validDate=/^\d{4}-\d{2}-\d{2}$/.test(date)&&date>=(phone?seoulToday():new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date()))&&nights>=1&&nights<=6&&(!end||end>date);
-  let personReady=!!byId('reserverName').value.trim()&&/^01\d{8,9}$/.test(byId('phone').value.replace(/\D/g,''));
+  let personReady=validPersonName(byId('reserverName').value)&&/^01\d{8,9}$/.test(byId('phone').value.replace(/\D/g,''));
   if(typeof workspaceTab!=='undefined'&&workspaceTab==='profiles-parallel'){
-   if(phone)personReady=phonePeople.length>0&&phonePeople.every(p=>p.name.trim()&&/^01\d{8,9}$/.test(p.phone.replace(/\D/g,'')));
-   else personReady=[{reserverName:byId('reserverName').value,phone:byId('phone').value},...extraProfiles].every(p=>p.reserverName?.trim()&&/^01\d{8,9}$/.test((p.phone||'').replace(/\D/g,'')));
+   if(phone)personReady=phonePeople.length>0&&phonePeople.every(p=>validPersonName(p.name)&&/^01\d{8,9}$/.test(p.phone.replace(/\D/g,'')));
+   else personReady=[{reserverName:byId('reserverName').value,phone:byId('phone').value},...extraProfiles].every(p=>validPersonName(p.reserverName)&&/^01\d{8,9}$/.test((p.phone||'').replace(/\D/g,'')));
   }
+  if([...bodies[0].body.querySelectorAll('input')].some(input=>composingNames.has(input)))personReady=false;
   const ready=[true,personReady,validDate&&personReady];
   bodies.forEach((item,i)=>{item.toggle.disabled=!ready[i];const disabled=String(!ready[i]);if(item.toggle.getAttribute('aria-disabled')!==disabled)item.toggle.setAttribute('aria-disabled',disabled);if(!ready[i])setHidden(item.body,true);else if(!item.ready)setHidden(item.body,false);item.ready=ready[i];const expanded=String(!item.body.hidden);if(item.toggle.getAttribute('aria-expanded')!==expanded)item.toggle.setAttribute('aria-expanded',expanded);});
   const trigger=byId('triggerAt')?.closest('label');setHidden(trigger,!validDate||workspaceTab==='watch'||!beforeOpening());

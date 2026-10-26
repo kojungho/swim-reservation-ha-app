@@ -1,3 +1,4 @@
+import { validPersonName } from './person-name.js';
 export const SEOUL_OFFSET = "+09:00";
 export const MAX_SAVED_PROFILES = 20;
 export function parallelProfileLimit(config) { return Math.max(1, new Set((config.roomPriority || []).map(room => room.name).filter(Boolean)).size); }
@@ -120,7 +121,7 @@ export function normalizeProfile(profile = {}) {
 }
 
 export function validateProfile(profile, label, errors) {
-  if (!profile?.reserverName) errors.push(`${label} 예약자명`);
+  if (!validPersonName(profile?.reserverName)) errors.push(`${label} 예약자명 (자음·모음만 입력하지 말고 완성된 이름을 입력하세요)`);
   if (!/^01\d{8,9}$/.test(profile?.phone || "")) errors.push(`${label} 휴대폰 번호`);
 }
 

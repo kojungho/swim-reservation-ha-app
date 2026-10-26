@@ -73,7 +73,7 @@ test("20명 저장 목록과 객실 수 기준 다인 입력은 5명에서 잘�
   await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="book"]').click();
   assert.equal(await page.locator("#bookingBookList .booking-book-row").count(), 20);
   assert.equal(await page.locator("#bookNewButton").isDisabled(), true);
-  await page.getByRole("button", { name: "저장예약자20 정보 수정", exact: true }).click();
+  await page.getByRole("button", { name: "저장예약자이십 정보 수정", exact: true }).click();
   await page.locator("#bookReserverName").fill("20번째 수정"); await page.locator("#bookAddButton").click();
   await page.waitForFunction(() => document.querySelector("#bookingBookList").textContent.includes("20번째 수정"));
   await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="profiles-parallel"]').click();

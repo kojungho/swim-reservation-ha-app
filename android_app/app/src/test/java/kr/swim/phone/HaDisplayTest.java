@@ -32,6 +32,9 @@ public class HaDisplayTest{
   assertTrue(response.getBoolean("ok"));assertEquals(before,PhoneRuns.count(c));
   assertTrue(new JSONObject(a.api(new JSONObject().put("action","hideKeyboard").toString())).getBoolean("ok"));assertEquals(before,PhoneRuns.count(c));
  }
+ @Test public void nativeProfileSaveRejectsIncompleteName()throws Exception{
+  try{new PhoneRepository(c).put("profiles",new JSONObject().put("name","ㄴ").put("phone","01000000000"));fail("incomplete name saved");}catch(IllegalArgumentException expected){assertTrue(expected.getMessage().contains("예약자명"));}
+ }
  @Test public void anonymousGetOnlyCachesPhotoAndPreservesPrivateData()throws Exception{
   byte[] image=png();HaDisplay.vault(c).saveDocument("profiles",new JSONObject().put("private","KEEP"));
   try(MockWebServer server=new MockWebServer()){server.start();String base=server.url("/").toString().replaceAll("/$","");

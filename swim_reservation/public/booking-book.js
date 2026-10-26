@@ -13,7 +13,7 @@ function matchingBookIndex(profile) {
 }
 function completeBookingIdentity(profile) {
   const value = bookingIdentity(profile);
-  return value.reserverName && /^01\d{8,9}$/.test(value.phone);
+  return validPersonName(value.reserverName) && /^01\d{8,9}$/.test(value.phone);
 }
 async function loadBookingBook() {
   const result = await request("profiles");

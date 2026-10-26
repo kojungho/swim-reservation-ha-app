@@ -41,7 +41,7 @@ public final class Plan {
         if(priorities().isEmpty()) throw new IllegalArgumentException("객실명을 우선순위대로 입력해 주세요.");
         if(priorities().stream().anyMatch(room->RoomCatalog.id(room)<1))throw new IllegalArgumentException("사이트 번호 미확인 · 먼저 목록을 조회해 주세요.");
         if(!siteVersion.equals("swimozicamp-v1")&&!demo())throw new IllegalArgumentException("구사이트 일정입니다. 날짜·사이트·예약자를 확인하고 다시 등록하세요.");
-        if(name.isBlank() || name.length()>50 || payer.length()>50) throw new IllegalArgumentException("예약자명·입금자명을 확인해 주세요.");
+        if(!PersonName.valid(name) || payer.length()>50) throw new IllegalArgumentException("예약자명은 자음·모음이 아닌 완성된 이름으로 입력해 주세요. 입금자명은 50자 이내입니다.");
         if(adults<1||adults>2||request.length()>1000||arrival.length()>20)throw new IllegalArgumentException("인원·도착 시간·요청사항을 확인해 주세요.");
         if(!phone.matches("01[0-9]{8,9}")) throw new IllegalArgumentException("휴대폰 번호를 확인해 주세요.");
         if(pollSeconds<MIN_POLL_SECONDS || pollSeconds>3600 || pollSeconds%60!=0) throw new IllegalArgumentException("감시 간격은 10~60분의 정수입니다.");
