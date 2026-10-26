@@ -46,7 +46,7 @@ final class AppUpdates {
     }
     void check(boolean manual){
         if(destroyed||!foreground||download.working)return;
-        if(new LocalStore(activity).active()){
+        if(PhoneRuns.anyActive(activity)){
             if(manual)new AlertDialog.Builder(activity).setMessage("예약·대기 작업을 마친 뒤 업데이트를 확인하세요. 진행 중인 작업은 중단하지 않습니다.").setPositiveButton("확인",null).show();
             return;
         }
@@ -61,7 +61,7 @@ final class AppUpdates {
                 running=false;boolean requested=manual||manualPending;manualPending=false;
                 if(destroyed||activity.isFinishing()||activity.isDestroyed())return;
                 if(result!=null)preferences(activity).edit().putInt("minimum",result.optInt("minSupportedVersionCode",0)).putLong("checked",System.currentTimeMillis()).apply();
-                if(!foreground||new LocalStore(activity).active())return;
+                if(!foreground||PhoneRuns.anyActive(activity))return;
                 boolean newer=result!=null&&result.optInt("versionCode")>BuildConfig.VERSION_CODE;
                 boolean required=newer&&result.optInt("minSupportedVersionCode",0)>BuildConfig.VERSION_CODE;
                 android.content.SharedPreferences prefs=preferences(activity);

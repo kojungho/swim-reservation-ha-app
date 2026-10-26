@@ -15,13 +15,13 @@ function initializeDatePicker() {
   const canChoose = value => !availabilityEnabled() || !window.stayCalendar.pending.has(month) && !window.stayCalendar.pending.has(rangeStart.slice(0,7)) && window.stayCalendar.allow(value, rangeMode ? rangePhase : target.id === "checkoutDate" ? "end" : "start", rangeStart, isWatch());
   let loadGeneration = 0;
   const help = document.createElement("p"); help.className = "date-picker-availability"; get("Days").after(help);
-  function loadCounts() {
+  function loadCounts(force=false) {
     if (!availabilityEnabled()) return;
     const generation = ++loadGeneration, displayed = month;
     help.textContent = "예약 현황 조회 중…";
-    const loading = Promise.all([...new Set([month, ...(rangePhase === "end" && rangeStart ? [rangeStart.slice(0, 7)] : [])])].map(value => window.stayCalendar.load(value))).then(() => {
+    const loading = Promise.all([...new Set([month, ...(rangePhase === "end" && rangeStart ? [rangeStart.slice(0, 7)] : [])])].map(value => window.stayCalendar.load(value,{force}))).then(() => {
       if (!dialog.open || generation !== loadGeneration || displayed !== month) return;
-      render();
+      render();if(window.stayCalendar.cache.get(displayed)?.error){help.textContent="달력 현황 조회 실패 · 다시 열면 재조회합니다.";window.showFloatingMessage?.(help.textContent,{error:true});}
     });
     render();help.textContent = "예약 현황 조회 중…";
   }
@@ -116,7 +116,7 @@ function initializeDatePicker() {
     get("Title").textContent = input.type === "month" ? "월 선택" : input.type === "datetime-local" ? "날짜·시각 선택" : "날짜 선택";
     get("Time").value = input.value.split("T")[1] || "00:00:00";
     get("Apply").hidden = input.type === "date";
-    render(); dialog.showModal(); loadCounts();
+    render(); dialog.showModal(); loadCounts(true);
     (get("Days").querySelector('[aria-pressed="true"]:not(:disabled)') || get("Next")).focus();
   }
   // Suppress the OS picker even when its indicator is clicked; retain typed input.
@@ -125,8 +125,8 @@ function initializeDatePicker() {
   document.addEventListener("keydown", event => {
     if (eligible(event.target) && (event.key === " " || event.key === "ArrowDown" && event.altKey)) { event.preventDefault(); open(event.target); }
   });
-  get("Prev").addEventListener("click", () => { month = shift(-1); render(); loadCounts(); });
-  get("Next").addEventListener("click", () => { month = shift(1); render(); loadCounts(); });
+  get("Prev").addEventListener("click", () => { month = shift(-1); render(); loadCounts(true); });
+  get("Next").addEventListener("click", () => { month = shift(1); render(); loadCounts(true); });
   get("Cancel").addEventListener("click", () => dialog.close());
   get("Checkin").addEventListener("click", () => { rangePhase = "start"; render(); });
   get("Checkout").addEventListener("click", () => { if (rangeStart) { rangePhase = "end"; render(); loadCounts(); } });

@@ -12,13 +12,16 @@ final class PhoneReads {
     static volatile boolean testMode=false;
     static final java.util.concurrent.ExecutorService worker=java.util.concurrent.Executors.newSingleThreadExecutor();
     static final java.util.Set<String> calendarJobs=java.util.concurrent.ConcurrentHashMap.newKeySet();
-    static JSONObject calendar(Context c,String month)throws Exception{
+    static JSONObject calendar(Context c,String month)throws Exception{return calendar(c,month,false);}
+    static JSONObject calendar(Context c,String month,boolean force)throws Exception{
         java.time.YearMonth.parse(month);LocalStore store=new LocalStore(c);JSONObject saved=store.loadDocument("calendar-"+month);
         long age=saved==null?Long.MAX_VALUE:System.currentTimeMillis()-saved.optLong("capturedAt");
-        if(saved!=null&&age>=0&&age<60000)return saved;
-        if(store.active())return new JSONObject().put("ok",false).put("busy",true).put("month",month);
+        if(calendarJobs.contains(month))return new JSONObject().put("pending",true).put("month",month);
+        if(saved!=null&&!saved.optBoolean("ok")&&!force&&age>=0&&age<2000)return saved;
+        if(saved!=null&&saved.optBoolean("ok")&&!force&&age>=0&&age<60000)return saved;
+
         if(calendarJobs.add(month))worker.execute(()->{try{
-            if(new LocalStore(c).active())throw new IllegalStateException("예약 우선");
+
             JSONObject raw;
             if(testMode)raw=new JSONObject().put("ok",true).put("ym",month).put("open",month+"-28").put("days",new JSONObject().put(month+"-01",0).put(month+"-02",4));
             else{HttpURLConnection connection=open("https://"+PhoneEngine.HOST+"/camp/api.php?a=cal&ym="+month,"GET");try{if(connection.getResponseCode()!=200)throw new IOException();raw=new JSONObject(text(connection));}finally{connection.disconnect();}}
@@ -30,7 +33,7 @@ final class PhoneReads {
         return new JSONObject().put("pending",true).put("month",month);
     }
     static void monthly(Context c,String month)throws Exception{
-        java.time.YearMonth.parse(month);if(new LocalStore(c).active())throw new IllegalStateException("진행·대기 중인 예약을 먼저 중지하세요.");
+        java.time.YearMonth.parse(month);
         LocalStore store=new LocalStore(c);store.saveDocument("monthly-result",new JSONObject().put("pending",true).put("month",month));
         worker.execute(()->{try{JSONObject raw;
             if(testMode){raw=new JSONObject().put("ok",true).put("ym",month).put("open",month+"-28").put("days",new JSONObject().put(month+"-01",0).put(month+"-02",4));}
@@ -42,11 +45,11 @@ final class PhoneReads {
         }catch(Exception e){try{store.saveDocument("monthly-result",new JSONObject().put("pending",false).put("ok",false).put("month",month).put("error","월별 조회 실패 · 0곳으로 판단하지 않습니다."));}catch(Exception ignored){}}});
     }
     static void time(Context c)throws Exception{
-        LocalStore current=new LocalStore(c);if(current.active()&&!current.stage().equals("WAITING"))throw new IllegalStateException("실행 중에는 시각 동기화를 하지 않습니다.");
+        LocalStore current=new LocalStore(c);if(PhoneRuns.executing(c))throw new IllegalStateException("실행 중에는 시각 동기화를 하지 않습니다.");
         worker.execute(()->{LocalStore store=new LocalStore(c);try{long start=System.currentTimeMillis();long date;
             if(testMode)date=start-500;else{HttpURLConnection connection=open("https://"+PhoneEngine.HOST+"/camp/","HEAD");try{if(connection.getResponseCode()!=200)throw new IOException();date=connection.getDate();}finally{connection.disconnect();}}
             SiteClock.save(c,date,start,System.currentTimeMillis());store.saveDocument("clock-result",new JSONObject().put("ok",true));
-            if(store.active()&&store.stage().equals("WAITING"))new Handler(Looper.getMainLooper()).post(()->{try{AlarmReceiver.schedule(c,store.load("run").trigger);}catch(Exception ignored){}});
+            new Handler(Looper.getMainLooper()).post(()->{try{PhoneRuns.reschedule(c);}catch(Exception ignored){}});
         }catch(Exception e){try{store.saveDocument("clock-result",new JSONObject().put("ok",false).put("error","서버 시각 동기화 실패 · 폰 시각과 구분해 표시합니다."));}catch(Exception ignored){}}});
     }
     static HttpURLConnection open(String address,String method)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(address).openConnection();c.setConnectTimeout(10000);c.setReadTimeout(10000);c.setRequestMethod(method);c.setInstanceFollowRedirects(false);c.setRequestProperty("Cache-Control","no-cache");return c;}

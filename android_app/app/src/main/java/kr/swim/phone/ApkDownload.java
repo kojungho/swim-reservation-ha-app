@@ -35,7 +35,7 @@ final class ApkDownload {
     }
     static long version(PackageInfo p){return Build.VERSION.SDK_INT>=28?p.getLongVersionCode():p.versionCode;}
     void start(JSONObject manifest){
-        if(working||new LocalStore(activity).active())return;
+        if(working||PhoneRuns.anyActive(activity))return;
         cancelled=false;working=true;ready=null;
         progress=new AlertDialog.Builder(activity).setTitle("앱 업데이트 다운로드").setMessage("연결 중… 앱 안에서 다운로드합니다.").setNegativeButton("취소",(d,w)->cancelled=true).setCancelable(false).create();progress.show();
         new Thread(()->{
@@ -64,7 +64,7 @@ final class ApkDownload {
     void finishProgress(){if(progress!=null)progress.dismiss();progress=null;}
     void install(){
         if(ready==null||!ready.isFile())return;
-        if(new LocalStore(activity).active()){new AlertDialog.Builder(activity).setMessage("업데이트 다운로드가 완료되었습니다. 예약·대기 작업을 마친 뒤 앱을 다시 열면 설치할 수 있습니다. 진행 중 작업은 유지합니다.").setPositiveButton("확인",null).show();return;}
+        if(PhoneRuns.anyActive(activity)){new AlertDialog.Builder(activity).setMessage("업데이트 다운로드가 완료되었습니다. 예약·대기 작업을 마친 뒤 앱을 다시 열면 설치할 수 있습니다. 진행 중 작업은 유지합니다.").setPositiveButton("확인",null).show();return;}
         if(!activity.getPackageManager().canRequestPackageInstalls()){
             new AlertDialog.Builder(activity).setTitle("업데이트 설치 허용").setMessage("이 앱의 업데이트를 설치하려면 다음 화면에서 ‘이 출처 허용’을 켜 주세요. 돌아오면 설치 화면으로 이어집니다.").setNegativeButton("나중에",null).setPositiveButton("설정 열기",(d,w)->{try{waitingPermission=true;activity.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,android.net.Uri.parse("package:"+activity.getPackageName())));}catch(Exception e){waitingPermission=false;}}).show();return;
         }

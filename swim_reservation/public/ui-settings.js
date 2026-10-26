@@ -14,7 +14,7 @@ async function initializeUiSettings() {
   try {
     const settings = await request("submission-settings");
     if (Number.isInteger(settings.intervalSeconds)) intervalInput.value = settings.intervalSeconds;
-  } catch (error) { intervalMessage.textContent = `제출 간격 조회 실패: ${error.message}`; }
+  } catch (error) { intervalMessage.textContent = `제출 간격 조회 실패: ${error.message}`;intervalMessage.hidden=true;window.showFloatingMessage?.(`제출 간격 조회 실패: ${error.message}`,{error:true}); }
   document.getElementById("saveFinalSubmitInterval").addEventListener("click", async event => {
     if (!intervalInput.reportValidity()) return;
     event.target.disabled = true;
@@ -22,7 +22,7 @@ async function initializeUiSettings() {
       const settings = await request("submission-settings", { method: "PUT", body: JSON.stringify({ intervalSeconds: intervalInput.valueAsNumber }) });
       intervalInput.value = settings.intervalSeconds;
       intervalMessage.textContent = `${settings.intervalSeconds === 0 ? "지연 미사용(0초)" : `${settings.intervalSeconds}초`}로 저장했습니다. 다인·다중 예약의 다음 실행부터 적용됩니다.`;
-    } catch (error) { intervalMessage.textContent = `저장 실패: ${error.message}`; }
+    } catch (error) { intervalMessage.textContent = `저장 실패: ${error.message}`;intervalMessage.hidden=true;window.showFloatingMessage?.(`저장 실패: ${error.message}`,{error:true}); }
     finally { event.target.disabled = false; }
   });
   const controls = document.getElementById("settingsControls");
@@ -79,7 +79,7 @@ async function initializeUiSettings() {
     try {
       uiSettings = await request("ui-settings", { method: "PUT", body: JSON.stringify(uiSettings) });
       applyUiSettings(); renderUiSettings(); document.getElementById("settingsMessage").textContent = "설정을 저장했습니다.";
-    } catch (error) { document.getElementById("settingsMessage").textContent = `저장 실패: ${error.message}`; }
+    } catch (error) { document.getElementById("settingsMessage").textContent = `저장 실패: ${error.message}`;document.getElementById("settingsMessage").hidden=true;window.showFloatingMessage?.(`저장 실패: ${error.message}`,{error:true}); }
     finally { event.target.disabled = false; }
   });
   document.getElementById("settingsReset").addEventListener("click", () => {
@@ -106,7 +106,7 @@ async function initializeUiSettings() {
     const saved = await request("ui-settings");
     uiSettings = { ...uiDefaults, ...saved, fonts: { ...uiDefaults.fonts, ...saved.fonts } };
     if(saved.dateInputVersion!==1){uiSettings.stayRange=true;uiSettings.dateInputVersion=1;}
-  } catch (error) { document.getElementById("settingsMessage").textContent = `설정 조회 실패: ${error.message}`; }
+  } catch (error) { document.getElementById("settingsMessage").textContent = `설정 조회 실패: ${error.message}`;document.getElementById("settingsMessage").hidden=true;window.showFloatingMessage?.(`설정 조회 실패: ${error.message}`,{error:true}); }
   renderUiSettings(); applyUiSettings();
 }
 
@@ -248,7 +248,7 @@ async function mapGalleryAction(action, message) {
     await action(); await loadMapGallery();
     elements.siteMapImage.src = `${API("site-map")}?v=${Date.now()}`;
     elements.siteMapMessage.textContent = message;
-  } catch (error) { elements.siteMapMessage.textContent = `사진 변경 실패: ${error.message}`; }
+  } catch (error) { elements.siteMapMessage.textContent = `사진 변경 실패: ${error.message}`;elements.siteMapMessage.hidden=true;window.showFloatingMessage?.(`사진 변경 실패: ${error.message}`,{error:true}); }
   finally { galleryBusy = false; renderMapGallery(); }
 }
 

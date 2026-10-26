@@ -2,13 +2,13 @@
 window.StayCalendarModel = class StayCalendarModel {
   constructor(fetchMonth, now = Date.now) { this.fetchMonth=fetchMonth;this.now=now;this.cache=new Map();this.pending=new Map(); }
   today(){return new Date(this.now()+9*3600000).toISOString().slice(0,10);}
-  fresh(value){return value&&this.now()-value.at>=0&&this.now()-value.at<60000;}
-  async load(month){
+  fresh(value){return value&&!value.error&&this.now()-value.at>=0&&this.now()-value.at<60000;}
+  async load(month,{force=false}={}){
     if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(month))return;
-    if(this.fresh(this.cache.get(month)))return;
+    if(!force&&this.fresh(this.cache.get(month)))return;
     if(this.pending.has(month))return this.pending.get(month);
     const task=(async()=>{try{
-      const raw=await this.fetchMonth(month);if(raw.month!==month||!Array.isArray(raw.days))throw Error('달력 형식 미확인');
+      const raw=await this.fetchMonth(month,{force});if(raw.month!==month||!Array.isArray(raw.days))throw Error('달력 형식 미확인');
       const days=new Map();for(const row of raw.days){if(typeof row.date!=='string'||row.date.slice(0,7)!==month)continue;
         const count=Number.isInteger(row.availableCount)&&row.availableCount>=0?row.availableCount:null;
         days.set(row.date,{state:row.beforeOpen===true||typeof raw.openThrough==='string'&&row.date>raw.openThrough?'planned':count===null?'unknown':count===0?'closed':'available',count});}
