@@ -19,6 +19,12 @@ public class MultiRunTest {
  }
  @After public void cleanup(){controller.destroy();ReservationTask.factory=original;PhoneSessions.testSupported=null;LocalStore.testKey=null;PhoneReads.testMode=false;}
  Plan plan(){Plan p=Plan.sample();p.mode="reserve";return p;}
+ @Test public void immediateDefaultTitleUsesReservationDayNotCheckin()throws Exception{
+  Plan p=plan();p.trigger=0;PhoneRepository repo=new PhoneRepository(c);
+  String today=java.time.Instant.ofEpochMilli(SiteClock.now(c)).atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate().toString();
+  JSONObject saved=repo.put("plans",new JSONObject().put("plan",p.json()));
+  assertEquals(today,saved.getJSONArray("plans").getJSONObject(0).getString("title"));assertEquals(p.date,saved.getJSONArray("plans").getJSONObject(0).getJSONObject("plan").getString("date"));
+ }
  void start(int slot,String id)throws Exception{PlanScheduler.start(c,plan(),false);LocalStore s=new LocalStore(c,slot);s.saveDocument("run",s.loadDocument("run").put("_planId",id));service.onStartCommand(new Intent(c,ReservationService.class).setAction("RUN").putExtra("slot",slot),0,slot);}
  @Test public void fiveEnginesRunIndependentlyAndOneStopDoesNotStopOthers()throws Exception{
   for(int n=1;n<=5;n++)start(n,"plan-"+n);assertEquals(5,PhoneRuns.count(c));assertEquals(5,service.tasks.size());

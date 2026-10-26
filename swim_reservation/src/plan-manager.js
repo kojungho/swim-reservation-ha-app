@@ -88,7 +88,9 @@ export class PlanManager {
       const config = input.kind === "watch" ? normalizeWatchConfig(input.config, Number(input.watchProfileIndex ?? 0)) : singleBookingConfig(input.config);
       const errors = validateConfig(config);
       if (errors.length) throw new Error(`확인할 항목: ${errors.join(", ")}`);
-      const plan = await this.createRuntime({ id: randomUUID(), name: String(input.name || `${config.startDate} ${config.nights}박`).trim().slice(0, 80), kind: input.kind, watchVersion: input.kind === "watch" ? 2 : undefined, watchEndsAt: input.kind === "watch" ? normalizeWatchEndsAt(input.watchEndsAt) : undefined, intervalSeconds: Math.max(60, Math.min(3600, Math.trunc(Number(input.intervalSeconds) || 60))), enabled: false, config });
+      const reservationDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date(this.timeSync.now()));
+      const name = input.kind === 'now' ? reservationDate : String(input.name || `${config.startDate} ${config.nights}박`).trim().slice(0, 80);
+      const plan = await this.createRuntime({ id: randomUUID(), name, kind: input.kind, watchVersion: input.kind === "watch" ? 2 : undefined, watchEndsAt: input.kind === "watch" ? normalizeWatchEndsAt(input.watchEndsAt) : undefined, intervalSeconds: Math.max(60, Math.min(3600, Math.trunc(Number(input.intervalSeconds) || 60))), enabled: false, config });
       this.plans.set(plan.id, plan);
       await this.persist();
       return plan.id;

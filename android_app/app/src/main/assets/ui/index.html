@@ -60,7 +60,7 @@
     </section>
 
     <section id="planCard" class="card">
-      <div class="plan-registration"><label>일정 이름<input id="planName" placeholder="예: 가족 캠핑"></label><button id="addPlanButton" class="secondary" type="button" aria-label="현재 설정으로 일정 등록">일정 등록</button></div>
+      <div class="plan-registration"><label>예약 대기 일정 명칭<input id="planName" placeholder="예: 가족 캠핑"></label><button id="addPlanButton" class="secondary" type="button" aria-label="현재 설정으로 일정 등록">일정 등록</button></div>
       <div id="planEditNotice" class="section-actions" hidden><span>기존 일정 수정 중 · 저장 후 시작을 눌러야 실행됩니다.</span><button id="cancelPlanEdit" class="secondary" type="button">수정 취소</button></div>
       <div class="watch-settings-row"><details id="watchEndsAtDetails" class="booking-details"><summary>조회 간격·취소 객실 조회 종료일</summary><div class="watch-settings-fields"><label id="watchIntervalField">조회 간격 (초)<input id="watchInterval" type="number" min="60" max="3600" value="60"></label><label id="watchEndsAtField">종료 날짜·시각 (선택)<input id="watchEndsAt" type="datetime-local" step="1"><small id="watchDeadlineHint">비워두면 숙박 시작일 00시에 감시를 종료합니다. 당일 감시를 원하면 마감을 직접 지정하세요.</small></label></div></details></div>
       <label id="watchProfileField" hidden>취소 자리를 예약할 예약자<select id="watchProfileSelect"></select></label>
@@ -116,7 +116,7 @@
     </section>
 
     <section id="historyCard" class="card status-card">
-      <div class="section-title"><span>4</span><div><h2>저장 이력</h2><p>입실일과 박수별로 저장된 설정을 불러오거나 삭제할 수 있습니다.</p></div></div>
+      <div class="section-title"><span>4</span><div><h2>예약 대기 일정 등록 및 예약 이력</h2><p>입실일과 박수별로 저장된 설정을 불러오거나 삭제할 수 있습니다.</p></div></div>
       <div id="historyList" class="history-list"><p class="history-empty">저장 이력을 불러오는 중입니다.</p></div>
       <div class="section-actions" hidden><button id="saveButton" class="secondary">설정 저장</button></div>
     </section>

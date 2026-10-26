@@ -12,7 +12,7 @@ window.buildDisplayReceipt=function(value){
  const setHidden=(el,value)=>{if(el&&el.hidden!==value)el.hidden=value;};
  const modes=['priority','multiple','profiles-parallel','watch'];
  const notify=text=>window.showFloatingMessage?.(text,{error:true});
- let scheduled=false,initialized=false,bodies=[],lastNoRoom='',haKey='',lastSync=0,autoTimer=0,autoWanted=false,autoKey='';
+ let scheduled=false,initialized=false,bodies=[],lastNoRoom='',haKey='',lastSync=0,autoTimer=0,autoWanted=false,autoKey='',pendingName='',autoNamed=false,generatedName='';
  window.applyBookingMenus=function(settings={},target=phone?'app':'addon'){
   const choices=settings[target+'Menus']||{};if(phone)labels.none='메뉴 없음';
   const visibleModes=phone?[...modes,'book','people','monthly','logs']:modes;
@@ -54,6 +54,13 @@ window.buildDisplayReceipt=function(value){
   return !input.validity.valid;
  }
  let correctingUntil=0,scrollCheck=0,lastScrollY=0;
+ function firstRequired(item){
+  if(!item.toggle.getClientRects().length)return;
+  const collapsed=item.body.hidden;item.body.hidden=false;
+  const missing=[...item.body.querySelectorAll('[data-booking-required]')].find(missingRequired);
+  if(missing)item.toggle.setAttribute('aria-expanded','true');else item.body.hidden=collapsed;
+  return missing;
+ }
  function showRequired(input){
   if(!missingRequired(input)||document.querySelector('dialog[open]'))return;
   autoWanted=false;clearTimeout(autoTimer);autoTimer=0;correctingUntil=performance.now()+1200;
@@ -69,7 +76,7 @@ window.buildDisplayReceipt=function(value){
   const nextStep=event=>{
    const heading=event.target.closest('.booking-step-title');if(!heading||!modes.includes(workspaceTab))return;
    const index=bodies.findIndex(item=>item.toggle===heading);if(index<1)return;
-   let missing;for(const item of bodies.slice(0,index)){const collapsed=item.body.hidden;item.body.hidden=false;missing=fields(item.body).find(missingRequired);if(missing){item.toggle.setAttribute('aria-expanded','true');break;}item.body.hidden=collapsed;}
+   let missing;for(const item of bodies.slice(0,index)){missing=firstRequired(item);if(missing)break;}
    if(missing){event.preventDefault();event.stopImmediatePropagation();showRequired(missing);}
   };
   document.addEventListener('click',nextStep,true);
@@ -79,7 +86,11 @@ window.buildDisplayReceipt=function(value){
    if(!down||performance.now()<correctingUntil||!modes.includes(workspaceTab))return;
    scrollCheck=setTimeout(()=>{
     if(performance.now()<correctingUntil||document.querySelector('dialog[open]'))return;
-    const missing=bodies.flatMap(item=>fields(item.body)).find(input=>missingRequired(input)&&input.getBoundingClientRect().bottom<70);
+    let missing;for(const item of bodies){
+     if(item.body.hidden&&item.toggle.getBoundingClientRect().bottom<70){missing=firstRequired(item);}
+     else missing=fields(item.body).find(input=>missingRequired(input)&&input.getBoundingClientRect().bottom<70);
+     if(missing)break;
+    }
     if(missing)showRequired(missing);
    },160);
   },{passive:true});
@@ -127,6 +138,8 @@ window.buildDisplayReceipt=function(value){
   const trigger=byId('triggerAt')?.closest('label');if(trigger){bodies[1].body.append(trigger);const caption=[...trigger.childNodes].find(n=>n.nodeType===3);if(caption)caption.textContent='예약 실행 시간(오픈 예정일)';byId('triggerAt').readOnly=true;byId('triggerAt').setAttribute('aria-readonly','true');byId('triggerAt').tabIndex=-1;}
   const safety=byId('safetyNotice');if(safety){const detail=document.createElement('details'),summary=document.createElement('summary'),text=document.createElement('p');summary.textContent='실행 안전 안내';text.textContent=phone?'전원·네트워크·절전 제한으로 실행이 중단될 수 있습니다.':'서버 전원·네트워크와 시간을 확인하세요.';detail.append(summary,text);safety.replaceChildren(detail);}
   markLabels();initializeRequiredValidation();
+  byId('historyCard').querySelector('h2').textContent='예약 대기 일정 등록 및 예약 이력';
+  const nameLabel=byId('planName').closest('label');for(const child of nameLabel.childNodes)if(child.nodeType===3)child.textContent='예약 대기 일정 명칭';
  }
  function refresh(){
   scheduled=false;initialize();if(!initialized)return;
@@ -140,6 +153,14 @@ window.buildDisplayReceipt=function(value){
   const ready=[true,personReady,validDate&&personReady];
   bodies.forEach((item,i)=>{item.toggle.disabled=!ready[i];const disabled=String(!ready[i]);if(item.toggle.getAttribute('aria-disabled')!==disabled)item.toggle.setAttribute('aria-disabled',disabled);if(!ready[i])setHidden(item.body,true);else if(!item.ready)setHidden(item.body,false);item.ready=ready[i];const expanded=String(!item.body.hidden);if(item.toggle.getAttribute('aria-expanded')!==expanded)item.toggle.setAttribute('aria-expanded',expanded);});
   const trigger=byId('triggerAt')?.closest('label');setHidden(trigger,!validDate||workspaceTab==='watch'||!beforeOpening());
+  const planned=validDate&&beforeOpening(),name=byId('planName');setHidden(name.closest('label'),!planned);
+  if(autoNamed&&name.value!==generatedName){autoNamed=false;pendingName=name.value;}
+  if(planned){if(autoNamed){name.value=pendingName;autoNamed=false;}}
+  else if(validDate&&workspaceTab!=='watch'){
+   if(!autoNamed)pendingName=name.value;
+   const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date(phone?currentSiteTime():Date.now()));
+   if(name.value!==today)name.value=today;autoNamed=true;generatedName=today;
+  }
   setHidden(byId('stayOpeningDate'),true);
   setHidden(byId('stayNightsDisplay'),!validDate||!uiSettings.stayRange);
   if(!validDate&&byId('stayNightsDisplay').textContent)byId('stayNightsDisplay').textContent='';

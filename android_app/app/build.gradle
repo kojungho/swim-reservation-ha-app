@@ -6,8 +6,8 @@ android {
         applicationId 'kr.swim.phone'
         minSdk 26
         targetSdk 36
-        versionCode 23
-        versionName '0.4.17'
+        versionCode 24
+        versionName '0.4.18'
         buildConfigField 'String', 'DEFAULT_HA_URL', '"' + (project.findProperty('phoneHaUrl') ?: 'https://ha.badara.co.kr').replace('"','') + '"'
         testInstrumentationRunner project.findProperty('phoneTestRunner') ?: 'kr.swim.phone.EngineTestRunner'
     }

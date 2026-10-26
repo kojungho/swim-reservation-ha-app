@@ -11,6 +11,14 @@ function config(mode = "priority") {
   return { ...defaultConfig(), startDate: "2030-10-20", nights: 2, triggerAt: "2030-10-13T00:00:00", bookingMode: mode, profiles: [profile], roomPriority: [{ name: "해_하늘존", enabled: true }, { name: "샘_산맥존", enabled: true }] };
 }
 const found = [{ name: "해_하늘존", status: "available", available: true }, { name: "샘_산맥존", status: "booked", available: false }];
+test('바로 예약 명칭은 입실일·이전 명칭이 아닌 한국 예약 실행일이며 대기 명칭은 유지한다', async t => {
+  const {manager,calls}=await fixture(t);
+  manager.timeSync.now=()=>Date.parse('2030-10-12T15:01:00Z');
+  const now=await manager.add({name:'이전 대기 이름',kind:'now',config:config()});
+  assert.equal(manager.get(now).name,'2030-10-13');
+  const pending=await manager.add({name:'가족 대기',kind:'scheduled',config:config()});
+  assert.equal(manager.get(pending).name,'가족 대기');assert.equal(calls.length,0);
+});
 test("다른 화면에서 변경된 일정은 이전 확인값으로 시작하지 않는다", async t => {
   const { manager, calls } = await fixture(t);
   const id = await manager.add({ name: "원본", kind: "scheduled", config: config() });

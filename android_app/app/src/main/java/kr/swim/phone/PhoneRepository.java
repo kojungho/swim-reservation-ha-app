@@ -46,7 +46,8 @@ final class PhoneRepository {
             requireStoppedPlan(id);
             Plan p=plan(value.getJSONObject("plan"),true);String title=value.optString("title").trim();
             if(title.length()>80)throw new IllegalArgumentException("일정 이름은 80자 이내입니다.");
-            saved=new JSONObject().put("title",title.isEmpty()?p.date+" "+p.nights+"박":title).put("plan",p.json());
+            String fallback=p.trigger==0&&!p.watch()?java.time.Instant.ofEpochMilli(SiteClock.now(storeContext)).atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalDate().toString():p.date+" "+p.nights+"박";
+            saved=new JSONObject().put("title",title.isEmpty()?fallback:title).put("plan",p.json());
         }else {
             String name=value.optString("name").trim(),payer=value.optString("payer").trim(),phone=value.optString("phone").replaceAll("[^0-9]",""),birth=value.optString("birth");
             if(name.isEmpty()||name.length()>50||payer.length()>50||!phone.matches("01[0-9]{8,9}"))throw new IllegalArgumentException("예약자명·휴대폰 번호를 확인해 주세요. 입금자명은 선택입니다.");
