@@ -65,12 +65,14 @@ function initializeEditorDrafts() {
   document.getElementById('editorResetButton').addEventListener('click', () => dialog.showModal());
   document.getElementById('editorResetCancel').addEventListener('click', () => dialog.close());
   document.getElementById('editorResetConfirm').addEventListener('click', () => {
+    window.beginBookingReset?.();
     delete editorDrafts[workspaceTab];
     resetPlanEditor(workspaceTab);
     updateEditorResetVisibility();
     persistDrafts();
     dialog.close();
     planMessage('현재 화면의 예약 입력만 초기화했습니다. 다른 화면의 초안은 유지됩니다. 저장된 예약자·등록 일정·실제 예약은 변경하지 않았습니다.');
+    window.finishBookingReset?.();
   });
 }
 function linkDraftToPlan(tab, id, snapshot) {

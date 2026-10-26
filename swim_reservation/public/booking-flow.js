@@ -53,7 +53,16 @@ window.buildDisplayReceipt=function(value){
   if(/phone/i.test(input.id)||input.name==='phone')return !/^01\d{8,9}$/.test(value.replace(/\D/g,''));
   return !input.validity.valid;
  }
- let correctingUntil=0,scrollCheck=0,lastScrollY=0;
+ let correctingUntil=0,scrollCheck=0,lastScrollY=0,validationEpoch=0,resettingValidation=false;
+ window.beginBookingReset=function(){
+  resettingValidation=true;validationEpoch++;clearTimeout(scrollCheck);clearTimeout(autoTimer);scrollCheck=autoTimer=0;autoWanted=false;autoKey='';correctingUntil=0;pendingName='';autoNamed=false;generatedName='';
+  for(const item of bodies)item.body.querySelectorAll('.required-input-error').forEach(input=>{input.classList.remove('required-input-error');input.removeAttribute('aria-invalid');});
+  const message=byId('floatingMessage');if(message){clearTimeout(message.hideTimer);message.hidden=true;}
+ };
+ window.finishBookingReset=function(){
+  resettingValidation=false;lastScrollY=window.scrollY;refresh();
+  const missing=bodies[0]&&firstRequired(bodies[0]);if(missing)showRequired(missing);
+ };
  function firstRequired(item){
   if(!item.toggle.getClientRects().length)return;
   const collapsed=item.body.hidden;item.body.hidden=false;
@@ -62,17 +71,19 @@ window.buildDisplayReceipt=function(value){
   return missing;
  }
  function showRequired(input){
-  if(!missingRequired(input)||document.querySelector('dialog[open]'))return;
+  if(resettingValidation||!missingRequired(input)||document.querySelector('dialog[open]'))return;
+  if(modes.includes(workspaceTab)&&bodies.some(item=>item.body.contains(input))){for(const item of bodies){const earlier=firstRequired(item);if(earlier){input=earlier;break;}if(item.body.contains(input))break;}}
   autoWanted=false;clearTimeout(autoTimer);autoTimer=0;correctingUntil=performance.now()+1200;
   input.classList.add('required-input-error');input.setAttribute('aria-invalid','true');
   const title=input.closest('label')?.querySelector('.field-label-text,.stay-label-line>span:first-child')?.textContent.replace('(필수)','').trim()||input.getAttribute('aria-label')||input.placeholder||'필수 항목';
   notify(title+(/phone/i.test(input.id)||input.name==='phone'?' 형식을 확인해 주세요.':' 입력이 필요합니다.'));
   input.scrollIntoView({block:'center',behavior:'smooth'});input.focus({preventScroll:true});
+  if(phone&&!input.readOnly&&input.matches('textarea,input:not([type=date]):not([type=datetime-local]):not([type=number])')){try{api('showKeyboard');}catch(error){/* Focus is retained if the keyboard is unavailable. */}}
  }
  function initializeRequiredValidation(){
   const fields=root=>[...root.querySelectorAll('[data-booking-required]')];
   document.addEventListener('input',event=>{const input=event.target;if(input.classList.contains('required-input-error')&&!missingRequired(input)){input.classList.remove('required-input-error');input.removeAttribute('aria-invalid');}},true);
-  document.addEventListener('focusout',event=>{const input=event.target;if(input.dataset.bookingRequired!=='true'||event.relatedTarget?.classList.contains('required-input-error'))return;setTimeout(()=>{if(!input.isConnected||!modes.includes(workspaceTab)&&!input.closest('#lookupCard,#bookingBookCard'))return;showRequired(input);},0);},true);
+  document.addEventListener('focusout',event=>{const input=event.target,epoch=validationEpoch;if(input.dataset.bookingRequired!=='true'||event.relatedTarget?.classList.contains('required-input-error')||event.relatedTarget?.closest('.phone-reset-floating,#editorResetButton,#editorResetConfirm,#editorResetCancel'))return;setTimeout(()=>{if(epoch!==validationEpoch||resettingValidation||!input.isConnected||!modes.includes(workspaceTab)&&!input.closest('#lookupCard,#bookingBookCard'))return;showRequired(input);},0);},true);
   const nextStep=event=>{
    const heading=event.target.closest('.booking-step-title');if(!heading||!modes.includes(workspaceTab))return;
    const index=bodies.findIndex(item=>item.toggle===heading);if(index<1)return;
@@ -83,7 +94,7 @@ window.buildDisplayReceipt=function(value){
   document.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')nextStep(event);},true);
   window.addEventListener('scroll',()=>{
    const down=window.scrollY>lastScrollY;lastScrollY=window.scrollY;clearTimeout(scrollCheck);
-   if(!down||performance.now()<correctingUntil||!modes.includes(workspaceTab))return;
+   if(resettingValidation||!down||performance.now()<correctingUntil||!modes.includes(workspaceTab))return;
    scrollCheck=setTimeout(()=>{
     if(performance.now()<correctingUntil||document.querySelector('dialog[open]'))return;
     let missing;for(const item of bodies){

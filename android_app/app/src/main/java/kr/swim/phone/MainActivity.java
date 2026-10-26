@@ -74,6 +74,7 @@ public final class MainActivity extends Activity {
             switch(action){
                 case "load":result=repository.load().put("rooms",new JSONArray(RoomCatalog.NAMES)).put("version",BuildConfig.VERSION_NAME);break;
                 case "checkUpdates":main.post(()->updates.check(true));result="앱 업데이트 확인 중";break;
+                case "showKeyboard":main.post(()->{if(screen!=null&&!isFinishing()&&!isDestroyed()){screen.requestFocus();screen.postDelayed(()->{if(!isFinishing()&&!isDestroyed()&&screen.hasWindowFocus()){android.view.inputmethod.InputMethodManager keyboard=getSystemService(android.view.inputmethod.InputMethodManager.class);if(keyboard!=null)keyboard.showSoftInput(screen,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);}},100);}});result="입력 준비";break;
                 case "syncTime":PhoneReads.time(this);result="서버 시각 동기화 중";break;
                 case "monthly":PhoneReads.monthly(this,data.getString("month"));result="월별 현황 조회 중";break;
                 case "calendarMonth":result=PhoneReads.calendar(this,data.getString("month"),data.optBoolean("force"));break;

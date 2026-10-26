@@ -1,5 +1,20 @@
 const test=require('node:test'),assert=require('node:assert/strict'),{chromium}=require('playwright-core'),{setup}=require('./fixtures/phone-ui.cjs');
 const executablePath=process.env.CHROMIUM_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+test('번호 안내 뒤 초기화는 이전 예약 콜백·오류를 지우고 이름부터 안내하며 폰 키패드를 요청한다',async t=>{
+ const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());const{mockBookApp}=await import('../../swim_reservation/test/fixtures/ui-book-app.js');
+ for(const phone of [true,false]){
+  let page,errors,state;if(phone)({page,errors}=await setup(browser));else{page=await browser.newPage({viewport:{width:390,height:900}});state=await mockBookApp(page);errors=state.errors;}t.after(()=>page.close());await page.waitForSelector('.booking-step-title');
+  await page.locator('#reserverName').fill('초기화 시험');await page.locator('#phone').fill('');await page.locator('#phone').focus();await page.keyboard.press('Tab');
+  await page.waitForFunction(()=>document.activeElement.id==='phone'&&document.getElementById('floatingMessage')?.textContent.includes('휴대폰'));
+  if(phone){await page.evaluate(()=>{document.getElementById('phone').dispatchEvent(new FocusEvent('focusout',{bubbles:true}));document.querySelector('.phone-reset-floating').click();});}
+  else{await page.locator('#editorResetButton').click();await page.evaluate(()=>{document.getElementById('phone').dispatchEvent(new FocusEvent('focusout',{bubbles:true}));document.getElementById('editorResetConfirm').click();});}
+  await page.waitForFunction(()=>document.activeElement.id==='reserverName'&&document.getElementById('floatingMessage')?.textContent.includes('예약자명'));
+  await page.waitForTimeout(1500);assert.equal(await page.locator('#reserverName').inputValue(),'');assert.equal(await page.locator('#phone').inputValue(),'');assert.equal(await page.locator('#phone').getAttribute('aria-invalid'),null);assert.equal(await page.locator('#reserverName').getAttribute('aria-invalid'),'true');assert.match(await page.locator('#floatingMessage span').textContent(),/예약자명/);
+  await page.locator('#reserverName').fill('처음부터');await page.locator('#reserverName').press('Tab');await page.locator('#phone').focus();await page.keyboard.press('Tab');await page.waitForFunction(()=>document.activeElement.id==='phone'&&document.getElementById('floatingMessage')?.textContent.includes('휴대폰'));
+  if(phone){assert.ok(await page.evaluate(()=>nativeMock.calls.filter(c=>c.action==='showKeyboard').length>=2));assert.equal(await page.evaluate(()=>nativeMock.calls.some(c=>['run','stop'].includes(c.action))),false);assert.equal(await page.evaluate(()=>nativeMock.vault.profiles.length),1);}else assert.equal(state.planCalls.length,0);
+  assert.deepEqual(errors,[]);await page.close();
+ }
+});
 test('앱·애드온 필수 입력: 벗어나기·다음 단계·스크롤 안내, 정상 입력 복구와 선택 항목 제외',async t=>{
  const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());const{mockBookApp}=await import('../../swim_reservation/test/fixtures/ui-book-app.js');
  for(const phone of [true,false]){
