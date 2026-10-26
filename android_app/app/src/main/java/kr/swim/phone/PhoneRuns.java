@@ -12,7 +12,9 @@ final class PhoneRuns {
     static boolean anyUncertain(Context c){for(int n=0;n<=LIMIT;n++)if(new LocalStore(c,n).uncertain())return true;return false;}
     static void acknowledge(Context c){for(int n=0;n<=LIMIT;n++){LocalStore s=new LocalStore(c,n);if(!s.active()){s.acknowledgeReceiptCheck();if(s.stage().equals("CHECK_REQUIRED"))s.state("STOPPED","공식 내역 확인 완료 · 필요하면 직접 다시 시작하세요.",false);}}}
     static int count(Context c)throws Exception{int count=0;for(int n=0;n<=LIMIT;n++){LocalStore s=new LocalStore(c,n);JSONObject run=s.loadDocument("run");if(s.active()&&(run==null||!run.optBoolean("_lookup")))count++;}return count;}
+    static boolean legacyUnbound(Context c)throws Exception{LocalStore s=new LocalStore(c,0);JSONObject run=s.loadDocument("run");return s.active()&&run!=null&&!run.optBoolean("_lookup")&&run.optString("_planId").isEmpty();}
     static int allocate(Context c,boolean lookup,String id)throws Exception{
+        if(!lookup&&legacyUnbound(c))throw new IllegalStateException("이전 버전 실행을 연결할 수 없습니다. 전체 중지 후 다시 시작하세요.");
         if(!id.isEmpty()){JSONObject history=new LocalStore(c,0).loadDocument("run-history");if(history!=null&&history.has(id))requireRestartable(history.getJSONObject(id));for(int n=0;n<=LIMIT;n++){JSONObject row=record(c,n);if(id.equals(row.optString("planId")))requireRestartable(row);}}
         if(activePlan(c,id))throw new IllegalStateException("이미 진행 중인 일정입니다.");
         if(lookup){if(new LocalStore(c,0).active()||!PhoneSessions.supported()&&anyActive(c))throw new IllegalStateException("진행 중인 조회가 끝난 뒤 다시 시도하세요.");return 0;}
@@ -57,7 +59,7 @@ final class PhoneRuns {
             if(!s.log().isEmpty())logs.append("[세션 ").append(n).append("]\n").append(s.log());
         }
         JSONArray records=new JSONArray();for(Iterator<String> keys=history.keys();keys.hasNext();)records.put(history.get(keys.next()));
-        return new JSONObject(main.toString()).put("runPlanId",main.optString("planId")).put("runTrigger",main.optLong("trigger")).put("runLookup",main.optBoolean("lookup")).put("active",anyActive(c)).put("activeCount",count(c)).put("capacity",PhoneSessions.supported()?LIMIT:1).put("multiProfile",PhoneSessions.supported()).put("executing",executing(c)).put("inspectBusy",new LocalStore(c,0).active()).put("uncertain",anyUncertain(c)).put("runs",records).put("log",logs.toString());
+        return new JSONObject(main.toString()).put("runPlanId",main.optString("planId")).put("runTrigger",main.optLong("trigger")).put("runLookup",main.optBoolean("lookup")).put("active",anyActive(c)).put("activeCount",count(c)).put("capacity",PhoneSessions.supported()?LIMIT:1).put("multiProfile",PhoneSessions.supported()).put("executing",executing(c)).put("inspectBusy",new LocalStore(c,0).active()).put("uncertain",anyUncertain(c)).put("runs",records).put("legacyUnbound",legacyUnbound(c)).put("log",logs.toString());
     }
     private static int priority(JSONObject r){if(r.optBoolean("lookup"))return 0;return r.optString("stage").equals("SUBMITTING")?3:r.optString("stage").equals("WAITING")||r.optString("stage").equals("WATCHING")?1:2;}
     static void reschedule(Context c)throws Exception{for(int n=0;n<=LIMIT;n++){LocalStore s=new LocalStore(c,n);if(s.active()&&s.stage().equals("WAITING"))AlarmReceiver.schedule(c,s.load("run").trigger,n);}}

@@ -107,7 +107,7 @@ public final class MainActivity extends Activity {
     JSONObject runtimeState()throws Exception{
         android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
         JSONObject editor=repository.load(),run=store.loadDocument("run");
-        PhoneRuns.reconcile(this);
+        repository.bindLegacyRun();PhoneRuns.reconcile(this);
         return PhoneRuns.snapshot(this).put("confirmationPending",confirmationPending).put("pendingPlanId",pendingPlanId)
             .put("notifications",getSystemService(NotificationManager.class).areNotificationsEnabled()).put("battery",power.isIgnoringBatteryOptimizations(getPackageName())).put("alarm",AlarmReceiver.permitted(this)).put("availability",store.availability()).put("catalog",new JSONArray(RoomCatalog.NAMES)).put("clock",SiteClock.state(this)).put("clockResult",store.loadDocument("clock-result")).put("monthly",store.loadDocument("monthly-result")).put("lookup",store.loadDocument("lookup-result")).put("draftClearedAt",editor.optLong("draftClearedAt")).put("clearedDraft",editor.optJSONObject("clearedDraft"));
     }

@@ -12,6 +12,7 @@ final class PlanScheduler {
         start(c,plan,lookup,"");
     }
     static synchronized void start(Context c,Plan plan,boolean lookup,String planId)throws Exception {
+        new PhoneRepository(c).bindLegacyRun();
         if(!lookup&&!plan.demo())PhoneRuns.guardUncertain(c,plan);
         int slot=PhoneRuns.allocate(c,lookup,planId);LocalStore store=new LocalStore(c,slot);
         CampLookup.cancel();

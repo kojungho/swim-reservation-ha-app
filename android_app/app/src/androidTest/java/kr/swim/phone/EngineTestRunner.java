@@ -19,6 +19,7 @@ public class EngineTestRunner extends Instrumentation {
         startPlan(Plan.sample(),action);
     }
     void startPlan(Plan p,String action)throws Exception{
+        PhoneSessions.testSupported=false; // This existing suite asserts legacy slot-zero engine behavior.
         activity=startActivitySync(new Intent(app,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         store.state("IDLE",p.demo()?"모의 테스트 준비":"읽기 전용 연결 확인",false);
         PlanScheduler.start(app,p,"INSPECT".equals(action));
@@ -213,6 +214,6 @@ public class EngineTestRunner extends Instrumentation {
             check(store.stage().equals("STOPPED")&&!store.active(),"reboot stops a watch instead of secretly placing a booking");
             Bundle done=new Bundle();done.putString("stream","\n"+assertions+" assertions passed\n"+report);finish(Activity.RESULT_OK,done);
         }catch(Throwable e){Bundle result=new Bundle();result.putString("stream","FAILED: "+e+"\n"+store.log()+"\n"+report);finish(Activity.RESULT_CANCELED,result);}
-        finally{AppUpdates.source=originalUpdateSource;PhoneEngine.demoScenario="";if(!liveInspect&&store.active())PlanScheduler.stop(app);try{shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");}catch(Exception ignored){}releaseActivity();}
+        finally{PhoneSessions.testSupported=null;AppUpdates.source=originalUpdateSource;PhoneEngine.demoScenario="";if(!liveInspect&&store.active())PlanScheduler.stop(app);try{shell("dumpsys deviceidle unforce");shell("dumpsys battery reset");}catch(Exception ignored){}releaseActivity();}
     }
 }
