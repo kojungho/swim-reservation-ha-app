@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {openingRetryDelay} from '../src/opening-readiness.js';
+test('오픈 전 안내만 1·1·2·3초 간격, 최초 포함 5회·10초 상한',()=>{let now=1000;for(const [i,delay]of [1000,1000,2000,3000].entries()){assert.equal(openingRetryDelay({notice:'아직 예약 오픈 전',reads:i+1,trigger:1000,now}),delay);now+=delay;}assert.equal(now,8000);assert.equal(openingRetryDelay({notice:'오픈 전',reads:5,trigger:1000,now}),null);assert.equal(openingRetryDelay({notice:'오픈 전',reads:4,trigger:1000,now:9000}),null);});
+test('제출 후·권한·요청 제한·알 수 없는 응답·오픈 시각 전후 범위 밖은 반복하지 않는다',()=>{const base={notice:'오픈 전',reads:1,trigger:1000,now:1000};for(const changes of [{submitted:true},{notice:'HTTP 403'},{notice:'HTTP 429'},{notice:'알 수 없는 화면'},{trigger:0},{now:999},{now:11001},{reads:0}])assert.equal(openingRetryDelay({...base,...changes}),null);});

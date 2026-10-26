@@ -50,9 +50,10 @@ window.buildDisplayReceipt=function(value){
   if(phone&&typeof featuresReady!=='undefined'&&!featuresReady)return;
   initialized=true;
   const date=byId('startDate').closest('section'),person=byId('reserverName').closest('section'),room=byId('roomList').closest('section');
-  room.before(person);
-  for(const [i,section]of [date,person,room].entries()){
+  date.before(person);
+  for(const [i,section]of [person,date,room].entries()){
    const title=section.querySelector('.section-title');title.querySelector('span').textContent=String(i+1);
+   title.querySelector('h2').textContent=['예약자 정보','기간','객실 선택'][i];
    const body=document.createElement('div');body.className='booking-step-body';
    for(const child of [...section.children])if(child!==title)body.append(child);
    const toggle=title;toggle.classList.add('booking-step-title');toggle.setAttribute('role','button');toggle.tabIndex=0;body.id='booking-step-body-'+(i+1);toggle.setAttribute('aria-controls',body.id);
@@ -84,7 +85,7 @@ window.buildDisplayReceipt=function(value){
 
    setHidden(byId('reservationConnectionDetails'),true);
   }
-  const trigger=byId('triggerAt')?.closest('label');if(trigger){bodies[0].body.append(trigger);const caption=[...trigger.childNodes].find(n=>n.nodeType===3);if(caption)caption.textContent='예약 실행 시간(오픈 예정일)';byId('triggerAt').readOnly=true;byId('triggerAt').setAttribute('aria-readonly','true');byId('triggerAt').tabIndex=-1;}
+  const trigger=byId('triggerAt')?.closest('label');if(trigger){bodies[1].body.append(trigger);const caption=[...trigger.childNodes].find(n=>n.nodeType===3);if(caption)caption.textContent='예약 실행 시간(오픈 예정일)';byId('triggerAt').readOnly=true;byId('triggerAt').setAttribute('aria-readonly','true');byId('triggerAt').tabIndex=-1;}
   const safety=byId('safetyNotice');if(safety){const detail=document.createElement('details'),summary=document.createElement('summary'),text=document.createElement('p');summary.textContent='실행 안전 안내';text.textContent=phone?'전원·네트워크·절전 제한으로 실행이 중단될 수 있습니다.':'서버 전원·네트워크와 시간을 확인하세요.';detail.append(summary,text);safety.replaceChildren(detail);}
   markLabels();
  }
@@ -97,7 +98,7 @@ window.buildDisplayReceipt=function(value){
    if(phone)personReady=phonePeople.length>0&&phonePeople.every(p=>p.name.trim()&&/^01\d{8,9}$/.test(p.phone.replace(/\D/g,'')));
    else personReady=[{reserverName:byId('reserverName').value,phone:byId('phone').value},...extraProfiles].every(p=>p.reserverName?.trim()&&/^01\d{8,9}$/.test((p.phone||'').replace(/\D/g,'')));
   }
-  const ready=[true,validDate,validDate&&personReady];
+  const ready=[true,personReady,validDate&&personReady];
   bodies.forEach((item,i)=>{item.toggle.disabled=!ready[i];const disabled=String(!ready[i]);if(item.toggle.getAttribute('aria-disabled')!==disabled)item.toggle.setAttribute('aria-disabled',disabled);if(!ready[i])setHidden(item.body,true);else if(!item.ready)setHidden(item.body,false);item.ready=ready[i];const expanded=String(!item.body.hidden);if(item.toggle.getAttribute('aria-expanded')!==expanded)item.toggle.setAttribute('aria-expanded',expanded);});
   const trigger=byId('triggerAt')?.closest('label');setHidden(trigger,!validDate||workspaceTab==='watch'||!beforeOpening());
   setHidden(byId('stayOpeningDate'),true);
@@ -106,7 +107,7 @@ window.buildDisplayReceipt=function(value){
   if(validDate&&beforeOpening()){const opening=bookingOpenIso(date);if(opening)byId('triggerAt').value=opening;}
   if(phone)setHidden(document.querySelector('[data-phone-run]'),!validDate||beforeOpening()||workspaceTab==='watch');
   document.querySelectorAll('.room-actions').forEach(el=>setHidden(el,true));
-  for(const el of bodies[1].body.querySelectorAll('button,a'))if(el.textContent.includes('공식'))setHidden(el,true);
+  for(const el of bodies[0].body.querySelectorAll('button,a'))if(el.textContent.includes('공식'))setHidden(el,true);
   if(autoWanted&&ready[2]&&modes.includes(workspaceTab)&&!autoTimer){
    const key=identityKey();autoTimer=setTimeout(()=>{autoTimer=0;if(!autoWanted||identityKey()!==key||document.hidden||document.querySelector('dialog[open]'))return;autoWanted=false;if(autoKey===key)return;autoKey=key;
     setHidden(bodies[2].body,false);bodies[2].toggle.setAttribute('aria-expanded','true');

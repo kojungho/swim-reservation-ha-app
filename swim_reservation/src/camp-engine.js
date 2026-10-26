@@ -6,6 +6,7 @@ import { reservationErrorDetails } from './reservation-errors.js';
 import { readCampReservations } from './camp-records.js';
 import { fillCampForm } from './camp-form.js';
 import { maskedProfile, safeCampError } from './camp-trace.js';
+import { openingRetryDelay } from './opening-readiness.js';
 
 const fail = (code, message) => Object.assign(new Error(message), { code, safeToLog: true });
 export class ReservationEngine extends LegacyEngine {
@@ -64,13 +65,17 @@ export class ReservationEngine extends LegacyEngine {
         await this.store.updateStatus({ state: 'running', selectedRoom: room.name, stage: 'room-lookup', message: `${room.name}: 예약 정보 화면을 불러옵니다.` });
         // Only a short opening-time readiness window, GET only. An ordinary pre-open
         // visit, HTTP error, unknown layout or any submitted request is never retried.
-        for (let attempt = 0; attempt < 3; attempt++) {
+        const openingGeneration = this.closeGeneration || 0;
+        for (let attempt = 0; attempt < 5; attempt++) {
           await this.traceStep('room-lookup', () => this.navigate(campUrl(config, 'book.php', room.siteId)));
           if (await this.traceStep('form-detect', () => this.page.locator('form.js-book').count())) break;
           const notice = await this.page.locator('.msg-box').innerText().catch(() => '');
-          const elapsed = Date.now() - triggerEpoch(config.triggerAt);
-          if (attempt === 2 || elapsed < 0 || elapsed > 10_000 || !/체크인까지|오픈|예약.*시작|아직/.test(notice)) break;
-          await this.traceStep('opening-wait', () => sleep(2000));
+          const trigger = triggerEpoch(config.triggerAt);
+          const delay = openingRetryDelay({ submitted, notice, reads: attempt + 1, trigger, now: Date.now() });
+          if (delay === null) break;
+          await this.traceStep('opening-wait', () => sleep(delay));
+          if (openingGeneration !== (this.closeGeneration || 0)) throw fail('BOOKING_CANCELED', '중지된 예약은 재조회하지 않습니다.');
+          if (Date.now() < trigger || Date.now() > trigger + 10000) break;
         }
         const form = this.page.locator('form.js-book');
         const available = await this.traceStep('form-ready', async () => {

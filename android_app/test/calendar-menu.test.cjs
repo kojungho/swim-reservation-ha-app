@@ -7,7 +7,7 @@ test('앱·애드온 월말 입실은 다음 달 퇴실 달력으로 이동하�
   t.after(()=>page.close());let reads=0;await page.route('**/api/monthly-availability?**',route=>{reads++;const month=new URL(route.request().url()).searchParams.get('month');return route.fulfill({json:{month,countsOnly:true,openThrough:'2026-12-31',beforeOpen:true,days:Array.from({length:new Date(Number(month.slice(0,4)),Number(month.slice(5)),0).getDate()},(_,i)=>({date:month+'-'+String(i+1).padStart(2,'0'),beforeOpen:true,availableCount:null,rooms:[]}))}});});
   await page.waitForSelector('.booking-step-title');
   for(const [start,end]of [['2027-01-31','2027-02-01'],['2027-12-31','2028-01-01'],['2028-02-29','2028-03-01']]){
-   await page.evaluate(({phone,start})=>{if(phone)loadPlan({mode:'reserve',date:start,name:'',phone:'',rooms:''});else{elements.startDate.value=start;updateStayFields();}}, {phone,start});
+   await page.evaluate(({phone,start})=>{if(phone)loadPlan({mode:'reserve',date:start,name:'모의예약자',phone:'01000000000',rooms:''});else{elements.reserverName.value='모의예약자';elements.phone.value='01000000000';elements.startDate.value=start;updateStayFields();}}, {phone,start});
    await page.locator('#startDate').click();await page.waitForFunction(date=>{const e=document.querySelector('[data-date="'+date+'"]');return e&&!e.disabled;},start);await page.locator('[data-date="'+start+'"]').click();
    await page.waitForFunction(date=>{const e=document.querySelector('[data-date="'+date+'"]');return e&&!e.disabled;},end);assert.match(await page.locator('#datePickerTitle').textContent(),/퇴실/);await page.locator('[data-date="'+end+'"]').click();assert.equal(await page.locator('#checkoutDate').inputValue(),end);
   }

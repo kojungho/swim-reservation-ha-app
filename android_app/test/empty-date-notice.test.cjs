@@ -3,7 +3,7 @@ test('앱·애드온 날짜 선택 전에는 박수 숨김, 선택하면 표시�
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());const{mockBookApp}=await import('../../swim_reservation/test/fixtures/ui-book-app.js');
  for(const phone of [true,false])for(const width of [320,390]){
   let page,errors,state;if(phone)({page,errors}=await setup(browser,width));else{page=await browser.newPage({viewport:{width,height:900}});state=await mockBookApp(page);errors=state.errors;}t.after(()=>page.close());await page.waitForSelector('.booking-step-title');
-  const setDate=date=>page.evaluate(({date,phone})=>{if(phone)loadPlan({mode:'reserve',date,name:'',phone:'',rooms:''});else{elements.startDate.value=date;updateStayFields();}},{date,phone});
+  const setDate=date=>page.evaluate(({date,phone})=>{if(phone)loadPlan({mode:'reserve',date,name:'모의예약자',phone:'01000000000',rooms:''});else{elements.reserverName.value='모의예약자';elements.phone.value='01000000000';elements.startDate.value=date;updateStayFields();}},{date,phone});
   await setDate('');await page.waitForTimeout(180);assert.equal(await page.locator('#stayNightsDisplay').isVisible(),false);assert.equal(await page.locator('[data-phone-run],#runNowButton').first().isVisible(),false);
   await setDate('2027-01-22');await page.waitForTimeout(180);assert.equal(await page.locator('#stayNightsDisplay').isVisible(),true);assert.equal(await page.locator('#stayNightsDisplay').textContent(),'1박');
   await setDate('');await page.waitForTimeout(180);assert.equal(await page.locator('#stayNightsDisplay').isVisible(),false);

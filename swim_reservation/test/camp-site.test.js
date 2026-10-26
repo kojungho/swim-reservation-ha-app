@@ -82,6 +82,22 @@ async function fixture(t, { html = form, postStatus = 200, done = receipt } = {}
   });
   return { engine, status, logs, requests };
 }
+test('오픈 반영 지연은 최대 5회 GET이며 중지 후 추가 조회·POST는 없다', { skip: !executablePath }, async t => {
+  const notice='<div class="msg-box">아직 예약 오픈 전입니다.</div>';
+  const f=await fixture(t,{html:notice});
+  const current=()=>({...config(),triggerAt:new Date(Date.now()+9*3600000).toISOString().slice(0,19)});
+  await assert.rejects(f.engine.runSingle(current()),e=>e.code==='BOOKING_NOT_OPEN');
+  assert.equal(f.requests.filter(r=>r.method==='GET').length,5);assert.equal(f.requests.filter(r=>r.method==='POST').length,0);
+  const g=await fixture(t,{html:notice});let settled;const result=g.engine.runSingle(current()).then(()=>null,e=>e);
+  while(!g.logs.some(entry=>entry[3]?.step==='opening-wait'&&entry[3]?.outcome==='start'))await new Promise(r=>setTimeout(r,20));
+  await g.engine.close();settled=await result;assert.ok(settled);assert.equal(g.requests.length,1);
+});
+test('오픈 반영 재조회 중 폼이 열리면 진행하고 최종 제출은 1회만 한다', { skip: !executablePath }, async t => {
+  const f=await fixture(t);let reads=0;
+  await f.engine.context.route('**/camp/book.php?**',route=>{reads++;f.requests.push({method:route.request().method(),url:route.request().url()});return route.fulfill({contentType:'text/html; charset=utf-8',body:reads===1?'<div class="msg-box">아직 예약 오픈 전</div>':form});});
+  await f.engine.runSingle({...config(),triggerAt:new Date(Date.now()+9*3600000).toISOString().slice(0,19)});
+  assert.equal(reads,2);assert.equal(f.requests.filter(r=>r.method==='POST').length,1);assert.equal(f.status.state,'success');
+});
 test('실행 시각에 새 폼을 입력하고 필수 약관·무통장 제출 1회 및 영수증을 검증한다', { skip: !executablePath }, async t => {
   const f = await fixture(t);
   assert.equal(f.engine.supportsPrewarm, false);

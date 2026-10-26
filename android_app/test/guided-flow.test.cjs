@@ -7,9 +7,10 @@ test('단계별 필수 입력, 팝업만 일괄선택·삭제, 2열·짧은 이�
   await page.waitForSelector('.booking-step-title');
   await page.evaluate(()=>loadPlan({mode:'reserve',date:'',name:'',phone:'',rooms:''}));
   await page.waitForFunction(()=>document.querySelectorAll('.booking-step-title')[1].disabled);
-  assert.equal(await page.locator('#reserverName').isVisible(),false);
+  assert.equal(await page.locator('#reserverName').isVisible(),true);assert.equal(await page.locator('#startDate').isVisible(),false);
+  assert.deepEqual(await page.locator('.booking-step-title h2').allTextContents(),['예약자 정보','기간','객실 선택']);
   await page.evaluate(()=>{loadPlan({mode:'reserve',date:'2027-01-17',name:'',phone:'',rooms:''});});
-  await page.waitForFunction(()=>!document.querySelectorAll('.booking-step-title')[1].disabled);
+  await page.waitForFunction(()=>document.querySelectorAll('.booking-step-title')[1].disabled);
   assert.equal(await page.locator('#roomList').isVisible(),false);
   await page.locator('#reserverName').fill('모의예약자');await page.locator('#phone').fill('01000000000');
   await page.waitForFunction(()=>!document.querySelectorAll('.booking-step-title')[2].disabled);
