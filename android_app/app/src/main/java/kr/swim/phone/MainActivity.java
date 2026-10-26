@@ -21,6 +21,7 @@ public final class MainActivity extends Activity {
     static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","toast.js","phone-features.js","booking-flow.js","booking-flow.css","ha-map.png","date-picker.js","stay-calendar.js","site-choice.js","site-map.png");
     WebView screen;
     AppUpdates updates;
+    DisplayConnection displayConnection;
     private String pendingMapExport;
     private volatile long lookupRequest=0;
     private volatile boolean confirmationPending=false;
@@ -79,7 +80,7 @@ public final class MainActivity extends Activity {
                 case "lookup":{JSONArray profiles=data.optJSONArray("profiles");if(profiles==null)profiles=repository.load().getJSONArray("profiles");JSONArray selected=profiles;main.post(()->{try{CampLookup.begin(this,selected);}catch(Exception e){if(CampLookup.active!=null){message("이미 예약 내역을 조회 중입니다.");return;}try{store.saveDocument("lookup-result",new JSONObject().put("pending",false).put("error",e instanceof IllegalArgumentException||e instanceof IllegalStateException?e.getMessage():"예약조회 초기화 실패 · 앱을 다시 열어 주세요.").put("capturedAt",System.currentTimeMillis()));}catch(Exception ignored){}}});result="예약 내역 조회 중";break;}
                 case "lookupStop":main.post(CampLookup::cancel);result="조회 중지";break;
                 case "maps":result=new JSONObject().put("photos",new JSONArray()).put("selected","");break;
-                case "haSync":HaDisplay.sync(this,false);result="HA 표시 동기화";break;
+                case "haSync":if(data.optBoolean("reconnect"))HaDisplay.reconnect(this);else HaDisplay.sync(this,false);result="HA 표시 동기화";break;
                 case "mapPick":case "mapExport":case "mapAction":throw new IllegalStateException("사진은 애드온에서만 관리합니다.");
 
 
@@ -134,8 +135,8 @@ public final class MainActivity extends Activity {
     private void safeSettings(Runnable action){try{action.run();}catch(Exception e){message("설정 화면을 열지 못했습니다. 시스템 앱 정보에서 직접 확인해 주세요.");}}
     private void open(Uri uri){try{startActivity(new Intent(Intent.ACTION_VIEW,uri));}catch(Exception e){message("브라우저를 열지 못했습니다.");}}
     private void message(String text){if(!isFinishing()&&screen!=null)screen.evaluateJavascript("window.showFloatingMessage?.("+JSONObject.quote(text)+",{error:true})",null);}
-    @Override protected void onResume(){super.onResume();if(store!=null)PhoneRuns.reconcile(this);if(updates!=null)updates.resume();HaDisplay.sync(this,false);refreshRuntime();}
-    @Override protected void onPause(){PhoneInspection.cancel();if(updates!=null)updates.pause();super.onPause();}
+    @Override protected void onResume(){super.onResume();if(store!=null)PhoneRuns.reconcile(this);if(updates!=null)updates.resume();if(displayConnection==null)displayConnection=new DisplayConnection(this,()->HaDisplay.reconnect(this));displayConnection.start();HaDisplay.reconnect(this);refreshRuntime();}
+    @Override protected void onPause(){if(displayConnection!=null)displayConnection.stop();PhoneInspection.cancel();if(updates!=null)updates.pause();super.onPause();}
     Intent mapExportIntent(String id)throws Exception{
         new MapPhotos(this).registeredFile(id);
         return new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("image/jpeg").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"swim-map-"+id+".jpg");

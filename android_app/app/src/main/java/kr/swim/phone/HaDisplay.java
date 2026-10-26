@@ -16,7 +16,9 @@ import okhttp3.*;
 final class HaDisplay {
  static final ExecutorService worker=Executors.newSingleThreadExecutor();
  static final AtomicBoolean busy=new AtomicBoolean();
+ static final AtomicBoolean reconnectPending=new AtomicBoolean();
  static volatile long lastAttempt=0;
+ static long lastReconnect=0;
  static volatile String message="공개 화면 설정 확인 대기";
  static final int MAX_PHOTO=12*1024*1024;
  static final OkHttpClient client=new OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).connectTimeout(8,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS).callTimeout(25,TimeUnit.SECONDS).build();
@@ -58,9 +60,10 @@ final class HaDisplay {
  }
  static void sync(Context c,boolean force){
   if((!force&&System.currentTimeMillis()-lastAttempt<60000)||!busy.compareAndSet(false,true))return;lastAttempt=System.currentTimeMillis();
-  worker.execute(()->{try{refresh(c,origin(BuildConfig.DEFAULT_HA_URL));message="앱 화면 설정 동기화 완료";}
-   catch(Exception error){message="공개 설정 연결 대기 · 마지막 설정 유지";}finally{busy.set(false);}});
+  worker.execute(()->{boolean success=false;try{refresh(c,origin(BuildConfig.DEFAULT_HA_URL));message="앱 화면 설정 동기화 완료";success=true;}
+   catch(Exception error){message="공개 설정 연결 대기 · 마지막 설정 유지";}finally{busy.set(false);if(reconnectPending.getAndSet(false)&&!success)sync(c,true);}});
  }
+ static synchronized void reconnect(Context c){if(busy.get()){reconnectPending.set(true);return;}long now=android.os.SystemClock.elapsedRealtime();if(lastReconnect>0&&now-lastReconnect<3000)return;lastReconnect=now;sync(c.getApplicationContext(),true);}
  static void refresh(Context c,String base)throws Exception{
   JSONObject display=project(new JSONObject(new String(get(base+"/api/swim_phone/display",131072),java.nio.charset.StandardCharsets.UTF_8)));
   String hash=display.getString("photoSha256");File file=new File(c.getFilesDir(),"ha-display-"+hash+".png");

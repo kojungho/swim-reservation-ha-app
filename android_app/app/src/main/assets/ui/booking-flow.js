@@ -64,7 +64,7 @@ window.buildDisplayReceipt=function(value){
 
   const request=byId('campRequest');if(request){request.closest('label').classList.add('full-field');request.rows=2;}
   const linkRow=document.createElement('div');linkRow.className='app-link-row';
-  const official=document.createElement('a');official.className='official-small official-site-link';official.textContent='공식 예약 사이트';official.href='https://www.swimozicamp.com/camp/';official.target='_blank';official.rel='noopener noreferrer';linkRow.append(official);document.querySelector('header').append(linkRow);
+  const official=document.createElement('a');official.className='official-small official-site-link';official.textContent='공식 예약 사이트';official.href='https://www.swimozicamp.com/camp/';official.target='_blank';official.rel='noopener noreferrer';if(phone)official.addEventListener('click',e=>{e.preventDefault();try{api('openMonthly');}catch(error){showError(error);}});linkRow.append(official);document.querySelector('header').append(linkRow);
   if(!phone){const update=document.createElement('a');update.className='official-small';update.textContent='앱 업데이트';update.href='https://github.com/kojungho/swim-reservation-ha-app/releases/latest';update.target='_blank';update.rel='noopener noreferrer';linkRow.prepend(update);}
   document.querySelectorAll('.one-off-lookup summary').forEach(el=>el.textContent='비회원 조회');
   const selector=byId('siteProfileSelect');if(selector){const label=selector.closest('label');for(const text of [...label.childNodes])if(text.nodeType===3)text.textContent='예약자 ';}
@@ -142,5 +142,6 @@ window.buildDisplayReceipt=function(value){
   if(plannedSiteChoices()||workspaceTab==='watch')return true;
   await refreshAvailability();return rooms.some(r=>canSelectRoom(r.name));
  };
+ window.addEventListener('online',()=>{lastSync=0;if(phone){try{api('haSync',{reconnect:true});}catch(e){/* Retain cached display until the next automatic retry. */}}queue();});
  document.addEventListener('DOMContentLoaded',()=>{queue();document.addEventListener('input',userEdited,true);document.addEventListener('change',userEdited,true);document.addEventListener('click',e=>{if(e.target.closest('.site-choice-tools button')){autoWanted=false;clearTimeout(autoTimer);autoTimer=0;}});document.addEventListener('roomorderchange',queue);new MutationObserver(queue).observe(document.querySelector('main'),{childList:true,subtree:true});setInterval(queue,1200);});
 })();
