@@ -71,6 +71,37 @@ test("다른 날짜와 모드의 일정은 독립 설정·상태로 동시에 �
   assert.equal(manager.get(first).scheduler.armed, false);
   assert.equal(manager.get(second).scheduler.armed, true);
 });
+test("업데이트 재시작 후 미래 예약은 같은 ID·설정·시각으로 대기만 자동 복원하고 즉시 제출하지 않는다", async t => {
+  const { manager, calls, dataDir } = await fixture(t);
+  const id = await manager.add({ name: "업데이트 보존", kind: "scheduled", config: config() });
+  await manager.start(id);
+  const original = (await manager.list())[0];
+  await manager.close();
+  for(let attempt=0;attempt<2;attempt++){
+    const restored = new PlanManager({ dataDir, timeSync: manager.timeSync, inspect: manager.inspect, engineFactory: manager.engineFactory });
+    restored.schedule=()=>{};
+    await restored.init();
+    try{
+      const entries=await restored.list();
+      assert.equal(entries.length,1);assert.equal(entries[0].id,id);
+      assert.deepEqual(entries[0].config,original.config);
+      assert.equal(entries[0].enabled,true);assert.equal(entries[0].status.state,"waiting");
+      assert.equal(restored.get(id).scheduler.armed,true);
+      assert.equal(restored.get(id).scheduler.armedConfig.triggerAt,original.config.triggerAt);
+      assert.equal(calls.length,0);
+    }finally{await restored.close();}
+  }
+});
+test("업데이트 중 실행 시각이 지난 예약은 즉시 제출로 바꾸지 않고 놓친 일정으로 표시한다", async t => {
+  const { manager, calls, dataDir } = await fixture(t);
+  const id=await manager.add({ kind:"scheduled",config:config() });
+  await manager.start(id);await manager.close();
+  const now=Date.parse("2030-10-13T00:01:00+09:00");
+  const restored=new PlanManager({dataDir,timeSync:{now:()=>now,ensureSynced:async()=>now},inspect:manager.inspect,engineFactory:manager.engineFactory});
+  restored.schedule=()=>{};await restored.init();
+  try{const status=await restored.get(id).store.getStatus();assert.equal(status.state,"failed");assert.equal(status.stage,"missed");assert.equal(restored.get(id).scheduler.armed,false);assert.equal(calls.length,0);}
+  finally{await restored.close();}
+});
 test("취소 대기는 박수와 날짜 설정으로 조회하고 가능 객실이 나오면 한 번 예약 후 종료한다", async t => {
   let available = false, inspected;
   const { manager, calls } = await fixture(t, async input => { inspected = input; return available ? found : found.map(room => ({ ...room, available: false, status: "booked" })); });
