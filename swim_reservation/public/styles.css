@@ -567,3 +567,5 @@ button.info-button { font-size: calc(var(--font-button) * 1.3); }
 #roomList > .site-choice-editor { grid-column:1/-1; }
 
 .gallery-download { display: inline-flex; align-items: center; justify-content: center; padding: 10px 12px; border-radius: 12px; background: var(--soft, #edf2ef); color: inherit; text-decoration: none; font-weight: 700; }
+
+.execution-plan-time,.execution-plan-progress,.execution-plan-controls{grid-column:2;min-width:0}.execution-plan-time,.execution-plan-progress{font-size:12px;line-height:1.5;overflow-wrap:anywhere;color:var(--muted)}.execution-plan-progress:empty{display:none}.execution-plan-controls{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.execution-plan-controls button{min-height:40px;padding:6px 12px;font-size:12px}.execution-plan-controls button:disabled{opacity:.4;cursor:default}.execution-plan.active-plan small{color:var(--green);font-weight:700}
