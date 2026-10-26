@@ -9,3 +9,5 @@
 - Existing signing certificate SHA-256 retained: `027555e7a8662d3029c1c29112723855d40c490e17ea4410985d783ea78a3d19`.
 - No actual campsite booking/cancellation/payment executed. Physical phone installation requires the user's Android installer approval.
 - Public 0.4.17 APK downloaded and certificate/hash verified before update registration; minimum supported version remains 5 and changeType fix.
+- Image workflow 40342903069 succeeded for both architectures and the multi-architecture manifest (source b442c2c6a2eb46df030d32c68da5f76307eebc3e). HA addon updated with backup to 2.15.22 and verified started; backup count increased to 583. Deployed site-choice.js, booking-flow.js and booking-flow.css hashes match the tested source.
+- Persisted plan configuration/enabled hash remained `30ac3743c4d932cdc50c0d5bdb7a0fe2d8c18026d638a3d5d6c41fc4bcddff29`; the future scheduled plan automatically restored waiting/armed after the update. No manual booking execution performed.
