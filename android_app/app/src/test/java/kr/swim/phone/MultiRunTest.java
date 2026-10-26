@@ -62,4 +62,13 @@ public class MultiRunTest {
   Plan other=plan();other.phone="01011111111";PhoneRuns.guardUncertain(c,other);
   service.onStartCommand(new Intent(c,ReservationService.class).setAction("STOP").putExtra("slot",1),0,7);PhoneRuns.acknowledge(c);assertFalse(new LocalStore(c,1).uncertain());assertEquals("STOPPED",new LocalStore(c,1).stage());PhoneRuns.guardUncertain(c,plan());
  }
+ @Test public void oldSingleRunBindsToItsUniqueSavedPlanBeforeStartingAnother()throws Exception{
+  Plan p=plan();p.trigger=System.currentTimeMillis()+3600000;PhoneRepository repo=new PhoneRepository(c);JSONObject saved=repo.put("plans",new JSONObject().put("title","이전 일정").put("plan",p.json()));String id=saved.getJSONArray("plans").getJSONObject(0).getString("id");
+  LocalStore old=new LocalStore(c,0);old.save("run",p);old.state("WAITING","이전 버전 대기",true);repo.bindLegacyRun();assertEquals(id,old.runPlanId());assertTrue(PhoneRuns.activePlan(c,id));
+  try{PhoneRuns.allocate(c,false,id);fail("legacy run duplicated");}catch(IllegalStateException expected){}assertEquals(1,PhoneRuns.allocate(c,false,"different"));
+ }
+ @Test public void ambiguousOldRunBlocksNewStartsUntilExplicitStop()throws Exception{
+  Plan p=plan();PhoneRepository repo=new PhoneRepository(c);for(int n=0;n<2;n++)repo.put("plans",new JSONObject().put("title","같은 일정 "+n).put("plan",p.json()));LocalStore old=new LocalStore(c,0);old.save("run",p);old.state("WAITING","이전 버전 대기",true);repo.bindLegacyRun();assertEquals("",old.runPlanId());
+  try{PhoneRuns.allocate(c,false,"different");fail("ambiguous old run duplicated");}catch(IllegalStateException expected){}PlanScheduler.stopSlot(c,0);assertEquals(1,PhoneRuns.allocate(c,false,"different"));
+ }
 }

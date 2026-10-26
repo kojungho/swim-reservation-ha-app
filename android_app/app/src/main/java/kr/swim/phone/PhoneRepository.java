@@ -23,6 +23,13 @@ final class PhoneRepository {
         if(!java.util.List.of("reserve","watch","multiple","profiles-parallel").contains(p.mode))throw new IllegalArgumentException("지원하지 않는 예약 방식입니다.");
         if(validate)p.validate(false);return p;
     }
+    synchronized void bindLegacyRun()throws Exception{synchronized(PhoneRepository.class){
+        LocalStore legacy=new LocalStore(storeContext,0);JSONObject run=legacy.loadDocument("run");
+        if(run==null||!legacy.active()&&!legacy.uncertain()||!run.optString("_planId").isEmpty()||run.optBoolean("_lookup"))return;
+        Plan old=Plan.from(run);old.consent=true;String expected=old.json().toString(),match="";int count=0;
+        JSONArray plans=load().getJSONArray("plans");for(int i=0;i<plans.length();i++){JSONObject entry=plans.getJSONObject(i);Plan saved=Plan.from(entry.getJSONObject("plan"));saved.consent=true;if(expected.equals(saved.json().toString())){match=entry.getString("id");count++;}}
+        if(count==1)legacy.saveDocument("run",run.put("_planId",match));
+    }}
     synchronized Plan registeredPlan(String id)throws Exception{synchronized(PhoneRepository.class){
         JSONArray entries=load().getJSONArray("plans");
         for(int i=0;i<entries.length();i++){JSONObject entry=entries.getJSONObject(i);if(entry.getString("id").equals(id))return plan(entry.getJSONObject("plan"),true);}
