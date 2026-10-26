@@ -38,12 +38,51 @@ window.buildDisplayReceipt=function(value){
   document.querySelectorAll('label').forEach(label=>{
    for(const child of label.childNodes)if(child.nodeType===3&&child.textContent.includes('(선택)'))child.textContent=child.textContent.replace(/\s*\(선택\)/g,'');
    const input=label.querySelector('input,select,textarea');if(input&&(required.has(input.id)||/^(reserverName|phone)\d+$/.test(input.id)||['name','phone'].includes(input.name))){
+    input.dataset.bookingRequired='true';
     let caption=label.querySelector(':scope>.field-label-text,:scope>.stay-label-line');
     if(!caption){caption=document.createElement('span');caption.className='field-label-text';const text=[...label.childNodes].filter(n=>n.nodeType===3);label.insertBefore(caption,label.firstChild);for(const node of text)caption.append(node);}
     const line=caption.classList.contains('stay-label-line')?caption.querySelector('span')||caption:caption;
     if(!line.querySelector('.required-tag')){const tag=document.createElement('small');tag.textContent='(필수)';tag.className='required-tag';line.append(tag);}
    }
   });
+ }
+ function missingRequired(input){
+  if(!input||input.disabled||input.readOnly&&input.id==='triggerAt'||!input.getClientRects().length)return false;
+  const value=input.value.trim();
+  if(!value)return true;
+  if(/phone/i.test(input.id)||input.name==='phone')return !/^01\d{8,9}$/.test(value.replace(/\D/g,''));
+  return !input.validity.valid;
+ }
+ let correctingUntil=0,scrollCheck=0,lastScrollY=0;
+ function showRequired(input){
+  if(!missingRequired(input)||document.querySelector('dialog[open]'))return;
+  autoWanted=false;clearTimeout(autoTimer);autoTimer=0;correctingUntil=performance.now()+1200;
+  input.classList.add('required-input-error');input.setAttribute('aria-invalid','true');
+  const title=input.closest('label')?.querySelector('.field-label-text,.stay-label-line>span:first-child')?.textContent.replace('(필수)','').trim()||input.getAttribute('aria-label')||input.placeholder||'필수 항목';
+  notify(title+(/phone/i.test(input.id)||input.name==='phone'?' 형식을 확인해 주세요.':' 입력이 필요합니다.'));
+  input.scrollIntoView({block:'center',behavior:'smooth'});input.focus({preventScroll:true});
+ }
+ function initializeRequiredValidation(){
+  const fields=root=>[...root.querySelectorAll('[data-booking-required]')];
+  document.addEventListener('input',event=>{const input=event.target;if(input.classList.contains('required-input-error')&&!missingRequired(input)){input.classList.remove('required-input-error');input.removeAttribute('aria-invalid');}},true);
+  document.addEventListener('focusout',event=>{const input=event.target;if(input.dataset.bookingRequired!=='true'||event.relatedTarget?.classList.contains('required-input-error'))return;setTimeout(()=>{if(!input.isConnected||!modes.includes(workspaceTab)&&!input.closest('#lookupCard,#bookingBookCard'))return;showRequired(input);},0);},true);
+  const nextStep=event=>{
+   const heading=event.target.closest('.booking-step-title');if(!heading||!modes.includes(workspaceTab))return;
+   const index=bodies.findIndex(item=>item.toggle===heading);if(index<1)return;
+   let missing;for(const item of bodies.slice(0,index)){const collapsed=item.body.hidden;item.body.hidden=false;missing=fields(item.body).find(missingRequired);if(missing){item.toggle.setAttribute('aria-expanded','true');break;}item.body.hidden=collapsed;}
+   if(missing){event.preventDefault();event.stopImmediatePropagation();showRequired(missing);}
+  };
+  document.addEventListener('click',nextStep,true);
+  document.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')nextStep(event);},true);
+  window.addEventListener('scroll',()=>{
+   const down=window.scrollY>lastScrollY;lastScrollY=window.scrollY;clearTimeout(scrollCheck);
+   if(!down||performance.now()<correctingUntil||!modes.includes(workspaceTab))return;
+   scrollCheck=setTimeout(()=>{
+    if(performance.now()<correctingUntil||document.querySelector('dialog[open]'))return;
+    const missing=bodies.flatMap(item=>fields(item.body)).find(input=>missingRequired(input)&&input.getBoundingClientRect().bottom<70);
+    if(missing)showRequired(missing);
+   },160);
+  },{passive:true});
  }
  function initialize(){
   if(initialized||!byId('startDate')||phone&&!window.featuresReady&&typeof featuresReady==='undefined')return;
@@ -87,7 +126,7 @@ window.buildDisplayReceipt=function(value){
   }
   const trigger=byId('triggerAt')?.closest('label');if(trigger){bodies[1].body.append(trigger);const caption=[...trigger.childNodes].find(n=>n.nodeType===3);if(caption)caption.textContent='예약 실행 시간(오픈 예정일)';byId('triggerAt').readOnly=true;byId('triggerAt').setAttribute('aria-readonly','true');byId('triggerAt').tabIndex=-1;}
   const safety=byId('safetyNotice');if(safety){const detail=document.createElement('details'),summary=document.createElement('summary'),text=document.createElement('p');summary.textContent='실행 안전 안내';text.textContent=phone?'전원·네트워크·절전 제한으로 실행이 중단될 수 있습니다.':'서버 전원·네트워크와 시간을 확인하세요.';detail.append(summary,text);safety.replaceChildren(detail);}
-  markLabels();
+  markLabels();initializeRequiredValidation();
  }
  function refresh(){
   scheduled=false;initialize();if(!initialized)return;
@@ -122,6 +161,7 @@ window.buildDisplayReceipt=function(value){
    },650);
   }
   markLabels();
+  document.querySelectorAll('.required-input-error').forEach(input=>{if(!missingRequired(input)&&input.value.trim()){input.classList.remove('required-input-error');input.removeAttribute('aria-invalid');}});
   if(phone){document.querySelectorAll('#phonePeople .phone-person-card').forEach((card,i)=>{const p=phonePeople[i],valid=validDate&&p?.name?.trim()&&/^01\d{8,9}$/.test((p?.phone||'').replace(/\D/g,''));setHidden(card.querySelector('.phone-person-ranks'),!valid);});}
   for(const id of ['inspectButton','watchSelectAll','watchDeselectAll'])setHidden(byId(id),true);
   if(phone){window.applyBookingMenus(uiSettings);setHidden(byId('settingsCard'),true);for(const id of ['galleryDeleteSelected','galleryDeleteAll','siteMapUploadButton','mapGallery'])setHidden(byId(id),true);setHidden(document.querySelector('.gallery-heading'),true);

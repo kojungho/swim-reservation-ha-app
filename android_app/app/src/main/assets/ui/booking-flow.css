@@ -1,5 +1,6 @@
 /* Shared compact workflow */
 .required-tag{color:#b44922;font-size:12px;margin:0 0 0 4px;font-weight:700;white-space:nowrap}
+.required-input-error{border-color:#bd3838!important;background:#fff1f0!important;box-shadow:0 0 0 2px #bd383833!important;scroll-margin-block:100px}
 .field-label-text{display:inline-flex;align-items:baseline;gap:0;justify-content:flex-start}
 .stay-label-line>span:first-child{display:inline-flex;align-items:baseline}
 .workspace-menu-floating[data-corner] .workspace-tabs{width:max-content;min-width:0;max-width:calc(100vw - 28px)}.workspace-menu-floating .workspace-tabs button{white-space:nowrap;min-width:0;width:100%}
