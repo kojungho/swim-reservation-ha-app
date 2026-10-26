@@ -2,19 +2,30 @@
 window.createSiteChoiceEditor = function createSiteChoiceEditor({items,canSelect,status,label=name=>String(name).replace('_',' · '),prefix='',onChange,ranked=true,message=''}) {
   const node=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
   const wrap=node('div',undefined,'site-choice-editor'),tools=node('div',undefined,'site-choice-tools');
-  const select=node('select');select.setAttribute('aria-label',(prefix?prefix+' ':'')+'추가할 사이트');
-  const choices=items.filter(item=>!item.enabled&&canSelect(item.name));
-  select.add(new Option(choices.length?'사이트 선택':message||'선택 기간에 추가 가능한 사이트 없음',''));
-  for(const item of choices)select.add(new Option(label(item.name)+' · '+status(item.name).label,item.name));
-  select.disabled=!choices.length;
-  const add=node('button','사이트 추가','secondary');add.type='button';add.disabled=true;
-  select.addEventListener('change',()=>add.disabled=!select.value||!canSelect(select.value));
+  const add=node('button','사이트 선택','secondary');add.type='button';add.setAttribute('aria-haspopup','dialog');
+  const pickerSource={wrap,items,canSelect,status,label,onChange,add};
+  if(window.activeSiteChoicePopup?.prefix===prefix){window.activeSiteChoicePopup.source=pickerSource;window.activeSiteChoicePopup.render();}
   add.addEventListener('click',()=>{
-    const item=items.find(item=>item.name===select.value);
-    if(!item||item.enabled||!canSelect(item.name))return;
-    item.enabled=true;onChange();
+    const dialog=node('dialog',undefined,'site-choice-dialog'),heading=node('h2','캠핑사이트 선택'),count=node('p'),grid=node('div',undefined,'site-choice-options'),actions=node('div',undefined,'site-choice-dialog-actions');
+    const chosen=new Set(items.filter(i=>i.enabled).map(i=>i.name));count.setAttribute('aria-live','polite');
+    const popup={prefix,source:pickerSource,dialog,render:null};window.activeSiteChoicePopup=popup;
+    const update=()=>count.textContent=chosen.size+'개 선택 · 완료를 누르면 한 번에 적용됩니다.';
+    popup.render=()=>{const source=popup.source;grid.replaceChildren();update();
+      for(const item of source.items){const row=node('label',undefined,'site-choice-option'),check=node('input'),body=node('span'),state=source.status(item.name);check.type='checkbox';check.value=item.name;check.checked=chosen.has(item.name);check.disabled=!chosen.has(item.name)&&!item.enabled&&!source.canSelect(item.name);row.dataset.available=String(!check.disabled);check.setAttribute('aria-label',source.label(item.name));body.append(node('strong',source.label(item.name)),node('small',state.label,'availability '+state.kind));check.addEventListener('change',()=>{check.checked?chosen.add(item.name):chosen.delete(item.name);update();});row.append(check,body);grid.append(row);}
+    };popup.render();
+    const cancel=node('button','취소','secondary'),done=node('button','완료','primary');cancel.type=done.type='button';cancel.onclick=()=>dialog.close();
+    done.onclick=()=>{
+      const source=popup.source;if(!source.wrap.isConnected){dialog.close();return;}
+      if(source.items.some(i=>chosen.has(i.name)&&!i.enabled&&!source.canSelect(i.name))){window.showFloatingMessage?.('사이트 현황이 바뀌었습니다. 선택을 확인해 주세요.',{error:true});return;}
+      const old=source.items.filter(i=>i.enabled&&chosen.has(i.name)),added=[...chosen].filter(name=>!old.some(i=>i.name===name)).map(name=>source.items.find(i=>i.name===name)).filter(Boolean);
+      for(const item of source.items)item.enabled=chosen.has(item.name);
+      const selected=[...old,...added];source.items.splice(0,source.items.length,...selected,...source.items.filter(i=>!i.enabled));window.activeSiteChoicePopup=null;dialog.close();source.onChange();
+    };
+    actions.append(cancel,done);dialog.append(heading,count,grid,actions);document.body.append(dialog);
+    const observer=new MutationObserver(()=>{if(!popup.source.wrap.isConnected)dialog.close();});observer.observe(document.body,{childList:true,subtree:true});
+    dialog.addEventListener('close',()=>{observer.disconnect();if(window.activeSiteChoicePopup===popup)window.activeSiteChoicePopup=null;dialog.remove();if(popup.source.add.isConnected)popup.source.add.focus({preventScroll:true});},{once:true});dialog.showModal();
   });
-  tools.append(select,add);wrap.append(tools);
+  tools.append(add);wrap.append(tools);
   const list=node('div',undefined,'site-choice-list room-list');list.setAttribute('aria-label',(prefix?prefix+' ':'')+'선택한 사이트 순위');
   const selected=items.filter(item=>item.enabled);
   if(!selected.length)list.append(node('p','사이트를 추가해 '+(ranked?'우선순위를 정하세요.':'예약할 곳을 선택하세요.'),'site-choice-empty'));
@@ -55,3 +66,5 @@ window.createSiteChoiceEditor = function createSiteChoiceEditor({items,canSelect
   const note=node('p',message,'site-choice-message');note.hidden=!message;note.setAttribute('role','status');wrap.append(note);
   return wrap;
 };
+
+if(!document.getElementById('site-choice-dialog-style')){const style=document.createElement('style');style.id='site-choice-dialog-style';style.textContent=`.site-choice-dialog{box-sizing:border-box;width:min(520px,calc(100vw - 24px));max-height:80dvh;padding:20px;border:1px solid var(--line,#dae4df);border-radius:22px;background:var(--card,#fff);color:var(--ink,#18392a)}.site-choice-dialog::backdrop{background:#10231b80}.site-choice-dialog h2{margin:0 0 8px;font-size:20px}.site-choice-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}.site-choice-option{display:flex;align-items:center;gap:8px;padding:12px 8px;border:1px solid var(--line,#d8e3dc);border-radius:12px;min-width:0;cursor:pointer}.site-choice-option:has(input:checked){border-color:var(--green,#28734d);background:#e7f5ec}.site-choice-option[data-available=false]{opacity:.5;cursor:default}.site-choice-option input{width:20px;height:20px;flex:none;accent-color:var(--green,#28734d)}.site-choice-option span{display:grid;gap:6px;min-width:0}.site-choice-option strong{font-size:13px;overflow-wrap:anywhere}.site-choice-option small{font-size:11px;white-space:normal}.site-choice-dialog-actions{display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:-20px;background:var(--card,#fff);padding:12px 0}.site-choice-dialog-actions button{min-width:76px;min-height:44px}.site-choice-tools{justify-content:flex-end}`;document.head.append(style);}

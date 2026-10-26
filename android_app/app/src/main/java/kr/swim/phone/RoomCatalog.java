@@ -13,11 +13,11 @@ final class RoomCatalog {
     static synchronized int id(String name){return ids.getOrDefault(name,0);}
     static synchronized JSONArray entries(){JSONArray result=new JSONArray();try{for(String name:NAMES)result.put(new JSONObject().put("name",name).put("siteId",id(name)).put("displayName",display(name)));}catch(JSONException e){throw new IllegalStateException(e);}return result;}
     static String display(String name){int i=name.lastIndexOf('_');return i<0?name:name.substring(i+1)+name.substring(0,i);}
-    static synchronized void restore(Context context)throws Exception{JSONObject saved=new LocalStore(context).loadDocument("catalog-v1");if(saved!=null)merge(context,saved.getJSONArray("entries"),false);}
+    static synchronized void restore(Context context)throws Exception{JSONObject saved=new LocalStore(context,0).loadDocument("catalog-v1");if(saved!=null)merge(context,saved.getJSONArray("entries"),false);}
     static synchronized void merge(Context context,JSONArray found,boolean persist)throws Exception{
         Map<String,Integer> next=new LinkedHashMap<>(ids);for(int i=0;i<found.length();i++){JSONObject room=found.getJSONObject(i);String name=room.getString("name");int id=room.getInt("siteId");if(name.isBlank()||name.length()>80||id<1||id>10000||!display(name).equals(room.getString("displayName")))throw new IllegalArgumentException("사이트 목록 형식 불일치");if(next.containsKey(name)&&next.get(name)!=id||next.entrySet().stream().anyMatch(e->e.getValue()==id&&!e.getKey().equals(name)))throw new IllegalArgumentException("사이트 번호·이름 충돌 · 자동 추정 중지");next.put(name,id);}
         ids.clear();ids.putAll(next);for(String name:next.keySet())if(!NAMES.contains(name))NAMES.add(name);
-        if(persist)new LocalStore(context).saveDocument("catalog-v1",new JSONObject().put("entries",entries()));
+        if(persist)new LocalStore(context,0).saveDocument("catalog-v1",new JSONObject().put("entries",entries()));
     }
     static String label(String name){int split=name.lastIndexOf('_');return split<0?name:name.substring(split+1)+" · "+name.substring(0,split);}
     static List<String> parse(String value){return new ArrayList<>(new LinkedHashSet<>(Arrays.stream(value.split("[,\\n]")).map(String::trim).filter(s->!s.isEmpty()).collect(java.util.stream.Collectors.toList())));}

@@ -1,3 +1,4 @@
+import {chooseSites,availableSiteChoices} from "./fixtures/ui-book-app.js";
 import { openPlanDetails } from "./fixtures/ui-book-app.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -42,8 +43,8 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(state.book[0].roomPriority.find(room => room.name === "달_하늘존").enabled, true);
     assert.equal(await page.locator("#saveBookingActor2").isDisabled(), true);
     await page.locator("#startDate").fill("2026-12-20");
-    await page.locator('[data-profile-index="0"] select').selectOption("해_하늘존");await page.locator('[data-profile-index="0"] .site-choice-tools button').click();
-    await page.locator('[data-profile-index="1"] select').selectOption("달_하늘존");await page.locator('[data-profile-index="1"] .site-choice-tools button').click();
+    await chooseSites(page,'[data-profile-index="0"]',["해_하늘존"]);
+    await chooseSites(page,'[data-profile-index="1"]',["달_하늘존"]);
     await page.locator("#planName").fill("사람별 일정");
     await page.locator("#addPlanButton").click();
     await page.locator("#executionPlanList .execution-plan").first().waitFor();
@@ -66,7 +67,7 @@ test("PC·폰의 저장 예약자는 자동 목록만 표시하고 사람별 선
     assert.equal(await page.locator("#extraProfiles .second-profile-panel").count(), 0);
     await page.locator("#startDate").fill("2026-12-21");
     await page.locator("#startDate").fill("2026-12-20");
-    await page.locator("#roomList select").selectOption({ index: 1 }); await page.locator("#roomList .site-choice-tools button").click();
+    await chooseSites(page);
     await page.evaluate(() => elements.saveButton.click());
     await page.waitForFunction(() => document.querySelector("#workspaceMessage").textContent.includes("설정을 HA"));
     assert.equal(state.book.length, 3);

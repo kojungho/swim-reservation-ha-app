@@ -1,3 +1,4 @@
+import {chooseSites,availableSiteChoices} from "./fixtures/ui-book-app.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
@@ -26,7 +27,7 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
       await page.locator('[data-workspace-tab="' + tab + '"]').click();
       await page.evaluate(() => {elements.startDate.value="2026-12-20";renderInspection([{ name: "해_하늘존", available: true, status: "available" }, { name: "달_하늘존", available: false, status: "booked" }]);});
       const list = tab === "profiles-parallel" ? page.locator("#profilePriorities") : page.locator("#roomList");
-      assert.ok(await list.locator("select option").filter({hasText:"해"}).count()>0);
+      assert.ok((await availableSiteChoices(page,list)).some(name=>name.includes("해")));
       if(tab!=="watch")assert.equal(await list.locator("select option").filter({hasText:"달"}).count(),0);
       assert.equal(await page.locator("#inspectResult").count(), 0);
       assert.doesNotMatch(await page.locator("body").innerText(), /객실 확인 결과/);
@@ -35,7 +36,7 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     await page.locator('[data-workspace-tab="priority"]').click();
     await page.locator("#bookingProfileSelect1").selectOption("0");
     await page.locator("#startDate").fill("2026-12-20");
-    await page.locator("#roomList select").selectOption({ index: 1 }); await page.locator("#roomList .site-choice-tools button").click();
+    await chooseSites(page);
     await page.locator("#planName").fill("보존할 일정");
     await page.locator("#addPlanButton").click();
     await page.locator("#executionPlanList .execution-plan").waitFor();
@@ -85,7 +86,7 @@ test("PC·폰의 예약자 관리에서 5명 추가·삭제·실패 복구와 �
     assert.equal(await page.locator("#saveLogsButton").isVisible(), true);
     assert.equal(await page.locator("#planCard").isVisible(), false);
     await page.reload();
-    await page.waitForFunction(() => document.querySelector("#bookingProfileSelect1").options.length === 1);
+    await page.waitForFunction(name => document.querySelector("#bookingProfileSelect1").options.length === 1 && document.querySelector("#reserverName").value === name, testGuest(1).reserverName);
     assert.equal(await page.locator("#reserverName").inputValue(), testGuest(1).reserverName);
     assert.deepEqual(state.errors, []);
     await page.close();

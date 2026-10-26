@@ -1,3 +1,4 @@
+import {chooseSites,availableSiteChoices} from "./fixtures/ui-book-app.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
@@ -13,8 +14,8 @@ test("예약 가능 체크·조건 변경·전체 선택·PC 2열·예약자 도
     state.availability = state.config.roomPriority.map((room, index) => ({ name: room.name, status: ["available", "booked", "unavailable", "unknown"][index] || "available", available: index === 0 || index > 3 }));
     await page.evaluate(() => refreshAvailability());
     await page.waitForFunction(() => canSelectRoom(rooms[0].name) && availabilityByRoom.get(rooms[1].name) === "booked");
-    assert.equal(await page.locator("#roomList select").isEnabled(), true);
-    assert.equal(await page.locator("#roomList select option[value]:not([value=\"\"])").count(),11);
+    assert.equal(await page.locator("#roomList .site-choice-tools button").isEnabled(), true);
+    assert.equal((await availableSiteChoices(page)).length,11);
     assert.equal(await page.locator("#watchDeselectAll").isVisible(), false);
     await page.locator("#watchSelectAll").click();
     assert.equal(await page.locator("#roomList .site-choice-row").count(), 11);
@@ -22,9 +23,9 @@ test("예약 가능 체크·조건 변경·전체 선택·PC 2열·예약자 도
     assert.equal(await page.locator("#roomList .room-rank").first().textContent(), "①");
     await page.locator("#watchDeselectAll").click();
     assert.equal(await page.locator("#roomList .site-choice-row").count(), 0);
-    await page.locator("#roomList select").selectOption({index:1});await page.locator("#roomList .site-choice-tools button").click();
+    await chooseSites(page);
     state.availability[0] = { name: state.availability[0].name, status: "booked", available: false };
-    const duringChange = await page.evaluate(() => { elements.nights.value = "2"; elements.nights.dispatchEvent(new Event("change", { bubbles: true })); return elements.roomList.querySelector("select").disabled; });
+    const duringChange = await page.evaluate(() => { elements.nights.value = "2"; elements.nights.dispatchEvent(new Event("change", { bubbles: true })); return !canSelectRoom(rooms[0].name); });
     assert.equal(duringChange, true);
     await page.waitForFunction(() => availabilityByRoom.get(rooms[0].name)==="booked");
     assert.equal(await page.locator("#roomList .site-choice-row").count(),0);
@@ -48,7 +49,7 @@ test("예약 가능 체크·조건 변경·전체 선택·PC 2열·예약자 도
     await page.locator("#datePickerCancel").click();
     await page.locator("#workspaceMenuButton").click(); await page.locator('[data-workspace-tab="profiles-parallel"]').click();
     await page.locator("#startDate").fill("2027-01-20");
-    await page.waitForFunction(() => document.querySelector("#profilePriorities select:not(:disabled)"));
+    await page.waitForFunction(() => document.querySelector("#profilePriorities .site-choice-tools button"));
     assert.equal(await page.locator("#profilePriorities.single-profile").count(), 1);
     await page.locator("#addProfileButton").click();
     if (width > 900) assert.equal(await page.locator("#profilePriorities").evaluate(el => getComputedStyle(el).gridTemplateColumns.split(" ").length), 2);
@@ -56,7 +57,7 @@ test("예약 가능 체크·조건 변경·전체 선택·PC 2열·예약자 도
     assert.equal(await page.locator("#profilePriorities .site-choice-row").count(), 28);
     await page.locator("#watchDeselectAll").click();
     assert.equal(await page.locator("#profilePriorities .site-choice-row").count(), 0);
-    await page.locator("#profilePriorities select").first().selectOption({index:1});await page.locator("#profilePriorities .site-choice-tools button").first().click();
+    await chooseSites(page,"#profilePriorities .site-choice-editor");
     assert.equal(await page.locator('[data-profile-index="0"] .site-choice-row').count(), 1);
     assert.equal(await page.locator('[data-profile-index="1"] .site-choice-row').count(), 0);
     await page.locator("#profilePriorities").screenshot({ path: `/tmp/swim-profiles.6W9Acs/profile-room-columns-${width}.png` });

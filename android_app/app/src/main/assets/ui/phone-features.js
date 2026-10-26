@@ -3,9 +3,9 @@ let featuresReady=false, phonePeople=[], submissionInterval=5, featureLookupKey=
 let modeEditorMeta={},draftByMode={},suppressDraftSwitch=false,clearedDraftAt=0;
 const modeTab=mode=>mode==='reserve'?'priority':mode==='watch'?'watch':mode;
 const tabMode=tab=>tab==='priority'?'reserve':tab;
-window.stayCalendar=new StayCalendarModel(async month=>{
+window.stayCalendar=new StayCalendarModel(async (month,{force=false}={})=>{
   const until=performance.now()+25000;let result;
-  do{result=api('calendarMonth',{month});if(!result.pending)break;await new Promise(resolve=>setTimeout(resolve,350));}while(performance.now()<until);
+  let first=true;do{result=api('calendarMonth',{month,force:first&&force});first=false;if(!result.pending)break;await new Promise(resolve=>setTimeout(resolve,350));}while(performance.now()<until);
   if(!result?.ok)throw Error('달력 조회 미확인');return {month,openThrough:result.openThrough,days:Object.entries(result.days||{}).map(([date,count])=>({date,availableCount:count,beforeOpen:date>result.openThrough}))};
 },()=>currentSiteTime());
 function phoneDraftSignature(p){return JSON.stringify([p.mode,p.date,p.nights,p.name||'',p.payer||'',p.phone||'',p.rooms||'',p.trigger||0,p.watchUntil||0,p.adults||2,p.arrival||'',p.request||'',p.submitInterval??5,(p.people||[]).map(x=>[x.name||'',x.payer||'',x.phone||'',Array.isArray(x.rooms)?x.rooms.join(', '):x.rooms||''])]);}
@@ -134,7 +134,7 @@ function updatePhoneResetVisibility(){
   if(!['priority','watch','multiple','profiles-parallel'].includes(workspaceTab)){button.hidden=true;return;}
   try{
     const p=readPlan(),emptyPerson=person=>!person.name&&!person.payer&&!person.phone&&!person.rooms?.length;
-    button.hidden=!(p.date||p.trigger||p.watchUntil||p.name||p.payer||p.phone||p.birth||p.consent||p.rooms||p.nights!==1||p.adults!==2||p.arrival||p.request||
+    button.hidden=!(p.date||p.trigger||p.watchUntil||p.name||p.payer||p.phone||p.birth||p.rooms||p.nights!==1||p.adults!==2||p.arrival||p.request||
       p.pollSeconds!==600||p.submitInterval!==5||$('planName').value||editingPlan||
       p.people.length>1||p.people.some(person=>!emptyPerson(person))||
       roomOrder.some((name,i)=>name!==vault.rooms[i]));
@@ -150,7 +150,7 @@ function queuePhonePeriodCheck(){
   },650);
 }
 function runPhonePeriodCheck(){
-  if(!phonePeriodQueued||nativeState.active||nativeState.lookup?.pending||nativeState.monthly?.pending||!nativeState.notifications||document.hidden||!['priority','watch','multiple','profiles-parallel'].includes(workspaceTab))return;
+  if(!phonePeriodQueued||nativeState.inspectBusy||!nativeState.multiProfile&&nativeState.active||nativeState.confirmationPending||nativeState.lookup?.pending||nativeState.monthly?.pending||!nativeState.notifications||document.hidden||!['priority','watch','multiple','profiles-parallel'].includes(workspaceTab))return;
   const key=phonePeriodQueued;
   if(key!==roomQueryKey()){phonePeriodQueued='';return;}
   phonePeriodQueued='';

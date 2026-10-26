@@ -11,16 +11,22 @@ import java.nio.charset.StandardCharsets;
 
 /** Atomic encrypted private preferences; no analytics, backups or plaintext guest logs. */
 public final class LocalStore {
+    static javax.crypto.SecretKey testKey=null; // JVM tests substitute hardware Keystore only.
+    private static javax.crypto.SecretKey cachedKey;
     private final SharedPreferences prefs;
-    public LocalStore(Context c){prefs=c.getSharedPreferences("phone-private",Context.MODE_PRIVATE);}
-    private javax.crypto.SecretKey key() throws Exception {
+    public LocalStore(Context c){this(c,RunContext.slot(c));}
+    public LocalStore(Context c,int slot){prefs=c.getSharedPreferences(slot==0?"phone-private":"phone-run-"+slot,Context.MODE_PRIVATE);}
+    public long heartbeat(){return prefs.getLong("heartbeat",0);}
+    private static synchronized javax.crypto.SecretKey key() throws Exception {
+        if(testKey!=null)return testKey;
+        if(cachedKey!=null)return cachedKey;
         KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
         if(!ks.containsAlias("swim-phone-v1")) {
             KeyGenerator gen=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");
             gen.init(new KeyGenParameterSpec.Builder("swim-phone-v1",KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build());gen.generateKey();
         }
-        return (javax.crypto.SecretKey)ks.getKey("swim-phone-v1",null);
+        return cachedKey=(javax.crypto.SecretKey)ks.getKey("swim-phone-v1",null);
     }
     public synchronized void save(String slot,Plan plan) throws Exception {
         saveDocument(slot,plan.json());
@@ -47,6 +53,7 @@ public final class LocalStore {
         if(!prefs.edit().putString("stage",stage).putString("message",message).putBoolean("active",active)
             .putLong("heartbeat",System.currentTimeMillis()).putString("log",log).commit()) throw new IllegalStateException("상태 저장 실패: 안전하게 중지합니다.");
     }
+    public String runPlanId() throws Exception {JSONObject run=loadDocument("run");return run==null?"":run.optString("_planId");}
     public String stage(){return prefs.getString("stage","IDLE");}
     public boolean active(){return prefs.getBoolean("active",false);}
     public long watchDueElapsed(){return prefs.getLong("watch-due-elapsed",0);}

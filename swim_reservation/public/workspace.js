@@ -48,7 +48,7 @@ function initializeWorkspace() {
   menuButton.addEventListener("click", () => setWorkspaceMenuOpen(menuButton.getAttribute("aria-expanded") !== "true"));
   document.addEventListener("click", event => { if (!event.target.closest(".workspace-menu-floating")) setWorkspaceMenuOpen(false); });
   document.addEventListener("keydown", event => { if (event.key === "Escape" && menuButton.getAttribute("aria-expanded") === "true") { setWorkspaceMenuOpen(false); menuButton.focus(); } });
-  document.getElementById("addPlanButton").addEventListener("click", () => registerPlan(workspaceTab === "watch" ? "watch" : "scheduled", false).catch(error => planMessage(error.message)));
+  document.getElementById("addPlanButton").addEventListener("click", () => registerPlan(workspaceTab === "watch" ? "watch" : "scheduled", false).catch(error => planMessage(error.message,true)));
   document.getElementById("cancelPlanEdit").addEventListener("click", () => { resetPlanEditor(); planMessage("수정을 취소했습니다. 저장된 일정은 변경되지 않았습니다."); });
   for (const [id, action, all] of [["startAllPlans", "start", true], ["startSelectedPlans", "start", false], ["stopSelectedPlans", "stop", false]]) {
     document.getElementById(id).addEventListener("click", () => batchPlanAction(action, all).catch(error => showMessage(error.message, true)));
@@ -202,11 +202,11 @@ async function lookupOneOff(profile) {
     const result = await request("reservations", { method: "POST", body: JSON.stringify({ profiles: [profile] }) });
     if (id !== oneOffLookupRequest) return;
     renderReservations(result.reservations || [], { container, profiles: [profile], errors: result.lookupErrors || [], reload: () => lookupOneOff(profile) });
-  } catch (error) { if (id === oneOffLookupRequest) container.textContent = `조회 실패: ${error.message}`; }
+  } catch (error) { if (id === oneOffLookupRequest){container.textContent="";window.showFloatingMessage?.(`조회 실패: ${error.message}`,{error:true});} }
   finally { if (id === oneOffLookupRequest) { oneOffLookupRunning = false; updateOneOffLookupButton(); } }
 }
 
-function planMessage(text) { document.getElementById("planMessage").textContent = shortRoomText(text); }
+function planMessage(text,error=false) { const node=document.getElementById("planMessage");node.textContent=shortRoomText(text);node.hidden=error;if(error)window.showFloatingMessage?.(shortRoomText(text),{error:true}); }
 function renderPlanEditMode() {
   const button = document.getElementById("addPlanButton");
   button.textContent = editingPlan ? "수정 저장" : "일정 등록";
@@ -365,7 +365,7 @@ async function refreshPlans() {
               if (action === "delete" && editingPlan?.id === entry.id) resetPlanEditor();
               planMessage(result.status?.stage === "expired" ? result.status.message : `${entry.name}: ${label} 완료`);
             }
-          } catch (error) { planMessage(error.message); document.getElementById("planDetailsMessage").textContent = error.message; }
+          } catch (error) { planMessage(error.message,true); document.getElementById("planDetailsMessage").textContent = error.message;document.getElementById("planDetailsMessage").hidden=true; }
           finally { planDetailPending = false; await refreshPlans(); }
         });
         controls.append(button);
@@ -374,7 +374,7 @@ async function refreshPlans() {
       list.append(row);
     }
     if (focusedAction) list.querySelector(`[data-action="${focusedAction}"]:not(:disabled)`)?.focus({ preventScroll: true });
-  } catch (error) { planMessage(`일정 조회 실패: ${error.message}`); }
+  } catch (error) { planMessage(`일정 조회 실패: ${error.message}`,true); }
   finally { planRefreshPending = false; }
 }
 
@@ -415,7 +415,7 @@ async function executionPlanAction(entry, action) {
     const result = await request(`plans/${entry.id}${action === "delete" ? "" : `/${action}`}`, { method: action === "delete" ? "DELETE" : "POST", ...(action === "start" ? { body: JSON.stringify({ expectedRevision: entry.revision }) } : {}) });
     if (action === "delete" && editingPlan?.id === entry.id) resetPlanEditor();
     planMessage(result.status?.stage === "expired" ? result.status.message : `${entry.name}: ${{start:"시작",stop:"중지",delete:"삭제"}[action]} 완료`);
-  } catch (error) { planMessage(error.message); }
+  } catch (error) { planMessage(error.message,true); }
   finally { planDetailPending = false; await refreshPlans(); }
 }
 function planCanStart(entry) {
@@ -485,6 +485,7 @@ async function deleteSelectedPlans() {
       catch (error) { failures.push(`${entry.name}: ${error.message}`); }
     }
     document.getElementById("executionBatchMessage").textContent = `삭제 ${targets.length - failures.length}개${failures.length ? ` · 실패: ${failures.join(" / ")}` : ""}`;
+    document.getElementById("executionBatchMessage").hidden=!!failures.length;if(failures.length)window.showFloatingMessage?.(document.getElementById("executionBatchMessage").textContent,{error:true});
     await refreshPlans();
   } finally { planBatchPending = false; renderExecutionPlans(); }
 }
@@ -520,6 +521,7 @@ async function batchPlanAction(action, all) {
     else for (const entry of targets) await runEntry(entry);
     const message = `${action === "start" ? "시작" : "중지"} 완료 ${succeeded}개${limited ? ` · 동시 진행 제한으로 제외 ${limited}개` : ""}${failures.length ? ` · 실패 ${failures.length}개: ${failures.join(" / ")}` : ""}`;
     document.getElementById("executionBatchMessage").textContent = shortRoomText(message);
+    document.getElementById("executionBatchMessage").hidden=!!failures.length;if(failures.length)window.showFloatingMessage?.(shortRoomText(message),{error:true});
     await refreshPlans(); await refreshStatus();
     if (action === "stop" && all) scheduleAvailabilityCheck(0);
   } finally { planBatchPending = false; renderExecutionPlans(); }

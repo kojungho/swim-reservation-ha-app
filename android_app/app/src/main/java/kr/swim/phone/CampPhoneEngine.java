@@ -24,7 +24,7 @@ final class CampPhoneEngine {
     String url(String page,int id){return SiteLinks.camp(plan,page,id).replace("https://"+PhoneEngine.HOST,origin());}
     void stage(String message){events.stage(submitted?"SUBMITTING":"PREPARING",(plan.demo()?"[모의] ":"")+message);}
     @SuppressLint("SetJavaScriptEnabled") void start(){
-        web=new WebView(context);web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT,false);WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(false);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);s.setCacheMode(WebSettings.LOAD_NO_CACHE);CookieManager.getInstance().setAcceptThirdPartyCookies(web,false);
+        web=new WebView(context);CookieManager cookies=PhoneSessions.attach(web,context);web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT,false);WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(false);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);s.setCacheMode(WebSettings.LOAD_NO_CACHE);cookies.setAcceptThirdPartyCookies(web,false);
         web.setWebChromeClient(new WebChromeClient(){
             @Override public boolean onJsAlert(WebView v,String u,String message,JsResult r){r.cancel();finish(submitted?"CHECK_REQUIRED":"FAILED","사이트 추가 안내 · 공식 예약 내역 확인 필요");return true;}
             @Override public boolean onJsConfirm(WebView v,String u,String message,JsResult r){r.cancel();finish(submitted?"CHECK_REQUIRED":"FAILED","사이트 추가 확인창 · 자동 승인하지 않습니다.");return true;}
@@ -52,7 +52,7 @@ final class CampPhoneEngine {
             @Override public void onPageFinished(WebView v,String address){if(ended||address.equals(processed)||!allowed(Uri.parse(address),true,plan.demo()))return;processed=address;main.removeCallbacks(timeout);main.postDelayed(timeout,30000);String path=Uri.parse(address).getPath();if(path.equals("/camp/"))listing();else if(path.endsWith("book.php"))prepare();else if(path.endsWith("done.php"))receipt();}
         });
         main.postDelayed(timeout,30000);stage("브라우저 준비 · 새 공식 사이트");
-        CookieManager.getInstance().removeAllCookies(done->{if(ended)return;if(lookup||plan.watch())web.loadUrl(url("",0));else next();});
+        cookies.removeAllCookies(done->{if(ended)return;if(lookup||plan.watch())web.loadUrl(url("",0));else next();});
     }
     void next(){if(ended||submitted)return;candidate++;if(candidate>=plan.priorities().size()){finish("NO_ROOM","선택한 사이트에 예약 가능한 자리가 없습니다.");return;}site=RoomCatalog.id(plan.priorities().get(candidate));if(site<1){finish("FAILED","사이트 번호 확인 실패 · 자동 추정하지 않습니다.");return;}stage("사이트 번호 확인 · 예약정보 화면 접속");web.loadUrl(url("book.php",site));}
     void listing(){stage("빈자리 목록·기간 대조");eval("listing",r->{if(!r.optBoolean("ok")){fail(r);return;}try{RoomCatalog.merge(context,r.getJSONArray("catalog"),true);}catch(Exception e){finish("FAILED","사이트 목록 번호·이름 충돌 · 중지");return;}JSONArray ids=r.optJSONArray("available");Set<Integer> available=new HashSet<>();for(int i=0;ids!=null&&i<ids.length();i++)available.add(ids.optInt(i));if(lookup){new LocalStore(context).availability(plan,available,true);finish("INSPECTED","예약 가능 사이트 "+available.size()+"개 · 예약 전송 없음");return;}for(int i=0;i<plan.priorities().size();i++)if(available.contains(RoomCatalog.id(plan.priorities().get(i)))){candidate=i-1;next();return;}finish("NO_ROOM","선택한 사이트에 빈자리 없음");});}

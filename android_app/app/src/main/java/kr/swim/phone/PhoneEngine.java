@@ -12,7 +12,7 @@ import java.io.*;
 import java.util.*;
 
 /** Service-owned WebView executes the site's real forms. No Activity, HA, cloud runtime or JS interface. */
-public final class PhoneEngine {
+public final class PhoneEngine implements PhoneExecution {
     // Instrumentation-only seam. No UI/Intent/persisted configuration can set it.
     static volatile String demoScenario="";
     static volatile int demoDocumentRequests=0;

@@ -75,3 +75,14 @@ export async function openPlanDetails(page, index = 0) {
   await page.locator("#executionPlanList .plan-detail-open").nth(index).click();
   await page.locator("#planList .plan-entry").waitFor();
 }
+
+export async function chooseSites(page,selector="#roomList",names){
+ const editor=typeof selector==='string'?page.locator(selector).first():selector;
+ await editor.getByRole('button',{name:'사이트 선택',exact:true}).click();const dialog=page.locator('.site-choice-dialog');
+ if(names){for(const name of names)await dialog.locator('input[value="'+name+'"]').check();}
+ else await dialog.locator('input:not(:disabled):not(:checked)').first().check();
+ await dialog.getByRole('button',{name:'완료',exact:true}).click();
+}
+export async function availableSiteChoices(page,selector="#roomList"){
+ await (typeof selector==='string'?page.locator(selector).first():selector).getByRole('button',{name:'사이트 선택',exact:true}).click();const dialog=page.locator('.site-choice-dialog');const names=await dialog.locator('input:not(:disabled):not(:checked)').evaluateAll(es=>es.map(e=>e.value));await dialog.getByRole('button',{name:'취소',exact:true}).click();return names;
+}

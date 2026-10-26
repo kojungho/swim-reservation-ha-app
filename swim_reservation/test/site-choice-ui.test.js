@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {chromium} from 'playwright-core';
 import {mockBookApp} from './fixtures/ui-book-app.js';
-const executablePath='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const executablePath=process.env.CHROMIUM_PATH||'/usr/bin/chromium';
 async function setup(t,width=390){
  const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());
  const page=await browser.newPage({viewport:{width,height:900},hasTouch:width<600});page.setDefaultTimeout(10000);
  const state=await mockBookApp(page);return {page,state};
 }
-async function addSite(picker,name){await picker.getByRole('combobox').selectOption(name);await picker.getByRole('button',{name:'사이트 추가',exact:true}).click();}
+async function siteChoices(picker){const page=picker.page();await picker.getByRole('button',{name:'사이트 선택',exact:true}).click();const dialog=page.locator('.site-choice-dialog');const choices=await dialog.locator('input:not(:disabled):not(:checked)').evaluateAll(es=>es.map(e=>e.value));await dialog.getByRole('button',{name:'취소',exact:true}).click();return choices;}
+async function addSite(picker,name){const page=picker.page();await picker.getByRole('button',{name:'사이트 선택',exact:true}).click();const dialog=page.locator('.site-choice-dialog');await dialog.locator('input').filter({hasNot:page.locator('[disabled]')}).count();await dialog.locator('input').evaluateAll((es,name)=>{const input=es.find(e=>e.value===name);if(!input||input.disabled)throw Error('Unavailable test site');input.checked=true;input.dispatchEvent(new Event('change',{bubbles:true}));},name);await dialog.getByRole('button',{name:'완료',exact:true}).click();}
 test('앱과 애드온의 사이트 선택 화면 코드는 동일하다',async()=>{
  assert.equal(await readFile(new URL('../public/site-choice.js',import.meta.url),'utf8'),await readFile(new URL('../../android_app/app/src/main/assets/ui/site-choice.js',import.meta.url),'utf8'));
 });
@@ -22,9 +23,9 @@ test('날짜별 3곳이지만 같은 사이트 연박 0이면 선택 불가, 달
  await page.waitForFunction(()=>document.querySelector('[data-date="2026-12-18"] small')?.textContent==='3곳');
  await page.locator('[data-date="2026-12-17"]').click();await page.locator('[data-date="2026-12-19"]').click();
  await page.waitForFunction(()=>availabilityContext==='2026-12-17/2'&&availabilityByRoom.get(rooms[0].name)==='unavailable');
- assert.equal(await page.locator('#roomList select option[value]:not([value=""])').count(),0);
+ assert.deepEqual(await siteChoices(page.locator('#roomList')),[]);
  assert.match(await page.locator('#roomList .site-choice-message').innerText(),/연박은 불가능/);
- assert.equal(await page.locator('#roomList select').isDisabled(),true);
+ assert.deepEqual(await siteChoices(page.locator('#roomList')),[]);
  await page.locator('#startDate').click();await page.locator('#datePickerDialog').screenshot({path:'/tmp/swim-addon-availability-calendar.png'});await page.locator('#datePickerCancel').click();
  assert.equal(state.planCalls.length,0);assert.deepEqual(state.errors,[]);
 });
@@ -33,7 +34,7 @@ test('선택 기간 가능 사이트만 추가·삭제·정렬하고 다인도 �
  state.availability=state.config.roomPriority.map((room,i)=>({name:room.name,available:[0,2,4].includes(i),status:[0,2,4].includes(i)?'available':'unavailable'}));
  await page.evaluate(()=>refreshAvailability());const picker=page.locator('#roomList');
  assert.equal(await picker.locator('input[type=checkbox]').count(),0);
- assert.deepEqual(await picker.getByRole('combobox').locator('option').evaluateAll(options=>options.map(o=>o.value).filter(Boolean)),[state.config.roomPriority[0].name,state.config.roomPriority[2].name,state.config.roomPriority[4].name]);
+ assert.deepEqual(await siteChoices(picker),[state.config.roomPriority[0].name,state.config.roomPriority[2].name,state.config.roomPriority[4].name]);
  for(const index of [0,2,4])await addSite(picker,state.config.roomPriority[index].name);
  assert.equal(await picker.locator('.site-choice-row').count(),3);
  await picker.locator('.room-drag-handle').first().focus();await page.keyboard.press('ArrowDown');
@@ -42,12 +43,12 @@ test('선택 기간 가능 사이트만 추가·삭제·정렬하고 다인도 �
  await page.evaluate(()=>{switchWorkspaceTab('profiles-parallel');elements.startDate.value='2026-12-17';elements.nights.value='2';updateStayFields();});
  await page.evaluate(()=>refreshAvailability());let people=page.locator('#profilePriorities .site-choice-editor');
  assert.equal(await people.count(),1);
- assert.equal(await people.first().getByRole('combobox').locator('option[value]:not([value=""])').count(),3);
+ assert.equal((await siteChoices(people.first())).length,3);
  await page.locator('#addProfileButton').click();assert.equal(await people.count(),2);
  await addSite(people.nth(1),state.config.roomPriority[0].name);assert.equal(await page.evaluate(()=>readConfig().profiles[1].roomPriority.filter(r=>r.enabled).length),1);
  await page.evaluate(()=>{elements.startDate.value='2027-01-17';elements.nights.value='2';updateStayFields();scheduleAvailabilityCheck(0);});
  await page.waitForFunction(()=>availabilityContext==='2027-01-17/2');
- assert.equal(await people.first().getByRole('combobox').locator('option[value]:not([value=""])').count(),14);
+ assert.equal((await siteChoices(people.first())).length,14);
  await page.locator('#profilePriorities').screenshot({path:'/tmp/swim-addon-site-choice.png'});
  assert.equal(state.planCalls.length,0);assert.deepEqual(state.errors,[]);
 });
@@ -57,9 +58,9 @@ test('조회 실패·다른 기간 결과는 후보로 사용하지 않고, 현�
  state.availability=state.config.roomPriority.map(room=>({name:room.name,available:false,status:'unavailable'}));await page.evaluate(()=>refreshAvailability());
  assert.equal(await page.locator('#roomList .site-choice-row').count(),0);
  await page.evaluate(()=>{availabilityContext='2000-01-01/1';for(const room of rooms)availabilityByRoom.set(room.name,'available');renderRooms();});
- assert.equal(await page.locator('#roomList select option[value]:not([value=""])').count(),0);
+ assert.deepEqual(await siteChoices(page.locator('#roomList')),[]);
  await page.route('https://app.test/api/inspect',route=>route.fulfill({status:503,json:{error:'모의 조회 실패'}}));await page.evaluate(()=>refreshAvailability());
- assert.equal(await page.locator('#roomList select option[value]:not([value=""])').count(),0);
+ assert.deepEqual(await siteChoices(page.locator('#roomList')),[]);
  assert.match(await page.locator('#roomList .site-choice-message').innerText(),/미확인은 0곳이 아닙니다/);
  assert.equal(state.planCalls.length,0);assert.deepEqual(state.errors,[]);
 });
