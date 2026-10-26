@@ -358,7 +358,7 @@ async function refreshPlans() {
               planMessage(action === "edit" ? `${entry.name}: 입력 내용을 변경하고 수정 저장을 누르세요. 기존 일정만 갱신되며 자동 시작하지 않습니다.` : "새 일정 등록용으로 설정을 불러왔습니다.");
               elements.startDate.closest("section").scrollIntoView({ behavior: "smooth", block: "start" });
             } else {
-              if (action === "start" && !window.confirm(`${entry.name}\n${entry.config.startDate}부터 ${entry.config.nights}박 · ${entry.kind === "watch" ? "체크한 객실 중 조건에 맞는 하나 예약" : modes[entry.config.bookingMode]}\n${entry.kind === "watch" ? "조건이 맞는 자리가 나오면" : "지정 시각에"} 환불 규정 동의와 최종 예약 제출까지 자동 진행합니다. 다른 일정과 중복되는지 확인하셨나요?`)) return;
+              if (action === "start" && !window.confirm(`${entry.name}\n${entry.config.startDate}부터 ${entry.config.nights}박 · ${entry.kind === "watch" ? "체크한 객실 중 조건에 맞는 하나 예약" : modes[entry.config.bookingMode]}\n${planRunNotice(entry)}\n\n환불 규정 동의와 최종 예약 제출까지 자동 진행합니다. 다른 일정과 중복되는지 확인하셨나요?`)) return;
               if (action === "delete" && !window.confirm("이 일정을 목록에서 삭제할까요? 실제 예약은 취소되지 않습니다.")) return;
               const result = await request(`plans/${entry.id}${action === "delete" ? "" : `/${action}`}`, { method: action === "delete" ? "DELETE" : "POST", ...(action === "start" ? { body: JSON.stringify({ expectedRevision: entry.revision }) } : {}) });
               if (action === "delete") document.getElementById("planDetailsDialog").close();
@@ -385,6 +385,39 @@ function renderPlanBadge() {
   elements.statusBadge.className = `badge ${running ? "running" : "waiting"}`;
   elements.statusBadge.textContent = `${active.length}개 일정 ${running ? "실행 중" : "대기·감시 중"}`;
 }
+function planStartTime(entry) {
+  if (entry.kind === "watch") return "감시 시작: 시작 확인 후 바로 실행";
+  if (entry.kind === "now") return "실행 예정: 시작 확인 후 바로 실행";
+  return `실행 예정: ${String(entry.config.triggerAt || "미지정").replace("T", " ")} (한국 시간)`;
+}
+function planRunNotice(entry) {
+  const timing = planStartTime(entry);
+  const behavior = entry.kind === "watch"
+    ? `${entry.intervalSeconds}초 간격으로 조회하며 빈자리 발견 시 예약합니다. 감시 종료: ${String(entry.watchDeadlineAt || entry.watchEndsAt || `${entry.config.startDate}T00:00:00`).replace("T", " ")} (한국 시간).`
+    : "예약 엔진이 실행된 뒤 조회·입력·필수 동의와 최종 제출을 진행하므로 실제 제출·완료 시각은 달라질 수 있습니다.";
+  return `${timing}\n${behavior}\n\nHA 서버에서 실행합니다. 서버 전원 꺼짐·절전, 애드온 중지·재시작, 인터넷 단절·예약 사이트 오류, 실행 시각 경과로 예약이 진행되지 않을 수 있습니다. 실행·예약 성공을 보장하지 않습니다.\n무통장입금 신청 후 입금은 직접 해야 합니다. 같은 예약을 폰 앱과 동시에 실행하지 마세요.`;
+}
+function planStateLabel(entry) {
+  if (planIsActive(entry)) {
+    if (entry.status?.stage === "prewarming") return "예약 준비 중";
+    if (entry.status?.state === "running") return "예약 진행 중";
+    return entry.kind === "watch" ? "취소 자리 감시 중" : "예약 대기 중";
+  }
+  return entry.status?.state === "success" ? "완료" : entry.status?.state === "failed" ? "결과 확인 필요" : "중지";
+}
+async function executionPlanAction(entry, action) {
+  if (planDetailPending || planBatchPending || busy) return;
+  if (action === "start" && !planCanStart(entry) || action === "stop" && !planIsActive(entry) || action === "delete" && planIsActive(entry)) return;
+  if (action === "start" && !window.confirm(`${entry.name}\n${entry.config.startDate}부터 ${entry.config.nights}박\n\n${planRunNotice(entry)}\n\n이 일정을 시작할까요?`)) return;
+  if (action === "delete" && !window.confirm("이 일정을 목록에서 삭제할까요? 실제 예약은 취소되지 않습니다.")) return;
+  planDetailPending = true; renderExecutionPlans();
+  try {
+    const result = await request(`plans/${entry.id}${action === "delete" ? "" : `/${action}`}`, { method: action === "delete" ? "DELETE" : "POST", ...(action === "start" ? { body: JSON.stringify({ expectedRevision: entry.revision }) } : {}) });
+    if (action === "delete" && editingPlan?.id === entry.id) resetPlanEditor();
+    planMessage(result.status?.stage === "expired" ? result.status.message : `${entry.name}: ${{start:"시작",stop:"중지",delete:"삭제"}[action]} 완료`);
+  } catch (error) { planMessage(error.message); }
+  finally { planDetailPending = false; await refreshPlans(); }
+}
 function planCanStart(entry) {
   return !entry.enabled && ["idle", "stopped"].includes(entry.status?.state || "idle") && entry.status?.stage !== "expired" && editingPlan?.id !== entry.id;
 }
@@ -398,7 +431,7 @@ function renderExecutionPlans() {
   list.replaceChildren();
   if (!planEntries.length) list.textContent = "등록된 일정이 없습니다. 아래에서 일정을 등록해 주세요.";
   for (const entry of planEntries) {
-    const label = document.createElement("div"); label.className = `execution-plan${planIsActive(entry) ? " active-plan" : ""}`;
+    const label = document.createElement("div"); label.className = `execution-plan${planIsActive(entry) ? " active-plan" : ""}`; label.dataset.executionPlanId = entry.id;
     const input = document.createElement("input"); input.type = "checkbox"; input.dataset.planId = entry.id;
     input.checked = selectedExecutionPlans.has(entry.id); input.disabled = planBatchPending;
     input.setAttribute("aria-label", `${entry.name} · ${entry.config.startDate} · ${entry.config.nights}박 선택`);
@@ -415,8 +448,16 @@ function renderExecutionPlans() {
       if (!dialog.open) dialog.showModal();
       await refreshPlans();
     });
-    const state = document.createElement("small"); state.textContent = `${bookingModeName(entry)} · ${planIsActive(entry) ? "진행 중" : entry.status?.state === "success" ? "완료" : entry.status?.state === "failed" ? "확인 필요" : "중지"}`;
-    label.append(input, text, state); list.append(label);
+    const state = document.createElement("small"); state.textContent = `${bookingModeName(entry)} · ${planStateLabel(entry)}`;
+    const timing = document.createElement("span"); timing.className = "execution-plan-time"; timing.textContent = planStartTime(entry);
+    const progress = document.createElement("span"); progress.className = "execution-plan-progress"; progress.setAttribute("role", "status"); progress.textContent = entry.status?.message || "";
+    const controls = document.createElement("div"); controls.className = "execution-plan-controls";
+    for (const [action, title] of [["start", "시작"], ["stop", "중지"], ["delete", "삭제"]]) {
+      const button = document.createElement("button"); button.type = "button"; button.className = action === "delete" ? "danger" : "secondary"; button.textContent = title; button.dataset.planAction = action;
+      button.disabled = busy || planBatchPending || planDetailPending || (action === "start" ? !planCanStart(entry) : action === "stop" ? !planIsActive(entry) : planIsActive(entry));
+      button.addEventListener("click", () => void executionPlanAction(entry, action)); controls.append(button);
+    }
+    label.append(input, text, state, timing, progress, controls); list.append(label);
     label.addEventListener("click", event => { if (!event.target.closest("input,button")) text.click(); });
   }
   if (focusId) [...list.querySelectorAll("[data-plan-id]")].find(input => input.dataset.planId === focusId)?.focus({ preventScroll: true });
@@ -459,7 +500,7 @@ async function batchPlanAction(action, all) {
       const capacity = Math.max(0, 5 - planEntries.filter(planIsActive).length);
       limited = Math.max(0, targets.length - capacity); targets = targets.slice(0, capacity);
       if (!targets.length) return;
-      const names = targets.map(entry => `${entry.name} · ${entry.config.startDate} / ${entry.config.nights}박`).join("\n");
+      const names = targets.map(entry => `${entry.name} · ${entry.config.startDate} / ${entry.config.nights}박\n${planRunNotice(entry)}`).join("\n\n");
       if (!window.confirm(`${names}\n\n위 ${targets.length}개 일정을 시작할까요? 예약 시각 또는 감시 조건이 맞으면 환불 규정 동의와 최종 예약까지 자동 진행합니다.${limited ? `\n동시 진행은 최대 5개여서 나머지 ${limited}개는 시작하지 않습니다.` : ""}`)) return;
     }
     let succeeded = 0; const failures = [];

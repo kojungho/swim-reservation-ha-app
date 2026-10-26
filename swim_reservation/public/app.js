@@ -1,5 +1,5 @@
 const API = (path) => new URL(`api/${path}`, document.baseURI).href;
-const CLIENT_VERSION = "2.15.12";
+const CLIENT_VERSION = "2.15.13";
 window.stayCalendar = new StayCalendarModel(month => request(`monthly-availability?month=${month}`, { timeoutMs: 25000 }), () => Number.isFinite(currentSiteTime()) ? currentSiteTime() : Date.now());
 let serverVersion = null;
 // Display-only: keep full site room identifiers in requests, saved data and raw diagnostics.
@@ -291,7 +291,7 @@ function bindEvents() {
     const modeText = elements.bookingMode.value === "profiles-parallel" ? `다인 예약 · ${extraProfiles.length + 1}명 · 각자 우선순위` : multiple ? `다중 예약 (${selectedRooms.length}개) · ${elements.reserverName.value || "선택한 한 명"}`
       : `단독 예약 · ${elements.reserverName.value || "선택한 한 명"}`;
     const approved = window.confirm(
-      `${date}부터 ${elements.nights.value}박 예약을 지금 즉시 실행합니다.\n\n예약 방식: ${modeText}\n예약 대상: ${selectedRooms.join(", ") || "선택 없음"}\n\n환불 규정 동의와 최종 예약하기까지 자동 진행됩니다. 실행할까요?`
+      `${date}부터 ${elements.nights.value}박 예약을 지금 즉시 실행합니다.\n\n예약 방식: ${modeText}\n예약 대상: ${selectedRooms.join(", ") || "선택 없음"}\n\n${planRunNotice({ kind: "now", config: readConfig() })}\n\n환불 규정 동의와 최종 예약하기까지 자동 진행됩니다. 실행할까요?`
     );
     if (!approved) return;
     await saveConfig();

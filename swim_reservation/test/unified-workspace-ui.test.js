@@ -15,7 +15,7 @@ test("저장 이력에 실행·모드·상세 팝업을 통합하고 중지된 �
     assert.equal(await page.locator("#historyCard #executionPlanList").count(), 1);
     assert.equal(await page.locator("#historyCard #startAllPlans").count(), 1);
     assert.equal(await page.locator("#executionCard").isVisible(), false);
-    assert.deepEqual(await page.locator("#executionPlanList small").allTextContents(), ["단독 예약 · 중지", "다중 예약 · 진행 중", "다인 예약 · 완료", "취소 대기 · 중지"]);
+    assert.deepEqual(await page.locator("#executionPlanList small").allTextContents(), ["단독 예약 · 중지", "다중 예약 · 예약 대기 중", "다인 예약 · 완료", "취소 대기 · 중지"]);
     await openPlanDetails(page, 1);
     assert.equal(await page.locator('[data-action="edit"]').isDisabled(), true);
     assert.equal(await page.locator('[data-action="delete"]').isDisabled(), true);
