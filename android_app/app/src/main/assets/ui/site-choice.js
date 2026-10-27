@@ -27,7 +27,7 @@ window.createSiteChoiceEditor = function createSiteChoiceEditor({items,canSelect
       const selected=[...old,...added];source.items.splice(0,source.items.length,...selected,...source.items.filter(i=>!i.enabled));window.activeSiteChoicePopup=null;dialog.close();source.onChange();
     };
     const all=node('button','전체 선택','secondary'),clear=node('button','전체 삭제','danger');all.type=clear.type='button';all.onclick=()=>{for(const i of popup.source.items)if(popup.source.canSelect(i.name))chosen.add(i.name);popup.render();};clear.onclick=()=>{chosen.clear();popup.render();};
-    const map=node('button','배치도','secondary');map.type='button';map.onclick=()=>document.getElementById('siteMapButton')?.click();
+    const map=node('button','배치도','site-choice-map');map.type='button';map.style.marginLeft='auto';map.style.backgroundColor='#facc15';map.style.color='#3d3100';map.style.borderColor='#eab308';map.onclick=()=>document.getElementById('siteMapButton')?.click();
     actions.append(cancel,done);const bulk=node('div',undefined,'site-choice-bulk');bulk.append(all,clear,map);dialog.append(heading,bulk,count,grid,actions);document.body.append(dialog);
     const observer=new MutationObserver(()=>{if(!popup.source.wrap.isConnected)dialog.close();});observer.observe(document.body,{childList:true,subtree:true});
     dialog.addEventListener('close',()=>{observer.disconnect();if(window.activeSiteChoicePopup===popup)window.activeSiteChoicePopup=null;dialog.remove();if(popup.source.add.isConnected)popup.source.add.focus({preventScroll:true});},{once:true});dialog.showModal();

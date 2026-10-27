@@ -11,13 +11,30 @@ export function parseQuote(html,{startDate,nights,adults=2},siteId){
   if(totals.length!==1)return null;
   const amount=Number(totals[0][1].replaceAll(',',''));return Number.isSafeInteger(amount)&&amount>0&&amount<100000000?amount:null;
 }
+export function parseQuoteDetail(html,config,siteId){
+  const total=parseQuote(html,config,siteId);if(total===null)return {total:null,nightlyRates:[]};
+  const form=[...html.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/gi)].find(m=>/\bjs-quote\b/.test(m[1]));
+  const tables=[...form[2].matchAll(/<table\b[^>]*class=["']night-table["'][^>]*>([\s\S]*?)<\/table>/gi)];
+  if(tables.length!==1)return {total,nightlyRates:[]};
+  const rows=[...tables[0][1].matchAll(/<tr\b[^>]*>\s*<td\b[^>]*>([\s\S]*?)<\/td>\s*<td\b[^>]*>\s*([\d,]+)원\s*<\/td>\s*<\/tr>/gi)];
+  if(rows.length!==config.nights)return {total,nightlyRates:[]};
+  const types={weekday:'평일',weekend:'주말',peak:'성수기'},nightlyRates=[];
+  for(const [index,row]of rows.entries()){
+    const match=row[1].trim().match(/^(\d{1,2})\.(\d{1,2})\([일월화수목금토]\)\s*<span\s+class=["']t-(weekday|weekend|peak)["']>\s*(평일|주말|성수기)\s*<\/span>$/i);
+    const date=new Date(config.startDate+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+index);
+    const amount=Number(row[2].replaceAll(',',''));
+    if(!match||Number(match[1])!==date.getUTCMonth()+1||Number(match[2])!==date.getUTCDate()||types[match[3]]!==match[4]||!Number.isSafeInteger(amount)||amount<=0)return {total,nightlyRates:[]};
+    nightlyRates.push({date:date.toISOString().slice(0,10),type:match[4],amount});
+  }
+  return {total,nightlyRates:nightlyRates.reduce((sum,row)=>sum+row.amount,0)===total?nightlyRates:[]};
+}
 export async function bookingQuote(input,{fetcher=fetch,now=Date.now()}={}){
   const config={startDate:String(input.startDate||''),nights:Number(input.nights),adults:Number(input.adults||2)};
   checkoutDate(config.startDate,config.nights);
   const names=[...new Set(input.roomNames||[])];
   if(!names.length||names.length>14||names.some(name=>!catalog.has(name))||![1,2].includes(config.adults))throw Error('숙박 기간·선택 사이트·성인 인원을 확인하세요.');
   const [year,month]=config.startDate.split('-').map(Number),opening=Date.UTC(year,month-3,1)-9*3600000;
-  const quotes=names.map(name=>({name,total:null}));if(now<opening)return {quotes,reason:'오픈 전 · 금액 미확인'};
+  const quotes=names.map(name=>({name,total:null,nightlyRates:[]}));if(now<opening)return {quotes,reason:'오픈 전 · 금액 미확인'};
   const signal=AbortSignal.timeout(12000);let reason='공식 금액 미확인';
   for(const quote of quotes){
     if(signal.aborted)break;
@@ -26,7 +43,7 @@ export async function bookingQuote(input,{fetcher=fetch,now=Date.now()}={}){
       const response=await fetcher(url,{method:'GET',redirect:'error',signal});
       if(!response.ok){reason='금액 조회 HTTP '+response.status;if([403,429].includes(response.status))break;continue;}
       const html=await response.text();if(html.length>1000000)break;
-      quote.total=parseQuote(html,config,siteId);
+      Object.assign(quote,parseQuoteDetail(html,config,siteId));
     }catch{break;}
   }
   return {quotes,reason:quotes.every(q=>q.total!==null)?'공식 금액 확인':reason};

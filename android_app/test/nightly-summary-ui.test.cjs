@@ -1,0 +1,19 @@
+const test=require('node:test'),assert=require('node:assert/strict'),{chromium}=require('playwright-core'),{setup}=require('./fixtures/phone-ui.cjs');
+test('앱·애드온 날짜별 요금·예약 상세 계좌 유지·노란 배치도 오른쪽 정렬',async t=>{
+ const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});t.after(()=>browser.close());const {mockBookApp}=await import('../../swim_reservation/test/fixtures/ui-book-app.js');
+ for(const phone of [true,false])for(const width of [320,390]){
+  let page,errors;if(phone)({page,errors}=await setup(browser,width));else{page=await browser.newPage({viewport:{width,height:900}});({errors}=await mockBookApp(page));}t.after(()=>page.close());await page.waitForFunction(()=>typeof bookingConfirmationText==='function');
+  await page.evaluate(phone=>{if(phone)loadPlan({mode:'reserve',date:'2027-01-22',name:'모의예약자',phone:'01000000000',rooms:'달_하늘존'});else{elements.reserverName.value='모의예약자';elements.phone.value='01000000000';elements.startDate.value='2027-01-22';updateStayFields();renderRooms();}},phone);await page.waitForTimeout(200);
+  const summary=await page.evaluate(()=>bookingConfirmationText({startDate:'2026-12-31',nights:3,bookingMode:'priority',roomPriority:[{name:'샘_산맥존',enabled:true}]},{quotes:[{name:'샘_산맥존',total:200000,nightlyRates:[{date:'2026-12-31',type:'평일',amount:60000},{date:'2027-01-01',type:'성수기',amount:70000},{date:'2027-01-02',type:'주말',amount:70000}]}]}));
+  for(const text of ['2026-12-31 · 평일 60,000원','2027-01-01 · 성수기 70,000원','2027-01-02 · 주말 70,000원','총 숙박비: 200,000원'])assert.ok(summary.includes(text),text);
+  await page.evaluate(()=>{window.prepareSiteChoice=async()=>true;const host=document.createElement('div');host.id='nightlyTest';host.style.cssText='position:fixed;top:180px;left:12px;right:12px;z-index:3000;background:white';document.body.append(host);host.append(createSiteChoiceEditor({prefix:'daily-test',items:[{name:'샘_산맥존',enabled:false},{name:'산_하늘존',enabled:false}],canSelect:()=>true,status:()=>({kind:'available',label:'예약 가능'}),onChange:()=>{throw Error('선택 결과를 적용하면 안 됩니다.');}}));});
+  await page.locator('#nightlyTest .site-choice-tools button').click();await page.locator('.site-choice-dialog').waitFor();
+  const geometry=await page.locator('.site-choice-map').evaluate(button=>({right:button.getBoundingClientRect().right,edge:button.parentElement.getBoundingClientRect().right,color:getComputedStyle(button).backgroundColor}));assert.ok(Math.abs(geometry.edge-geometry.right)<2,JSON.stringify(geometry));assert.equal(geometry.color,'rgb(250, 204, 21)');
+  if(width===390)await page.screenshot({path:phone?'/tmp/swim-phone-0424-map.png':'/tmp/swim-addon-21529-map.png'});
+  await page.locator('.site-choice-dialog').getByRole('button',{name:'취소',exact:true}).click();
+  await page.evaluate(()=>{document.getElementById('nightlyTest').replaceChildren(buildDisplayReceipt({id:'TEST-SAVED',room:'샘_산맥존',stayDate:'2026-12-31',checkout:'2027-01-02',nights:'2박',total:'50,000원',status:'예약 확정',depositDeadline:'2026-10-28 12:00',bankAccount:'농협 317-0028-3427-31',bankHolder:'(주)쉼오지캠프',depositNotice:'예약 후 24시간 이내 입금하지 않을 시 자동으로 예약이 취소됩니다.'}));});
+  const details=page.locator('#nightlyTest .reservation-detail-button');await details.click();const more=page.locator('#nightlyTest .reservation-more');
+  for(const text of ['농협 317-0028-3427-31','(주)쉼오지캠프','총 숙박비 50,000원','입금 기한 2026-10-28 12:00','퇴실일 2027-01-02','예약 후 24시간 이내 입금하지 않을 시 자동으로 예약이 취소됩니다.'])assert.ok((await more.textContent()).includes(text),text);
+  await details.click();await details.click();assert.ok((await more.textContent()).includes('50,000원'));assert.doesNotMatch(await more.textContent(),/200,000원/);assert.deepEqual(errors,[]);if(phone)assert.equal(await page.evaluate(()=>nativeMock.calls.some(c=>['run','planPut'].includes(c.action))),false);await page.close();
+ }
+});

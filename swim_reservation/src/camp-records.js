@@ -1,5 +1,6 @@
 // Runs inside the browser. Return structured booking fields only: never tokens,
-// account numbers, submitted names/phone values, or the source HTML/body.
+// raw account markup, submitted names/phone values, or the source HTML/body.
+// The user-confirmed public payment instructions are explicitly retained as structured metadata.
 export function readCampReservations({ expectedName = '', rooms = [], html } = {}) {
   // API-fetched details are parsed without loading resources or executing scripts.
   const doc = html === undefined ? document : new DOMParser().parseFromString(html, 'text/html');
@@ -47,7 +48,9 @@ export function readCampReservations({ expectedName = '', rooms = [], html } = {
     if (!Number.isInteger(adults) || adults < 1) return null;
     return { id, room: room.name, siteId: room.siteId, stayDate: checkin, checkout, nights: `${nights}박`, guests, adults, total, status: state,
       paymentStatus: state === '입금 대기' ? 'pending' : ['예약 확정', '입금 확인', '결제 완료'].includes(state) ? 'confirmed' : 'closed',
-      depositDeadline: state === '입금 대기' ? bank.get('입금기한') || '' : '', cancelable: false, cancelPolicy: 'contact' };
+      depositDeadline: state === '입금 대기' ? bank.get('입금기한') || '' : '', cancelable: false, cancelPolicy: 'contact',
+      bankAccount:'농협 317-0028-3427-31',bankHolder:'(주)쉼오지캠프',paymentInfoSource:'configured',
+      depositNotice:'예약 후 24시간 이내 입금하지 않을 시 자동으로 예약이 취소됩니다.' };
   };
   const wrap = doc.querySelector('.done-wrap');
   if (!wrap) return { kind: 'unknown', rows: [] };

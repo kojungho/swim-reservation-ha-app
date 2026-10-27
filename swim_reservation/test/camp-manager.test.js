@@ -112,6 +112,10 @@ test('사진과 같은 입금 대기 상세를 구조적으로 읽고 확정으�
   assert.equal(row.cancelable, false);
   assert.equal(row.cancelPolicy, 'contact');
   assert.match(row.depositDeadline, /15:58/);
+  assert.equal(row.bankAccount,'농협 317-0028-3427-31');
+  assert.equal(row.bankHolder,'(주)쉼오지캠프');
+  assert.equal(row.paymentInfoSource,'configured');
+  assert.equal(row.depositNotice,'예약 후 24시간 이내 입금하지 않을 시 자동으로 예약이 취소됩니다.');
   const detail = await f.page.evaluate(readCampReservations, { expectedName: profile.reserverName, rooms: [...catalog.values()] });
   assert.equal(detail.submissionComplete, false);
   assert.ok(!JSON.stringify(row).includes('테스트용 계좌 원문'));

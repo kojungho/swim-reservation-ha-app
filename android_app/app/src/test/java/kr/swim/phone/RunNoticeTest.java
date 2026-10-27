@@ -13,4 +13,5 @@ public final class RunNoticeTest {
   p.mode="multiple";assertTrue(RunNotice.message(p,0,Map.of("산_하늘존",130000L,"샘_산맥존",140000L)).contains("총 숙박비: 270,000원"));assertTrue(RunNotice.message(p,0).contains("총 숙박비: 공식 금액 미확인"));
  }
  @Test public void batteryNoticeRemainsAvailableOutsideTheConfirmationSummary(){Plan p=plan();p.trigger=7200000L;assertTrue(RunNotice.batteryNotice(p,0).contains("배터리 사용"));}
+ @Test public void dailyBreakdownAndTotalAppearTogether(){Plan p=plan();String text=RunNotice.detailedMessage(p,0,Map.of("산_하늘존",new BookingQuote.Detail(130000L,List.of(new BookingQuote.Night("2026-12-31","평일",60000),new BookingQuote.Night("2027-01-01","성수기",70000)))));assertTrue(text.contains("2026-12-31 · 평일 60,000원"));assertTrue(text.contains("2027-01-01 · 성수기 70,000원"));assertTrue(text.contains("총 숙박비: 130,000원"));}
 }

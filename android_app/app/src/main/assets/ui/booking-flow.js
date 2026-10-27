@@ -17,7 +17,10 @@ window.bookingConfirmationText=function(config,quote={}){
  const groups=config.bookingMode==='profiles-parallel'?(config.profiles||[]).map(names):[names(config)];
  const money=name=>quote.quotes?.find(q=>q.name===name)?.total;
  const format=amount=>Number.isSafeInteger(amount)&&amount>0?amount.toLocaleString('ko-KR')+'원':'공식 금액 미확인';
- const lines=groups.flatMap((group,i)=>group.map(name=>(groups.length>1?'예약자 '+(i+1)+' · ':'')+name.split('_')[0]+' / '+format(money(name))));
+ const lines=groups.flatMap((group,i)=>group.map(name=>{
+  const item=quote.quotes?.find(q=>q.name===name),daily=(item?.nightlyRates||[]).map(row=>'  '+row.date+' · '+row.type+' '+format(row.amount));
+  return (groups.length>1?'예약자 '+(i+1)+' · ':'')+name.split('_')[0]+' / '+format(money(name))+'\n'+(daily.length?daily.join('\n'):'  날짜별 요금 미확인');
+ }));
  const selected=config.bookingMode==='multiple'?groups.flat():groups.every(g=>g.length===1)?groups.flat():[];
  const total=selected.length&&selected.every(name=>money(name)>0)?format(selected.reduce((sum,name)=>sum+money(name),0)):groups.some(g=>g.length>1)?'우선순위 중 실제 예약되는 사이트의 금액':'공식 금액 미확인';
  return '입실일 '+config.startDate+' / 퇴실일 '+stayEndDate(config.startDate,config.nights)+' / '+config.nights+'박\n\n'+(lines.join('\n')||'사이트 선택 필요')+'\n총 숙박비: '+total+'\n\n입금 계좌: 농협 317-0028-3427-31\n예금주: (주)쉼오지캠프\n\n예약 후 24시간 이내 입금하지 않을 시 자동으로 예약이 취소됩니다.';
@@ -38,7 +41,13 @@ window.buildDisplayReceipt=function(value){
  const identity=el('div');identity.append(el('strong',String(value.room||'').split('_')[0]),el('span',(value.stayDate||'')+' · '+(value.nights||'')));
  const state=el('div');state.className='reservation-compact-state';state.append(el('strong',value.status||'확인 필요'),el('span',value.total||''));
  const details=el('button','상세');details.type='button';details.className='reservation-detail-button';details.setAttribute('aria-expanded','false');
- const more=el('div');more.className='reservation-more';more.hidden=true;more.append(el('span','예약번호 '+(value.id||'미확인')));if(value.depositDeadline)more.append(el('span','입금 기한 '+value.depositDeadline));more.append(el('span','취소는 캠핑장에 문의해 주세요.'));details.onclick=()=>{more.hidden=!more.hidden;details.setAttribute('aria-expanded',String(!more.hidden));};card.append(identity,state,details,more);return card;
+ const more=el('div');more.className='reservation-more';more.hidden=true;
+ more.append(el('span','예약번호 '+(value.id||'미확인')),el('span','사이트 '+String(value.room||'').split('_')[0]),el('span','입실일 '+(value.stayDate||'미확인')+' / 퇴실일 '+(value.checkout||'미확인')+' / '+(value.nights||'미확인')),el('span','총 숙박비 '+(value.total||'미확인')));
+ if(value.guests)more.append(el('span','인원 '+value.guests));
+ for(const row of value.nightlyRates||[])more.append(el('span',row.date+' · '+row.type+' '+Number(row.amount).toLocaleString('ko-KR')+'원'));
+ more.append(el('span','입금 계좌: '+(value.bankAccount||'농협 317-0028-3427-31')),el('span','예금주: '+(value.bankHolder||'(주)쉼오지캠프')));
+ if(value.depositDeadline)more.append(el('span','입금 기한 '+value.depositDeadline));
+ more.append(el('span',value.depositNotice||'예약 후 24시간 이내 입금하지 않을 시 자동으로 예약이 취소됩니다.'),el('span','현재 예약 상태와 공식 입금 기한을 확인하세요.'),el('span','취소는 캠핑장에 문의해 주세요.'));details.onclick=()=>{more.hidden=!more.hidden;details.setAttribute('aria-expanded',String(!more.hidden));};card.append(identity,state,details,more);return card;
 };
 (() => {
  const byId=id=>document.getElementById(id),phone=!!window.Phone;
