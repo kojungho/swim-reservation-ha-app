@@ -90,6 +90,9 @@ window.buildDisplayReceipt=function(value){
  }
  function missingRequired(input){
   if(!input||input.disabled||input.readOnly&&input.id==='triggerAt'||!input.getClientRects().length)return false;
+  return invalidRequiredValue(input);
+ }
+ function invalidRequiredValue(input){
   const value=input.value.trim();
   if(!value)return true;
   if(nameInput(input))return !validPersonName(value);
@@ -98,41 +101,35 @@ window.buildDisplayReceipt=function(value){
  }
  const composingNames=new WeakSet();
  function nameInput(input){return /^(reserverName|bookReserverName|oneOffName)\d*$/.test(input.id)||input.name==='name';}
- let correctingUntil=0,scrollCheck=0,lastScrollY=0,validationEpoch=0,resettingValidation=false,choosingProfile=false,lastRequiredMessage='';
+ let validationEpoch=0,resettingValidation=false,choosingProfile=false,lastRequiredMessage='';
  function savedProfileControl(target){return target?.closest?.('select[id^="bookingProfileSelect"],#watchProfileSelect,#multipleProfileSelect,#phonePeople select,.booking-select-field');}
  function beginProfileChoice(){
-  if(choosingProfile)return;choosingProfile=true;validationEpoch++;clearTimeout(scrollCheck);clearTimeout(autoTimer);scrollCheck=autoTimer=0;autoWanted=false;
+  if(choosingProfile)return;choosingProfile=true;validationEpoch++;clearTimeout(autoTimer);autoTimer=0;autoWanted=false;
   const message=byId('floatingMessage');if(message?.querySelector('span')?.textContent===lastRequiredMessage){clearTimeout(message.hideTimer);message.hidden=true;}
   if(phone){try{api('hideKeyboard');}catch(error){/* Native selector remains usable without the optional IME request. */}}
  }
  window.beginBookingReset=function(){
-  resettingValidation=true;choosingProfile=false;validationEpoch++;clearTimeout(scrollCheck);clearTimeout(autoTimer);scrollCheck=autoTimer=0;autoWanted=false;autoKey='';correctingUntil=0;pendingName='';autoNamed=false;generatedName='';
+  resettingValidation=true;choosingProfile=false;validationEpoch++;clearTimeout(autoTimer);autoTimer=0;autoWanted=false;autoKey='';pendingName='';autoNamed=false;generatedName='';
   for(const item of bodies)item.body.querySelectorAll('.required-input-error').forEach(input=>{input.classList.remove('required-input-error');input.removeAttribute('aria-invalid');});
   const message=byId('floatingMessage');if(message){clearTimeout(message.hideTimer);message.hidden=true;}
  };
  window.finishBookingReset=function(){
-  resettingValidation=false;lastScrollY=window.scrollY;refresh();
-  const missing=bodies[0]&&firstRequired(bodies[0]);if(missing)showRequired(missing);
+  resettingValidation=false;refresh();
  };
  function firstRequired(item){
   if(!item.toggle.getClientRects().length)return;
   const collapsed=item.body.hidden;item.body.hidden=false;
   const missing=[...item.body.querySelectorAll('[data-booking-required]')].find(missingRequired);
-  if(missing)item.toggle.setAttribute('aria-expanded','true');else item.body.hidden=collapsed;
-  return missing;
+  item.body.hidden=collapsed;return missing;
  }
  function showRequired(input){
-  if(resettingValidation||choosingProfile||composingNames.has(input)||savedProfileControl(document.activeElement)||!missingRequired(input)||document.querySelector('dialog[open]'))return;
-  if(modes.includes(workspaceTab)&&bodies.some(item=>item.body.contains(input))){for(const item of bodies){const earlier=firstRequired(item);if(earlier){input=earlier;break;}if(item.body.contains(input))break;}}
-  autoWanted=false;clearTimeout(autoTimer);autoTimer=0;correctingUntil=performance.now()+1200;
+  if(resettingValidation||choosingProfile||composingNames.has(input)||savedProfileControl(document.activeElement)||!invalidRequiredValue(input)||document.querySelector('dialog[open]'))return;
+  autoWanted=false;clearTimeout(autoTimer);autoTimer=0;
   input.classList.add('required-input-error');input.setAttribute('aria-invalid','true');
   const title=input.closest('label')?.querySelector('.field-label-text,.stay-label-line>span:first-child')?.textContent.replace('(필수)','').trim()||input.getAttribute('aria-label')||input.placeholder||'필수 항목';
   lastRequiredMessage=nameInput(input)&&input.value.trim()?title+'은 공백 없이 완성된 이름을 한글 2~50글자로 입력해 주세요.':title+(/phone/i.test(input.id)||input.name==='phone'?' 형식을 확인해 주세요.':' 입력이 필요합니다.');notify(lastRequiredMessage);
-  input.scrollIntoView({block:'center',behavior:'smooth'});input.focus({preventScroll:true});
-  if(phone&&!input.readOnly&&input.matches('textarea,input:not([type=date]):not([type=datetime-local]):not([type=number])')){try{api('showKeyboard');}catch(error){/* Focus is retained if the keyboard is unavailable. */}}
  }
  function initializeRequiredValidation(){
-  const fields=root=>[...root.querySelectorAll('[data-booking-required]')];
   document.addEventListener('compositionstart',event=>{if(nameInput(event.target)){composingNames.add(event.target);validationEpoch++;clearTimeout(autoTimer);autoTimer=0;queue();}},true);
   document.addEventListener('compositionend',event=>{if(nameInput(event.target)){composingNames.delete(event.target);queue();if(document.activeElement!==event.target)queueMicrotask(()=>showRequired(event.target));}},true);
   const choose=event=>{if(savedProfileControl(event.target))beginProfileChoice();else if(choosingProfile){choosingProfile=false;validationEpoch++;if(savedProfileControl(document.activeElement))document.activeElement.blur();}};
@@ -148,20 +145,12 @@ window.buildDisplayReceipt=function(value){
    if(missing){event.preventDefault();event.stopImmediatePropagation();showRequired(missing);}
   };
   document.addEventListener('click',nextStep,true);
+  document.addEventListener('click',event=>{
+   if(!event.target.closest('#addPlanButton,#runNowButton,[data-phone-run]'))return;
+   const missing=bodies.slice(0,2).map(firstRequired).find(Boolean);
+   if(missing){event.preventDefault();event.stopImmediatePropagation();showRequired(missing);}
+  },true);
   document.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')nextStep(event);},true);
-  window.addEventListener('scroll',()=>{
-   const down=window.scrollY>lastScrollY;lastScrollY=window.scrollY;clearTimeout(scrollCheck);
-   if(resettingValidation||choosingProfile||!down||performance.now()<correctingUntil||!modes.includes(workspaceTab))return;
-   scrollCheck=setTimeout(()=>{
-    if(performance.now()<correctingUntil||document.querySelector('dialog[open]'))return;
-    let missing;for(const item of bodies){
-     if(item.body.hidden&&item.toggle.getBoundingClientRect().bottom<70){missing=firstRequired(item);}
-     else missing=fields(item.body).find(input=>missingRequired(input)&&input.getBoundingClientRect().bottom<70);
-     if(missing)break;
-    }
-    if(missing)showRequired(missing);
-   },160);
-  },{passive:true});
  }
  function initialize(){
   if(initialized||!byId('startDate')||phone&&!window.featuresReady&&typeof featuresReady==='undefined')return;
@@ -213,7 +202,11 @@ window.buildDisplayReceipt=function(value){
    else if(button.dataset.profileSave!==undefined){const fields=button.closest('.phone-person-card');profile={name:fields.querySelector('[name=name]').value,phone:fields.querySelector('[name=phone]').value,payer:fields.querySelector('[name=payer]').value};}
    else if(phone)profile=profileFromEditor();
    else profile=readConfig().profiles[button.id==='saveProfilesButton'?0:Number(button.id.replace('saveBookingActor',''))-1];
-   const error=bookingProfileSaveError(profile);if(error){validationEpoch++;event.preventDefault();event.stopImmediatePropagation();notify(error);}
+   const error=bookingProfileSaveError(profile);if(error){validationEpoch++;event.preventDefault();event.stopImmediatePropagation();
+    const root=button.id==='bookAddButton'?byId('bookingBookCard'):button.closest('.phone-person-card')||bodies[0].body;
+    root?.querySelectorAll('[data-booking-required]').forEach(input=>{if(missingRequired(input)){input.classList.add('required-input-error');input.setAttribute('aria-invalid','true');}});
+    notify(error);
+   }
   },true);
   byId('historyCard').querySelector('h2').textContent='예약 대기 일정 등록 및 예약 이력';
   const nameLabel=byId('planName').closest('label');for(const child of nameLabel.childNodes)if(child.nodeType===3)child.textContent='예약 대기 일정 명칭';
