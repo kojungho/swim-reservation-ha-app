@@ -121,7 +121,7 @@ export function normalizeProfile(profile = {}) {
 }
 
 export function validateProfile(profile, label, errors) {
-  if (!validPersonName(profile?.reserverName)) errors.push(`${label} 예약자명 (자음·모음만 입력하지 말고 완성된 이름을 입력하세요)`);
+  if (!validPersonName(profile?.reserverName)) errors.push(`${label} 예약자명 (공백 없이 완성된 이름을 한글 2~50글자로 입력하세요)`);
   if (!/^01\d{8,9}$/.test(profile?.phone || "")) errors.push(`${label} 휴대폰 번호`);
 }
 

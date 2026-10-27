@@ -21,7 +21,7 @@ test('번호 안내 뒤 초기화는 이전 예약 콜백·오류를 지우고 �
  const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());const{mockBookApp}=await import('../../swim_reservation/test/fixtures/ui-book-app.js');
  for(const phone of [true,false]){
   let page,errors,state;if(phone)({page,errors}=await setup(browser));else{page=await browser.newPage({viewport:{width:390,height:900}});state=await mockBookApp(page);errors=state.errors;}t.after(()=>page.close());await page.waitForSelector('.booking-step-title');
-  await page.locator('#reserverName').fill('초기화 시험');await page.locator('#phone').fill('');await page.locator('#phone').focus();await page.keyboard.press('Tab');
+  await page.locator('#reserverName').fill('초기화시험');await page.locator('#phone').fill('');await page.locator('#phone').focus();await page.keyboard.press('Tab');
   await page.waitForFunction(()=>document.activeElement.id==='phone'&&document.getElementById('floatingMessage')?.textContent.includes('휴대폰'));
   if(phone){await page.evaluate(()=>{document.getElementById('phone').dispatchEvent(new FocusEvent('focusout',{bubbles:true}));document.querySelector('.phone-reset-floating').click();});}
   else{await page.locator('#editorResetButton').click();await page.evaluate(()=>{document.getElementById('phone').dispatchEvent(new FocusEvent('focusout',{bubbles:true}));document.getElementById('editorResetConfirm').click();});}

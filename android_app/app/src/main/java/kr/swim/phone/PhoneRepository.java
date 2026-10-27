@@ -50,7 +50,7 @@ final class PhoneRepository {
             saved=new JSONObject().put("title",title.isEmpty()?fallback:title).put("plan",p.json());
         }else {
             String name=value.optString("name").trim(),payer=value.optString("payer").trim(),phone=value.optString("phone").replaceAll("[^0-9]",""),birth=value.optString("birth");
-            if(!PersonName.valid(name)||payer.length()>50||!phone.matches("01[0-9]{8,9}"))throw new IllegalArgumentException("예약자명·휴대폰 번호를 확인해 주세요. 이름은 자음·모음이 아닌 완성된 이름으로 입력하세요. 입금자명은 선택입니다.");
+            if(!PersonName.valid(name)||payer.length()>50||!phone.matches("01[0-9]{8,9}"))throw new IllegalArgumentException("예약자명·휴대폰 번호를 확인해 주세요. 공백 없이 완성된 이름을 한글 2~50글자로 입력하세요. 입금자명은 선택입니다.");
             saved=new JSONObject().put("name",name).put("payer",payer).put("phone",phone).put("birth",birth);
         }
         int found=-1;for(int i=0;i<entries.length();i++)if(entries.getJSONObject(i).getString("id").equals(id))found=i;

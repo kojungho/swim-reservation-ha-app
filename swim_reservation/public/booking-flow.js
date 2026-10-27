@@ -1,7 +1,7 @@
 /* Shared compact booking flow. Display-only; no start, submit or cancel actions. */
 window.validPersonName=function(value){
  if(typeof value!=='string')return false;const name=value.trim().normalize('NFC');
- return name.length>0&&name.length<=50&&!/[\u1100-\u11ff\u3130-\u318f\ua960-\ua97f\ud7b0-\ud7ff]/u.test(name)&&/^\p{L}[\p{L}\p{M}]*(?:[ '\u2019·-]\p{L}[\p{L}\p{M}]*)*$/u.test(name);
+ return /^[가-힣]{2,50}$/u.test(name);
 };
 window.buildDisplayReceipt=function(value){
  const el=(tag,text)=>{const item=document.createElement(tag);if(text!==undefined)item.textContent=text;return item;};
@@ -89,7 +89,7 @@ window.buildDisplayReceipt=function(value){
   autoWanted=false;clearTimeout(autoTimer);autoTimer=0;correctingUntil=performance.now()+1200;
   input.classList.add('required-input-error');input.setAttribute('aria-invalid','true');
   const title=input.closest('label')?.querySelector('.field-label-text,.stay-label-line>span:first-child')?.textContent.replace('(필수)','').trim()||input.getAttribute('aria-label')||input.placeholder||'필수 항목';
-  lastRequiredMessage=nameInput(input)&&input.value.trim()?title+'은 자음·모음이 아닌 완성된 이름으로 입력해 주세요.':title+(/phone/i.test(input.id)||input.name==='phone'?' 형식을 확인해 주세요.':' 입력이 필요합니다.');notify(lastRequiredMessage);
+  lastRequiredMessage=nameInput(input)&&input.value.trim()?title+'은 공백 없이 완성된 이름을 한글 2~50글자로 입력해 주세요.':title+(/phone/i.test(input.id)||input.name==='phone'?' 형식을 확인해 주세요.':' 입력이 필요합니다.');notify(lastRequiredMessage);
   input.scrollIntoView({block:'center',behavior:'smooth'});input.focus({preventScroll:true});
   if(phone&&!input.readOnly&&input.matches('textarea,input:not([type=date]):not([type=datetime-local]):not([type=number])')){try{api('showKeyboard');}catch(error){/* Focus is retained if the keyboard is unavailable. */}}
  }

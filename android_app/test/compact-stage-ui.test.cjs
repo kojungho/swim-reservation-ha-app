@@ -10,7 +10,7 @@ test('앱·애드온 제목 펼침·필수 한 줄·상단 링크·오픈 전 �
   if(phone)await page.evaluate(()=>loadPlan({mode:'reserve',date:'2027-01-17',name:'',phone:'',rooms:''}));
   else {await page.locator('#reserverName').fill('');await page.locator('#phone').fill('');await page.evaluate(()=>{elements.startDate.value='2027-01-17';updateStayFields();});}
   assert.equal(await page.locator('#reserverName').isVisible(),true);
-  await page.locator('#reserverName').fill('자동 전환 검증');await page.locator('#phone').fill('01000000000');
+  await page.locator('#reserverName').fill('자동전환검증');await page.locator('#phone').fill('01000000000');
   await page.waitForFunction(()=>document.querySelectorAll('.booking-step-title')[1].getAttribute('aria-disabled')==='false');
   await page.waitForTimeout(100);assert.equal(await page.locator('#triggerAt').isVisible(),true);
   assert.equal((await page.locator('#triggerAt').locator('..').textContent()).trim(),'예약 실행 시간(오픈 예정일)');
@@ -29,7 +29,7 @@ test('앱·애드온 제목 펼침·필수 한 줄·상단 링크·오픈 전 �
   assert.equal(await title.evaluate(e=>getComputedStyle(e).borderTopWidth),'0px');
   await page.locator('.booking-step-title').nth(0).click();await page.locator('.booking-step-title').nth(0).click();
   // Programmatic load models restoring an editor; it must not auto-open a picker.
-  if(phone)await page.evaluate(()=>loadPlan({mode:'reserve',date:'2026-12-22',name:'자동 전환 검증',phone:'01000000000',rooms:''}));
+  if(phone)await page.evaluate(()=>loadPlan({mode:'reserve',date:'2026-12-22',name:'자동전환검증',phone:'01000000000',rooms:''}));
   else await page.evaluate(()=>{elements.startDate.value='2026-12-22';updateStayFields();});
   await page.waitForTimeout(1400);assert.equal(await page.locator('#triggerAt').isVisible(),false);assert.equal(await page.locator('.site-choice-dialog').count(),0);
   assert.deepEqual(errors,[]);if(phone)assert.equal(await page.evaluate(()=>nativeMock.calls.some(c=>c.action==='run')),false);else assert.equal(state.planCalls.length,0);
