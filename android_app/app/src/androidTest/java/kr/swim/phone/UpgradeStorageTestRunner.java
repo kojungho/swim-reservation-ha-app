@@ -14,7 +14,7 @@ public final class UpgradeStorageTestRunner extends Instrumentation {
     if(!fromVersion.equals(app.getPackageManager().getPackageInfo(app.getPackageName(),0).versionName))throw new AssertionError("seed must run on "+fromVersion);
     if(store.active()||store.uncertain())throw new AssertionError("emulator has an active or uncertain operation");
     JSONObject backup=repository.load();store.saveDocument("upgrade-v17-original",backup);
-    repository.put("profiles",new JSONObject().put("name","업데이트 보존 검증").put("payer","").put("phone","01000000000"));
+    repository.put("profiles",new JSONObject().put("name","업데이트보존검증").put("payer","").put("phone","01000000000"));
     Plan plan=Plan.sample();plan.mode="reserve";plan.date="2030-12-17";plan.trigger=0;
     repository.put("plans",new JSONObject().put("title","미실행 보존 검증").put("plan",plan.json()));
     repository.saveDraft(plan.json());JSONObject seeded=repository.load();
