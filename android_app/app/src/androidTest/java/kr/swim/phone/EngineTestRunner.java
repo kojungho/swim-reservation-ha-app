@@ -41,7 +41,7 @@ public class EngineTestRunner extends Instrumentation {
                 Bundle result=new Bundle();result.putString("stream","READ-ONLY SITE RESULT: "+store.stage()+" / "+store.message()+"\nNo booking forms submitted.\n");finish(Activity.RESULT_OK,result);return;
             }
             PhoneReads.testMode=true;
-            AppUpdates.source=()->new org.json.JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("minSupportedVersionCode",0).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
+            AppUpdates.source=()->new org.json.JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("minSupportedVersionCode",0).put("sha256","0".repeat(64)).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
             check(PhoneEngine.permitted(Uri.parse("https://www.swimozicamp.com/camp/book.php"),true,false),"new official reservation route allowed");
             check(!PhoneEngine.permitted(Uri.parse("https://evil.invalid/reservation/order_ok3.php"),true,false),"foreign origin blocked");
             check(!PhoneEngine.permitted(Uri.parse("http://newpension.logosweb.or.kr/reservation/order_ok3.php"),true,false),"cleartext blocked");

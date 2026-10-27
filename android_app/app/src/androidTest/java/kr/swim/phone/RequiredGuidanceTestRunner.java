@@ -8,7 +8,7 @@ public final class RequiredGuidanceTestRunner extends EngineTestRunner {
   try{
    if(store.active()||store.uncertain()||PhoneRuns.count(app)>0)throw new AssertionError("Emulator has an active or uncertain operation");
    backup=new PhoneRepository(app).load();oldIme=shell("settings get secure show_ime_with_hard_keyboard").trim();shell("settings put secure show_ime_with_hard_keyboard 1");
-   PhoneReads.testMode=true;AppUpdates.source=()->new JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
+   PhoneReads.testMode=true;AppUpdates.source=()->new JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("sha256","0".repeat(64)).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
    activity=startActivitySync(new Intent(app,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));uiReady();
    long ready=System.currentTimeMillis()+10000;while(!js("typeof window.finishBookingReset==='function'&&featuresReady").equals("true")&&System.currentTimeMillis()<ready)Thread.sleep(100);
    js("switchTab('priority');loadPlan({mode:'reserve',name:'키패드모의',phone:''})");Thread.sleep(500);

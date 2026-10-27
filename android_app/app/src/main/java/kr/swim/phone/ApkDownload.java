@@ -21,7 +21,7 @@ final class ApkDownload {
     ApkDownload(Activity activity){this.activity=activity;}
     static boolean allowed(URL url){return "https".equals(url.getProtocol())&&url.getUserInfo()==null&&(url.getPort()==-1||url.getPort()==443)&&Set.of("github.com","release-assets.githubusercontent.com","objects.githubusercontent.com").contains(url.getHost());}
     static void verify(Context context,File file,JSONObject manifest)throws Exception{
-        if(manifest.has("sha256")){
+        {
             String expected=manifest.getString("sha256");if(!expected.matches("[0-9a-fA-F]{64}"))throw new IOException("Invalid digest");
             MessageDigest digest=MessageDigest.getInstance("SHA-256");try(InputStream input=new FileInputStream(file)){byte[] bytes=new byte[32768];int n;while((n=input.read(bytes))!=-1)digest.update(bytes,0,n);}
             StringBuilder hash=new StringBuilder();for(byte b:digest.digest())hash.append(String.format("%02x",b&255));if(!expected.equalsIgnoreCase(hash.toString()))throw new IOException("Digest mismatch");
@@ -29,6 +29,7 @@ final class ApkDownload {
         PackageManager pm=context.getPackageManager();int flags=Build.VERSION.SDK_INT>=28?PackageManager.GET_SIGNING_CERTIFICATES:PackageManager.GET_SIGNATURES;
         PackageInfo archive=pm.getPackageArchiveInfo(file.getAbsolutePath(),flags),installed=pm.getPackageInfo(context.getPackageName(),flags);
         if(archive==null||!context.getPackageName().equals(archive.packageName)||version(archive)!=manifest.getInt("versionCode")||version(archive)<=BuildConfig.VERSION_CODE)throw new IOException("Package/version mismatch");
+        if(archive.applicationInfo==null||(archive.applicationInfo.flags&(ApplicationInfo.FLAG_DEBUGGABLE|ApplicationInfo.FLAG_TEST_ONLY))!=0)throw new IOException("Not a distribution build");
         android.content.pm.Signature[] a=Build.VERSION.SDK_INT>=28?archive.signingInfo.getApkContentsSigners():archive.signatures,b=Build.VERSION.SDK_INT>=28?installed.signingInfo.getApkContentsSigners():installed.signatures;
         if(a==null||b==null||a.length==0||a.length!=b.length)throw new IOException("Signer missing");
         Set<String> actual=new HashSet<>(),expected=new HashSet<>();for(var s:a)actual.add(s.toCharsString());for(var s:b)expected.add(s.toCharsString());if(!actual.equals(expected))throw new IOException("Signer mismatch");

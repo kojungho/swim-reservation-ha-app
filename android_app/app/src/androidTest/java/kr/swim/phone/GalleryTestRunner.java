@@ -13,7 +13,7 @@ public final class GalleryTestRunner extends EngineTestRunner {
   app=getTargetContext();store=new LocalStore(app);JSONObject backup=null;AppUpdates.MetadataSource original=AppUpdates.source;String added=null;File fixture=new File(app.getCacheDir(),"gallery-export-test.png");
   try{
    PhoneReads.testMode=true;store.state("WAITING","사진 UI 모의 검증",true);
-   AppUpdates.source=()->new JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
+   AppUpdates.source=()->new JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("sha256","0".repeat(64)).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
    MapPhotos photos=new MapPhotos(app);backup=photos.state();store.saveDocument("maps-v1",new JSONObject().put("photos",new JSONArray()).put("selected",""));
    Bitmap image=Bitmap.createBitmap(24,16,Bitmap.Config.ARGB_8888);image.eraseColor(0xff246b50);try(OutputStream out=new FileOutputStream(fixture)){image.compress(Bitmap.CompressFormat.PNG,100,out);}finally{image.recycle();}
    photos.add(Uri.fromFile(fixture));added=photos.state().getJSONArray("photos").getString(0);

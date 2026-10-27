@@ -12,7 +12,7 @@ public final class UiSafetyTestRunner extends EngineTestRunner {
         app=getTargetContext();store=new LocalStore(app);AppUpdates.MetadataSource original=AppUpdates.source;JSONObject backup=null;
         try{
             PhoneReads.testMode=true;store.state("IDLE","UI 안전 검증",false);
-            AppUpdates.source=()->new JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
+            AppUpdates.source=()->new JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("sha256","0".repeat(64)).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
             PhoneRepository repository=new PhoneRepository(app);backup=repository.load();int profiles=backup.getJSONArray("profiles").length(),plans=backup.getJSONArray("plans").length();
             repository.saveDraft(new JSONObject().put("mode","reserve").put("name","단독모의").put("date","2026-12-17"));
             repository.saveDraft(new JSONObject().put("mode","watch").put("name","대기모의").put("date","2027-01-17"));

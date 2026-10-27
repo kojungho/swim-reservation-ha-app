@@ -9,7 +9,7 @@ public final class SiteChoiceTestRunner extends EngineTestRunner {
   app=getTargetContext();store=new LocalStore(app);JSONObject backup=null;AppUpdates.MetadataSource original=AppUpdates.source;
   try{
    PhoneReads.testMode=true;store.state("WAITING","사이트 선택 UI 모의 대기",true);
-   AppUpdates.source=()->new JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
+   AppUpdates.source=()->new JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("sha256","0".repeat(64)).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
    PhoneRepository repository=new PhoneRepository(app);backup=repository.load();
    activity=startActivitySync(new Intent(app,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));uiReady();
    check(MainActivity.localUi(android.net.Uri.parse("https://phone.swim.invalid/site-choice.js"),false),"shared site picker is served by the native UI allowlist");

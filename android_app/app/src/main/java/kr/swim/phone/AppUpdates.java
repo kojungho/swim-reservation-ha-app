@@ -30,6 +30,7 @@ final class AppUpdates {
         if(!"kr.swim.phone".equals(manifest.getString("packageId")))throw new Exception("package");
         int version=manifest.getInt("versionCode"),minimum=manifest.optInt("minSupportedVersionCode",0);
         if(version<1||minimum<0||minimum>version||manifest.getString("versionName").length()>100)throw new Exception("version");
+        if(!manifest.optString("sha256").matches("[0-9a-fA-F]{64}"))throw new Exception("digest");
         URI uri=URI.create(manifest.getString("apkUrl"));
         if(!"https".equals(uri.getScheme())||!"github.com".equals(uri.getHost())||uri.getPort()!=-1||!uri.getPath().startsWith("/kojungho/swim-reservation-ha-app/releases/download/phone-")||!uri.getPath().endsWith(".apk")||uri.getUserInfo()!=null||uri.getQuery()!=null||uri.getFragment()!=null)throw new Exception("url");
         return manifest;

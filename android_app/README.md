@@ -1,3 +1,18 @@
+## 현재 배포 빌드 · 0.4.25 / versionCode 31
+
+이전 공개 버전의 패키지·서명·저장 형식을 유지하는 **디버깅 비활성화 release 빌드**입니다. 기존 앱을 삭제하지 않고 업데이트 설치합니다. 아래 과거 버전 설명의 debug APK 빌드 명령은 현재 배포에 사용하지 않습니다.
+
+```sh
+./gradlew :app:testDebugUnitTest :app:assembleRelease :app:lintRelease
+bash verify-release.sh app/build/outputs/apk/release/app-release.apk 31 0.4.25
+```
+
+서명은 기존 `~/.android/debug.keystore`를 사용합니다. 다른 위치는 `SWIM_SIGNING_STORE`, 비밀번호·별칭은 `SWIM_SIGNING_STORE_PASSWORD`, `SWIM_SIGNING_KEY_PASSWORD`, `SWIM_SIGNING_ALIAS`로 지정합니다. 원래 인증서가 아니거나 키가 없으면 release 서명을 거부합니다. 키 파일은 저장소에 넣지 마세요. 현재 인증서는 기존 Android Debug 인증서이므로, release 빌드라고 해서 Google Play 배포용 인증서로 바뀌거나 Play Protect 승인이 보장되는 것은 아닙니다. 호환성을 위해 키를 새로 만들지 않습니다.
+
+업데이트는 HTTPS·대상 저장소 주소·필수 SHA-256·패키지·상위 버전·기존 서명·디버그/테스트 플래그를 검증한 뒤, 사용자가 Android 설치 확인 화면에서 승인합니다. Play Protect 검사 비활성화나 설치 경고 우회를 요구하지 않습니다.
+
+점검 범위와 한계는 [0.4.25 검증 보고서](TEST_RESULTS_0.4.25.md)를 참고하세요. 이하 내용은 과거 버전 이력입니다.
+
 ## 0.4.11 · 실행 상태와 예약 내역 알림 수정
 
 다인·다중 예약 대상이 0개일 때 0/0을 성공으로 처리하던 판정을 차단했습니다. 예약 대기·실행·제출·예약 신청 완료·일부 완료·객실 없음·실패·결과 확인 필요·중지를 구분합니다. 완료는 예약 영수증 검증 결과이며 결제 완료를 뜻하지 않습니다. 입금 대기는 영수증을 확인한 건에만 ‘신청 당시’ 상태로 표시하고 현재 상태는 내역 조회로 확인합니다. 기존 잘못된 0/0 성공 기록은 결과 확인 필요로 보정하며 자동 재예약하지 않습니다.

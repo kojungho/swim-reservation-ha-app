@@ -11,7 +11,7 @@ public final class ProfileSaveTestRunner extends EngineTestRunner {
         app=getTargetContext();store=new LocalStore(app);AppUpdates.MetadataSource original=AppUpdates.source;
         try{
             PhoneReads.testMode=true;store.state("IDLE","예약자 저장 검증",false);
-            AppUpdates.source=()->new JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
+            AppUpdates.source=()->new JSONObject().put("packageId","kr.swim.phone").put("versionCode",BuildConfig.VERSION_CODE).put("versionName",BuildConfig.VERSION_NAME).put("sha256","0".repeat(64)).put("apkUrl","https://github.com/kojungho/swim-reservation-ha-app/releases/download/phone-test/mock.apk");
             PhoneRepository repository=new PhoneRepository(app);int before=repository.load().getJSONArray("profiles").length();
             activity=startActivitySync(new Intent(app,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));uiReady();
             js("switchTab('priority');$('reserverName').value='저장검증단독';$('depositorName').value='';$('phone').value='01000000001';$('saveProfilesButton').click()");

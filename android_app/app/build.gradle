@@ -6,15 +6,44 @@ android {
         applicationId 'kr.swim.phone'
         minSdk 26
         targetSdk 36
-        versionCode 30
-        versionName '0.4.24'
+        versionCode 31
+        versionName '0.4.25'
         buildConfigField 'String', 'DEFAULT_HA_URL', '"' + (project.findProperty('phoneHaUrl') ?: 'https://ha.badara.co.kr').replace('"','') + '"'
         testInstrumentationRunner project.findProperty('phoneTestRunner') ?: 'kr.swim.phone.EngineTestRunner'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17; coreLibraryDesugaringEnabled true }
     testOptions { unitTests.includeAndroidResources = true }
     buildFeatures { buildConfig true }
-    buildTypes { release { minifyEnabled false } }
+    // Deployed versions use this certificate. Never generate a replacement for release.
+    signingConfigs {
+        legacyUpdate {
+            storeFile file(System.getenv('SWIM_SIGNING_STORE') ?: "${System.getProperty('user.home')}/.android/debug.keystore")
+            storePassword System.getenv('SWIM_SIGNING_STORE_PASSWORD') ?: 'android'
+            keyAlias System.getenv('SWIM_SIGNING_ALIAS') ?: 'AndroidDebugKey'
+            keyPassword System.getenv('SWIM_SIGNING_KEY_PASSWORD') ?: 'android'
+        }
+    }
+    testBuildType project.findProperty('phoneTestBuildType') ?: 'debug'
+    buildTypes {
+        release {
+            minifyEnabled false
+            debuggable false
+            jniDebuggable false
+            signingConfig signingConfigs.legacyUpdate
+        }
+    }
+}
+tasks.configureEach {
+    if (name == 'validateSigningRelease') doFirst {
+        if (!android.signingConfigs.legacyUpdate.storeFile.isFile())
+            throw new GradleException('Original signing key missing; release refused. Do not generate a replacement.')
+        def signing = android.signingConfigs.legacyUpdate
+        def store = java.security.KeyStore.getInstance(signing.storeFile, signing.storePassword.toCharArray())
+        def certificate = store.getCertificate(signing.keyAlias)
+        def fingerprint = certificate == null ? '' : java.security.MessageDigest.getInstance('SHA-256').digest(certificate.encoded).encodeHex().toString()
+        if (fingerprint != '027555e7a8662d3029c1c29112723855d40c490e17ea4410985d783ea78a3d19')
+            throw new GradleException('Original certificate mismatch; release refused.')
+    }
 }
 dependencies {
     implementation 'androidx.webkit:webkit:1.14.0'
