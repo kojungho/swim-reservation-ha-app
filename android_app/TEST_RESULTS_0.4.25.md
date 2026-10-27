@@ -10,6 +10,7 @@
 - 새 APK 패키지 `kr.swim.phone`, 버전 0.4.25 / 31, 원래 서명 인증서 `027555e7a8662d3029c1c29112723855d40c490e17ea4410985d783ea78a3d19`, 단일 서명자, APK Signature Scheme v2 검증 성공.
 - 기존 인증서 이름은 Android Debug입니다. 기존 앱의 업데이트 호환성 때문에 유지하며, Google Play용 키로 바뀐 것은 아닙니다. 기존 앱 삭제나 새 키로 교체하지 마세요.
 - 검증 APK: `swim-phone-0.4.25.apk`, 2,358,900 bytes, SHA-256 `6806b6b5ad88c9a508c5100c387fd9732dd245892101c82b3996bce2cdbe71fb`.
+- 공개 [phone-v0.4.25 릴리스](https://github.com/kojungho/swim-reservation-ha-app/releases/tag/phone-v0.4.25)에 게시한 파일을 재다운로드하여 동일 해시·인증서·non-debug/non-test를 검증했습니다. `update.json`은 같은 파일의 버전·주소·해시를 등록하고 기존 최소 지원 버전 5를 유지합니다.
 
 ## 코드 및 권한 점검
 
