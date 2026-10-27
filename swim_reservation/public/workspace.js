@@ -360,7 +360,7 @@ async function refreshPlans() {
               planMessage(action === "edit" ? `${entry.name}: 입력 내용을 변경하고 수정 저장을 누르세요. 기존 일정만 갱신되며 자동 시작하지 않습니다.` : "새 일정 등록용으로 설정을 불러왔습니다.");
               elements.startDate.closest("section").scrollIntoView({ behavior: "smooth", block: "start" });
             } else {
-              if (action === "start" && !window.confirm(`${entry.name}\n${entry.config.startDate}부터 ${entry.config.nights}박 · ${entry.kind === "watch" ? "체크한 객실 중 조건에 맞는 하나 예약" : modes[entry.config.bookingMode]}\n${planRunNotice(entry)}\n\n환불 규정 동의와 최종 예약 제출까지 자동 진행합니다. 다른 일정과 중복되는지 확인하셨나요?`)) return;
+              if (action === "start" && !await confirmBooking(entry)) return;
               if (action === "delete" && !window.confirm("이 일정을 목록에서 삭제할까요? 실제 예약은 취소되지 않습니다.")) return;
               const result = await request(`plans/${entry.id}${action === "delete" ? "" : `/${action}`}`, { method: action === "delete" ? "DELETE" : "POST", ...(action === "start" ? { body: JSON.stringify({ expectedRevision: entry.revision }) } : {}) });
               if (action === "delete") document.getElementById("planDetailsDialog").close();
@@ -410,7 +410,7 @@ function planStateLabel(entry) {
 async function executionPlanAction(entry, action) {
   if (planDetailPending || planBatchPending || busy) return;
   if (action === "start" && !planCanStart(entry) || action === "stop" && !planIsActive(entry) || action === "delete" && planIsActive(entry)) return;
-  if (action === "start" && !window.confirm(`${entry.name}\n${entry.config.startDate}부터 ${entry.config.nights}박\n\n${planRunNotice(entry)}\n\n이 일정을 시작할까요?`)) return;
+  if (action === "start" && !await confirmBooking(entry)) return;
   if (action === "delete" && !window.confirm("이 일정을 목록에서 삭제할까요? 실제 예약은 취소되지 않습니다.")) return;
   planDetailPending = true; renderExecutionPlans();
   try {
@@ -503,8 +503,7 @@ async function batchPlanAction(action, all) {
       const capacity = Math.max(0, 5 - planEntries.filter(planIsActive).length);
       limited = Math.max(0, targets.length - capacity); targets = targets.slice(0, capacity);
       if (!targets.length) return;
-      const names = targets.map(entry => `${entry.name} · ${entry.config.startDate} / ${entry.config.nights}박\n${planRunNotice(entry)}`).join("\n\n");
-      if (!window.confirm(`${names}\n\n위 ${targets.length}개 일정을 시작할까요? 예약 시각 또는 감시 조건이 맞으면 환불 규정 동의와 최종 예약까지 자동 진행합니다.${limited ? `\n동시 진행은 최대 5개여서 나머지 ${limited}개는 시작하지 않습니다.` : ""}`)) return;
+      for(const entry of targets)if(!await confirmBooking(entry))return;
     }
     let succeeded = 0; const failures = [];
     let legacyStop = Promise.resolve();

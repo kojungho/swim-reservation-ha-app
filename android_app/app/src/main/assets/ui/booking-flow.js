@@ -3,6 +3,35 @@ window.validPersonName=function(value){
  if(typeof value!=='string')return false;const name=value.trim().normalize('NFC');
  return /^[가-힣]{2,50}$/u.test(name);
 };
+window.bookingProfileSaveError=function(profile={}){
+ const name=String(profile.reserverName??profile.name??'').trim(),phone=String(profile.phone||'').replace(/\D/g,'');
+ const errors=[];
+ if(!name)errors.push('예약자명과 휴대폰 번호는 예약 확인에 사용하는 필수 정보입니다. 예약자명을 한글 2~50글자로 입력하세요.');
+ else if(!validPersonName(name))errors.push('예약자명은 공백 없이 완성된 한글 2~50글자만 사용할 수 있습니다. 영문·외국어·숫자·기호·자음·모음만 입력한 이름은 저장할 수 없습니다.');
+ if(!/^01\d{8,9}$/.test(phone))errors.push('휴대폰 번호를 01로 시작하는 10~11자리 숫자로 입력하세요.');
+ if(String(profile.depositorName??profile.payer??'').trim().length>50)errors.push('입금자명은 50글자 이내로 입력하세요.');
+ return errors.length?'저장하지 못했습니다. '+errors.join(' ')+' 입금자명은 비워도 됩니다.':'';
+};
+window.bookingConfirmationText=function(config,quote={}){
+ const names=profile=>(profile.roomPriority||[]).filter(r=>r.enabled).map(r=>r.name);
+ const groups=config.bookingMode==='profiles-parallel'?(config.profiles||[]).map(names):[names(config)];
+ const money=name=>quote.quotes?.find(q=>q.name===name)?.total;
+ const format=amount=>Number.isSafeInteger(amount)&&amount>0?amount.toLocaleString('ko-KR')+'원':'공식 금액 미확인';
+ const lines=groups.flatMap((group,i)=>group.map(name=>(groups.length>1?'예약자 '+(i+1)+' · ':'')+name.split('_')[0]+' / '+format(money(name))));
+ const selected=config.bookingMode==='multiple'?groups.flat():groups.every(g=>g.length===1)?groups.flat():[];
+ const total=selected.length&&selected.every(name=>money(name)>0)?format(selected.reduce((sum,name)=>sum+money(name),0)):groups.some(g=>g.length>1)?'우선순위 중 실제 예약되는 사이트의 금액':'공식 금액 미확인';
+ return '입실일 '+config.startDate+' / 퇴실일 '+stayEndDate(config.startDate,config.nights)+' / '+config.nights+'박\n\n'+(lines.join('\n')||'사이트 선택 필요')+'\n총 숙박비: '+total+'\n\n입금 계좌: 농협 317-0028-3427-31\n예금주: (주)쉼오지캠프\n\n예약 후 24시간 이내 입금하지 않을 시 자동으로 예약이 취소됩니다.';
+};
+let bookingConfirmPending=false;
+window.confirmBooking=async function(entry){
+ if(bookingConfirmPending)return false;bookingConfirmPending=true;
+ try{
+ const config=entry.config,groups=config.bookingMode==='profiles-parallel'?config.profiles||[]:[config];
+ const roomNames=[...new Set(groups.flatMap(p=>(p.roomPriority||[]).filter(r=>r.enabled).map(r=>r.name)))];
+ let quote={};try{quote=await request('booking-quote',{method:'POST',body:JSON.stringify({startDate:config.startDate,nights:Number(config.nights),adults:config.adults,roomNames})});}catch{/* Unverified prices are never guessed. */}
+ return window.confirm(bookingConfirmationText(config,quote));
+ }finally{bookingConfirmPending=false;}
+};
 window.buildDisplayReceipt=function(value){
  const el=(tag,text)=>{const item=document.createElement(tag);if(text!==undefined)item.textContent=text;return item;};
  const card=el('div');card.className='reservation-row reservation-compact';
@@ -33,7 +62,7 @@ window.buildDisplayReceipt=function(value){
   if(cached?.settings){uiSettings={...defaults,...cached.settings,fonts:{...defaults.fonts,...cached.settings.fonts}};applyUi();window.applyBookingMenus(uiSettings,'app');}
   const image=byId('siteMapImage');image.src=cached?.hasPhoto?'ha-map.png?v='+cached.updatedAt:'site-map.png';
   const status=byId('haConnectionState');if(status)status.textContent=state?.message||(cached?'마지막 동기화 설정 사용':'공개 설정 확인 대기');
-  byId('siteMapMessage').textContent=cached?'애드온의 메인 사진':'공개 설정이 연결되면 메인 사진이 자동으로 표시됩니다.';
+  byId('siteMapMessage').textContent='';
   window.refreshPhoneMaps=()=>{};setHidden(byId('mapGallery'),true);setHidden(document.querySelector('.gallery-heading'),true);
   for(const id of ['galleryDeleteSelected','galleryDeleteAll','siteMapUploadButton'])setHidden(byId(id),true);
  };
@@ -168,6 +197,15 @@ window.buildDisplayReceipt=function(value){
   const trigger=byId('triggerAt')?.closest('label');if(trigger){bodies[1].body.append(trigger);const caption=[...trigger.childNodes].find(n=>n.nodeType===3);if(caption)caption.textContent='예약 실행 시간(오픈 예정일)';byId('triggerAt').readOnly=true;byId('triggerAt').setAttribute('aria-readonly','true');byId('triggerAt').tabIndex=-1;}
   const safety=byId('safetyNotice');if(safety){const detail=document.createElement('details'),summary=document.createElement('summary'),text=document.createElement('p');summary.textContent='실행 안전 안내';text.textContent=phone?'전원·네트워크·절전 제한으로 실행이 중단될 수 있습니다.':'서버 전원·네트워크와 시간을 확인하세요.';detail.append(summary,text);safety.replaceChildren(detail);}
   markLabels();initializeRequiredValidation();
+  document.addEventListener('click',event=>{
+   const button=event.target.closest('button');if(!button||!(/^(bookAddButton|saveProfilesButton|saveBookingActor\d+)$/.test(button.id)||button.dataset.profileSave!==undefined))return;
+   let profile;
+   if(button.id==='bookAddButton')profile={name:byId('bookReserverName').value,phone:byId('bookPhone').value,payer:byId('bookDepositorName').value};
+   else if(button.dataset.profileSave!==undefined){const fields=button.closest('.phone-person-card');profile={name:fields.querySelector('[name=name]').value,phone:fields.querySelector('[name=phone]').value,payer:fields.querySelector('[name=payer]').value};}
+   else if(phone)profile=profileFromEditor();
+   else profile=readConfig().profiles[button.id==='saveProfilesButton'?0:Number(button.id.replace('saveBookingActor',''))-1];
+   const error=bookingProfileSaveError(profile);if(error){validationEpoch++;event.preventDefault();event.stopImmediatePropagation();notify(error);}
+  },true);
   byId('historyCard').querySelector('h2').textContent='예약 대기 일정 등록 및 예약 이력';
   const nameLabel=byId('planName').closest('label');for(const child of nameLabel.childNodes)if(child.nodeType===3)child.textContent='예약 대기 일정 명칭';
  }
@@ -185,6 +223,10 @@ window.buildDisplayReceipt=function(value){
   bodies.forEach((item,i)=>{item.toggle.disabled=!ready[i];const disabled=String(!ready[i]);if(item.toggle.getAttribute('aria-disabled')!==disabled)item.toggle.setAttribute('aria-disabled',disabled);if(!ready[i])setHidden(item.body,true);else if(!item.ready)setHidden(item.body,false);item.ready=ready[i];const expanded=String(!item.body.hidden);if(item.toggle.getAttribute('aria-expanded')!==expanded)item.toggle.setAttribute('aria-expanded',expanded);});
   const trigger=byId('triggerAt')?.closest('label');setHidden(trigger,!validDate||workspaceTab==='watch'||!beforeOpening());
   const planned=validDate&&beforeOpening(),name=byId('planName');setHidden(name.closest('label'),!planned);
+  const immediate=validDate&&!planned&&workspaceTab!=='watch';
+  setHidden(byId('planCard')?.querySelector('.plan-registration'),immediate);
+  byId('planCard')?.querySelectorAll(':scope>p').forEach(el=>setHidden(el,immediate));
+  const reserveButton=phone?document.querySelector('[data-phone-run]'):byId('runNowButton');if(reserveButton&&reserveButton.textContent!=='예약 하기')reserveButton.textContent='예약 하기';
   if(autoNamed&&name.value!==generatedName){autoNamed=false;pendingName=name.value;}
   if(planned){if(autoNamed){name.value=pendingName;autoNamed=false;}}
   else if(validDate&&workspaceTab!=='watch'){

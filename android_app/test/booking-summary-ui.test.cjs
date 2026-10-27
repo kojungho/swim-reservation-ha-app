@@ -1,0 +1,20 @@
+const test=require('node:test'),assert=require('node:assert/strict'),{chromium}=require('playwright-core'),{setup}=require('./fixtures/phone-ui.cjs');
+const executablePath='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+test('앱·애드온: 빈 예약자 저장 안내·바로 예약 등록 숨김·배치도 중첩 팝업·예약 요약',async t=>{
+ const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());const {mockBookApp}=await import('../../swim_reservation/test/fixtures/ui-book-app.js');
+ for(const phone of [true,false]){
+  let page,errors;if(phone)({page,errors}=await setup(browser));else{page=await browser.newPage({viewport:{width:390,height:900}});({errors}=await mockBookApp(page));}t.after(()=>page.close());await page.waitForFunction(()=>typeof bookingProfileSaveError==='function');await page.waitForTimeout(150);
+  await page.evaluate(()=>{document.getElementById('reserverName').value='';document.getElementById('phone').value='';});
+  const save=page.locator('#saveProfilesButton');assert.equal(await save.isEnabled(),true);await save.click();
+  await page.waitForFunction(()=>document.getElementById('floatingMessage').textContent.includes('저장하지 못했습니다.'));let text=await page.locator('#floatingMessage').textContent();assert.match(text,/한글 2~50글자/);assert.match(text,/10~11자리/);assert.match(text,/입금자명은 비워도/);
+  await page.evaluate(phone=>phone?switchTab('book'):switchWorkspaceTab('book'),phone);await page.locator('#bookNewButton').click();assert.equal(await page.locator('#bookAddButton').isEnabled(),true);await page.locator('#bookAddButton').click();assert.match(await page.locator('#floatingMessage').textContent(),/저장하지 못했습니다/);assert.equal(await page.locator('#bookEditor').isVisible(),true);
+  await page.evaluate(phone=>{if(phone)loadPlan({mode:'reserve',date:'2026-12-22',name:'모의예약자',phone:'01000000000',rooms:'달_하늘존'});else{switchWorkspaceTab('priority');elements.reserverName.value='모의예약자';elements.phone.value='01000000000';elements.startDate.value='2026-12-22';elements.nights.value='1';updateStayFields();renderRooms();}},phone);await page.waitForTimeout(250);
+  assert.equal(await page.locator('#planCard .plan-registration').isVisible(),false);assert.equal(await page.locator(phone?'[data-phone-run]':'#runNowButton').textContent(),'예약 하기');
+  await page.evaluate(phone=>{if(phone)loadPlan({mode:'reserve',date:'2027-01-22',name:'모의예약자',phone:'01000000000',rooms:'달_하늘존'});else{elements.startDate.value='2027-01-22';updateStayFields();renderRooms();}window.prepareSiteChoice=async()=>true;},phone);await page.waitForTimeout(250);assert.equal(await page.locator('#planCard .plan-registration').isVisible(),true);
+  await page.locator('#roomList .site-choice-tools button').click();await page.locator('.site-choice-dialog').waitFor();await page.locator('.site-choice-dialog').getByRole('button',{name:'배치도',exact:true}).click();assert.equal(await page.locator('#siteMapDialog').isVisible(),true);await page.locator('#siteMapCloseButton').click();assert.equal(await page.locator('.site-choice-dialog').isVisible(),true);await page.locator('.site-choice-dialog').getByRole('button',{name:'취소',exact:true}).click();
+  if(phone)assert.doesNotMatch(await page.locator('#siteMapMessage').textContent(),/애드온/);
+  await page.screenshot({path:phone?'/tmp/swim-phone-0423-booking.png':'/tmp/swim-addon-21528-booking.png',fullPage:true});
+  const summary=await page.evaluate(()=>bookingConfirmationText({startDate:'2026-12-31',nights:2,bookingMode:'priority',roomPriority:[{name:'산_하늘존',enabled:true}]},{quotes:[{name:'산_하늘존',total:130000}]}));assert.match(summary,/퇴실일 2027-01-02/);assert.match(summary,/총 숙박비: 130,000원/);assert.match(summary,/농협 317-0028-3427-31/);assert.match(summary,/예금주: \(주\)쉼오지캠프/);assert.ok(summary.endsWith('예약 후 24시간 이내 입금하지 않을 시 자동으로 예약이 취소됩니다.'));assert.doesNotMatch(summary,/실행 예정|배터리|최종 제출 시각/);
+  assert.deepEqual(errors,[]);if(phone)assert.equal(await page.evaluate(()=>nativeMock.calls.some(c=>['profilePut','run','planPut'].includes(c.action))),false);await page.close();
+ }
+});

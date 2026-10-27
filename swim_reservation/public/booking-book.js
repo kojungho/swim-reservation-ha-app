@@ -33,7 +33,7 @@ function initializeBookingBook() {
     if (editingBookIdentity) {
       const index = matchingBookIndex(editingBookIdentity);
       if (index < 0) throw new Error("수정할 예약자가 변경되었습니다. 목록에서 다시 선택하세요.");
-      if (!completeBookingIdentity(profile)) throw new Error("예약자 정보를 모두 확인하세요.");
+      if (!completeBookingIdentity(profile)) throw new Error(bookingProfileSaveError(profile));
       const duplicate = matchingBookIndex(profile);
       if (duplicate >= 0 && duplicate !== index) throw new Error("이미 저장된 예약자입니다.");
       await writeBookingBook(bookingBook.map((saved, item) => item === index ? { ...saved, ...bookingIdentity(profile) } : saved));
@@ -62,7 +62,7 @@ function updateBookEditor() {
   document.getElementById("bookNewButton").disabled = locked || !bookingBookLoaded || bookingBook.length >= 20;
   for (const button of document.querySelectorAll("#bookingBookList button")) button.disabled = locked;
   const draft = Object.fromEntries(bookingIdentityKeys.map((key, index) => [key, document.getElementById(["bookReserverName", "bookDepositorName", "bookPhone", "bookBirthDate"][index]).value]));
-  document.getElementById("bookAddButton").disabled = busy || bookingBookWriting || !bookingBookLoaded || !completeBookingIdentity(draft) || !editingBookIdentity && bookingBook.length >= 20;
+  document.getElementById("bookAddButton").disabled = busy || bookingBookWriting || !bookingBookLoaded || !editingBookIdentity && bookingBook.length >= 20;
   document.getElementById("bookAddButton").textContent = editingBookIdentity ? "수정 저장" : "예약자 저장";
 }
 async function writeBookingBook(next) {
@@ -77,7 +77,7 @@ async function writeBookingBook(next) {
   } finally { bookingBookWriting = false; renderBookingProfileSelectors(); refreshLookupSiteSelector(); updateBookEditor(); }
 }
 async function appendBookingIdentity(profile) {
-  if (!completeBookingIdentity(profile)) throw new Error("예약자명·입금자명·휴대폰 번호·생년월일을 모두 확인하세요.");
+  if (!completeBookingIdentity(profile)) throw new Error(bookingProfileSaveError(profile));
   if (matchingBookIndex(profile) >= 0) throw new Error("이미 저장된 예약자입니다. 선택 목록에서 선택하세요.");
   if (bookingBook.length >= 20) throw new Error("예약자는 최대 20명입니다. 예약자 정보 탭에서 사용하지 않는 사람을 삭제하세요.");
   await writeBookingBook([...bookingBook, bookingIdentity(profile)]);
@@ -121,7 +121,7 @@ function renderBookingProfileSelectors() {
     select.replaceChildren(empty, ...bookingBook.map((saved, bookIndex) => new Option(`${saved.reserverName} · ${saved.phone}`, String(bookIndex))));
     select.value = selected >= 0 ? String(selected) : "";
     const save = index === 0 ? elements.saveProfilesButton : document.getElementById(`saveBookingActor${index + 1}`);
-    save.disabled = busy || bookingBookWriting || !bookingBookLoaded || selected >= 0 || !completeBookingIdentity(profile) || bookingBook.length >= 20;
+    save.disabled = busy || bookingBookWriting || !bookingBookLoaded || selected >= 0 || bookingBook.length >= 20;
   });
 }
 function renderBookingBook() {

@@ -124,10 +124,13 @@ public final class MainActivity extends Activity {
     private void confirmRun(Plan plan,String id){
         if(isFinishing()||isDestroyed()){confirmationPending=false;pendingPlanId="";return;}
         if(!executionPermissions(plan)){confirmationPending=false;pendingPlanId="";refreshRuntime();return;}
-        new AlertDialog.Builder(this).setTitle("폰에서 실제 예약 실행")
-            .setMessage(RunNotice.message(plan,SiteClock.now(this)))
-            .setNegativeButton("취소",null).setPositiveButton("시작",(d,w)->startPlan(plan,false,id))
-            .setOnDismissListener(d->{confirmationPending=false;pendingPlanId="";refreshRuntime();}).show();
+        new Thread(()->{java.util.Map<String,Long> quotes=BookingQuote.load(plan,SiteClock.now(this));main.post(()->{
+            if(isFinishing()||isDestroyed()){confirmationPending=false;pendingPlanId="";return;}
+            new AlertDialog.Builder(this).setTitle("예약 확인")
+                .setMessage(RunNotice.message(plan,SiteClock.now(this),quotes))
+                .setNegativeButton("취소",null).setPositiveButton("시작",(d,w)->startPlan(plan,false,id))
+                .setOnDismissListener(d->{confirmationPending=false;pendingPlanId="";refreshRuntime();}).show();
+        });},"booking-quote").start();
         refreshRuntime();
     }
     private void startPlan(Plan plan,boolean lookup){startPlan(plan,lookup,"");}

@@ -149,7 +149,7 @@
         <button id="startSelectedPlans" class="secondary" type="button" disabled>선택 시작</button>
         <button id="stopSelectedPlans" class="secondary" type="button" disabled>선택 중지</button>
         <button id="deleteSelectedPlans" class="danger" type="button" disabled>선택 삭제</button>
-        <button id="runNowButton" class="now" hidden>지금 바로 예약</button>
+        <button id="runNowButton" class="now" hidden>예약 하기</button>
       </div>
       <div id="executionPlanList" class="execution-plan-list"></div>
       <p id="executionBatchMessage" role="status"></p>
@@ -196,13 +196,13 @@
     <details data-booking-help="priority">
       <summary>단독 예약</summary>
       <p>선택한 예약자 한 명으로 우선순위 중 객실 하나를 예약합니다.</p>
-      <ol><li>날짜·박수·실행 시각과 예약자 한 명의 정보를 선택하거나 입력합니다.</li><li>객실을 체크하고 두 줄 손잡이를 끌어 원하는 순서로 정합니다.</li><li>미래 시각 예약은 아래 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘지금 바로 예약’을 사용할 수 있습니다.</li></ol>
+      <ol><li>날짜·박수·실행 시각과 예약자 한 명의 정보를 선택하거나 입력합니다.</li><li>객실을 체크하고 두 줄 손잡이를 끌어 원하는 순서로 정합니다.</li><li>미래 시각 예약은 아래 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘예약 하기’을 사용할 수 있습니다.</li></ol>
       <p class="booking-help-warning">객실이 확실히 마감된 경우에만 다음 순위를 시도합니다. 제출 결과가 불확실하면 중복 방지를 위해 중단합니다.</p>
     </details>
     <details data-booking-help="multiple">
       <summary>다중 예약</summary>
       <p>선택한 예약자 한 명으로 체크한 객실을 모두 예약하는 방식입니다. 순위별 대체 예약이 아닙니다.</p>
-      <ol><li>날짜·박수·실행 시각과 예약자 한 명의 정보를 입력합니다.</li><li>동시에 예약할 객실을 최대 5개까지 체크합니다. 객실 우선순위는 없습니다.</li><li>미래 시각 예약은 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘지금 바로 예약’을 사용할 수 있습니다.</li></ol>
+      <ol><li>날짜·박수·실행 시각과 예약자 한 명의 정보를 입력합니다.</li><li>동시에 예약할 객실을 최대 5개까지 체크합니다. 객실 우선순위는 없습니다.</li><li>미래 시각 예약은 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘예약 하기’을 사용할 수 있습니다.</li></ol>
       <p class="booking-help-warning">체크한 객실 수만큼 실제 예약이 생성될 수 있습니다. 일부 객실만 성공할 수 있으니 완료 후 예약확인에서 결과를 확인하세요.</p>
     </details>
     <details data-booking-help="watch">
@@ -214,10 +214,10 @@
     <details data-booking-help="profiles-parallel">
       <summary>다인 예약</summary>
       <p>객실 수만큼 예약자를 동시에 진행하고, 각 사람의 우선순위에 따라 객실 하나씩 예약합니다.</p>
-      <ol><li>저장된 예약자를 선택하거나 직접 입력하고 필요한 사람만 추가합니다. 신규 예약자는 ‘예약자 저장’으로 목록에 추가할 수 있습니다.</li><li>각 예약자의 객실 우선순위에서 후보를 체크하고 두 줄 손잡이로 순서를 정합니다. 개인별 순위는 이 모드에서만 사용합니다.</li><li>날짜·박수·실행 시각을 확인하고 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘지금 바로 예약’을 사용할 수 있습니다.</li></ol>
+      <ol><li>저장된 예약자를 선택하거나 직접 입력하고 필요한 사람만 추가합니다. 신규 예약자는 ‘예약자 저장’으로 목록에 추가할 수 있습니다.</li><li>각 예약자의 객실 우선순위에서 후보를 체크하고 두 줄 손잡이로 순서를 정합니다. 개인별 순위는 이 모드에서만 사용합니다.</li><li>날짜·박수·실행 시각을 확인하고 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘예약 하기’을 사용할 수 있습니다.</li></ol>
       <p class="booking-help-warning">같은 객실을 여러 사람의 1순위로 선택하면 서로 경쟁할 수 있습니다. 확실한 마감만 다음 순위로 넘어가며, 결과가 불확실하면 그 사람의 추가 제출을 중단합니다.</p>
     </details>
-    <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>미래 시각 예약과 취소 대기는 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 새 사이트는 사전 입력 없이 지정 시각에 예약 화면을 열어 입력·필수 약관 동의·최종 제출합니다. 제출 결과가 불확실하면 재제출하지 않습니다. ‘지금 바로 예약’은 실행 시각이 미래이거나 서버 시간이 미확인인 경우 표시하지 않으며 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약자 정보’ 탭은 실제 예약에 사용할 사람들을 관리합니다. 각 모드에 선택 목록은 자동 표시되지만 사람을 선택하기 전에는 입력란을 채우지 않습니다. 입력은 모드별로 유지하며, 연결된 예약이 완료되면 해당 초안만 초기화합니다. 직접 지울 때는 플로팅 초기화 버튼을 사용하세요. ‘예약 조회’는 저장한 모든 예약자의 내역을 조회합니다. 저장하지 않는 ‘1회성 조회’는 이름과 휴대폰 번호만 입력해 별도로 확인합니다. 등록된 일정의 설정은 이후 편집과 관계없이 유지됩니다.</p></div>
+    <div class="booking-help-common"><strong>예약 대기와 즉시 예약</strong><p>미래 시각 예약과 취소 대기는 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 새 사이트는 사전 입력 없이 지정 시각에 예약 화면을 열어 입력·필수 약관 동의·최종 제출합니다. 제출 결과가 불확실하면 재제출하지 않습니다. ‘예약 하기’은 실행 시각이 미래이거나 서버 시간이 미확인인 경우 표시하지 않으며 오픈 전에는 실행할 수 없습니다. 네트워크 지연 때문에 서버 도착·완료 시각까지 같지는 않습니다.</p><p>‘예약자 정보’ 탭은 실제 예약에 사용할 사람들을 관리합니다. 각 모드에 선택 목록은 자동 표시되지만 사람을 선택하기 전에는 입력란을 채우지 않습니다. 입력은 모드별로 유지하며, 연결된 예약이 완료되면 해당 초안만 초기화합니다. 직접 지울 때는 플로팅 초기화 버튼을 사용하세요. ‘예약 조회’는 저장한 모든 예약자의 내역을 조회합니다. 저장하지 않는 ‘1회성 조회’는 이름과 휴대폰 번호만 입력해 별도로 확인합니다. 등록된 일정의 설정은 이후 편집과 관계없이 유지됩니다.</p></div>
   </dialog>
   <dialog id="monthlyDialog" class="monthly-dialog" aria-label="월별 예약 현황">
     <div class="monthly-controls"><button id="monthlyPrevButton" class="secondary" type="button" aria-label="이전 달">‹</button><label><input id="monthlyMonth" aria-label="조회 월" type="month" min="2000-01" max="2100-12"></label><button id="monthlyNextButton" class="secondary" type="button" aria-label="다음 달">›</button><div class="monthly-query-control"><button id="monthlyQueryButton" class="secondary" type="button">조회</button><span id="monthlyQuerySpinner" class="query-spinner" role="status" aria-label="월별 예약 조회 중" hidden></span></div></div>

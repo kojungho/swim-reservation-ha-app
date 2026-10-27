@@ -1,4 +1,5 @@
 import {serveStatic} from "./static-files.js";
+import {bookingQuote} from './booking-quote.js';
 import http from "node:http";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -337,6 +338,10 @@ const server = http.createServer(async (request, response) => {
         const result = await inspections.inspect({ month, nowMs: timeSync.now(), knownRooms: config.roomPriority.map(room => room.name) }, controller.signal);
         return json(response, 200, result);
       } finally { response.off("close", cancel); }
+    }
+    if (url.pathname === '/api/booking-quote' && request.method === 'POST') {
+      if(scheduler.running||scheduler.preparing)return json(response,409,{error:'예약 실행 중에는 금액을 조회하지 않습니다.'});
+      return json(response,200,await bookingQuote(await readJsonBody(request),{now:timeSync.now()}));
     }
     if (url.pathname === "/api/inspect" && request.method === "POST") {
       if (scheduler.running || scheduler.preparing) return json(response, 409, { ok: false, code: "INSPECTION_BUSY", error: "예약 실행 또는 사전 준비 중에는 객실 확인을 사용할 수 없습니다." });
