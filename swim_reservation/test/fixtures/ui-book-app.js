@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import {renderClientScript} from '../../src/static-files.js';
 import { defaultConfig, normalizeConfig, normalizeProfile } from "../../src/config.js";
 
 const nameDigit=['','일','이','삼','사','오','육','칠','팔','구'];
@@ -13,7 +14,8 @@ export async function mockBookApp(page, count = 2) {
     const req = route.request(), path = new URL(req.url()).pathname;
     if (!path.startsWith("/api/")) {
       const file = path === "/" ? "index.html" : path.slice(1);
-      return route.fulfill({ contentType: file.endsWith("js") ? "text/javascript" : file.endsWith("css") ? "text/css" : "text/html", body: await readFile(new URL(`../../public/${file}`, import.meta.url)) });
+      const body=await readFile(new URL(`../../public/${file}`, import.meta.url));
+      return route.fulfill({ contentType: file.endsWith("js") ? "text/javascript" : file.endsWith("css") ? "text/css" : "text/html", body: file==='app.js'?renderClientScript(body.toString('utf8')):body });
     }
     if (req.method() !== "GET") state.writes.push(path);
     let result;

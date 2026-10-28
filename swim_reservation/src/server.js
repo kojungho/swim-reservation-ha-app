@@ -1,8 +1,7 @@
-import {serveStatic} from "./static-files.js";
+import {serveStatic,APP_VERSION} from "./static-files.js";
 import {bookingQuote} from './booking-quote.js';
 import http from "node:http";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeConfig, normalizeProfile, validateProfile, triggerEpoch, validateConfig, getProfiles } from "./config.js";
@@ -28,7 +27,6 @@ const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
-const APP_VERSION = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8")).version;
 const cancelEventIds = new Set();
 
 const store = new Store(DATA_DIR);

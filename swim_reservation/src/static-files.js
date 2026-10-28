@@ -2,6 +2,14 @@ import {readFile} from "node:fs/promises";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 const PUBLIC_DIR=fileURLToPath(new URL("../public/",import.meta.url));
+export const APP_VERSION=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8')).version;
+// Stamp the JS bytes being served, never the later status response: an already
+// loaded old client must retain its old version so safety checks still work.
+export function renderClientScript(source){
+  const marker='"__SWIM_CLIENT_VERSION__"';
+  if(source.split(marker).length!==2)throw new Error('Client version marker missing or duplicated');
+  return source.replace(marker,JSON.stringify(APP_VERSION));
+}
 export async function serveStatic(pathname, response) {
   const routes = {
     "/": ["index.html", "text/html; charset=utf-8"],
@@ -23,5 +31,5 @@ export async function serveStatic(pathname, response) {
   if (!route) { response.writeHead(404,{"Content-Type":"application/json; charset=utf-8"});response.end(JSON.stringify({error:"Not found"}));return; }
   const body = await readFile(path.join(PUBLIC_DIR, route[0]));
   response.writeHead(200, { "Content-Type": route[1], "Cache-Control": "no-store" });
-  response.end(body);
+  response.end(pathname==='/app.js'?renderClientScript(body.toString('utf8')):body);
 }
