@@ -9,6 +9,25 @@ MODES = ("priority", "multiple", "profiles-parallel", "watch", "book", "people",
 FONTS = ("title", "heading", "body", "field", "button", "room", "status", "calendar", "list", "log")
 MAX_PHOTO = 12 * 1024 * 1024
 SLUG = re.compile(r"(?:[a-z0-9]+_)?swim_reservation")
+PROBLEM_CODES = set("DIAGNOSTIC_TEST PAYMENT_METHOD_UNRECOGNIZED FORM_FIELDS_UNRECOGNIZED FORM_FIELDS_AMBIGUOUS FORM_VALIDATION_FAILED FORM_DOM_ERROR TERMS_UNRECOGNIZED FORM_MISMATCH FORM_UNRECOGNIZED LIST_UNRECOGNIZED CATALOG_MISMATCH PRE_SUBMIT_MISMATCH PREFLIGHT_SOURCE DOM_ERROR NOT_OPEN NO_ROOM NO_VACANCY PROFILE PLAN CONNECTION RENDERER SCRIPT TIMEOUT INTERRUPTED BACKGROUND_START CHECK_FAILED STOPPED BUSY EXECUTION_FAILED CHECK_REQUIRED HTTP_403 HTTP_429 HTTP_OTHER".split())
+
+
+def project_problem(raw):
+    keys = {"id", "clientId", "version", "versionCode", "category", "state", "code", "stage", "occurredAt"}
+    uuid = r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}"
+    if not isinstance(raw, dict) or set(raw) != keys:
+        raise ValueError("Invalid problem")
+    if any(not isinstance(raw[k], str) or not re.fullmatch(uuid, raw[k]) for k in ("id", "clientId")):
+        raise ValueError("Invalid ID")
+    if not isinstance(raw["version"], str) or not re.fullmatch(r"\d{1,3}\.\d{1,3}\.\d{1,3}", raw["version"]):
+        raise ValueError("Invalid version")
+    if type(raw["versionCode"]) is not int or not 1 <= raw["versionCode"] <= 100000:
+        raise ValueError("Invalid version code")
+    if raw["category"] not in ("preflight", "execution") or raw["state"] not in ("failed", "unavailable", "check_required") or raw["code"] not in PROBLEM_CODES or raw["stage"] not in ("listing", "prepare", "preflight", "execution", "unknown"):
+        raise ValueError("Invalid enum")
+    if type(raw["occurredAt"]) is not int or not 1577836800000 <= raw["occurredAt"] <= 4102444800000:
+        raise ValueError("Invalid time")
+    return dict(raw)
 
 
 def project(raw, image):

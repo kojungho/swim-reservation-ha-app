@@ -23,6 +23,7 @@ import { MonthCache } from "./month-cache.js";
 import { SubmissionSettings } from "./submission-settings.js";
 import { HaNotifications, notificationService } from './ha-notifications.js';
 import { ReservationPreflight } from './reservation-preflight.js';
+import { AppProblems } from './app-problems.js';
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -31,6 +32,7 @@ const PUBLIC_DIR = path.join(ROOT, "public");
 const cancelEventIds = new Set();
 
 const store = new Store(DATA_DIR);
+const appProblems = new AppProblems(store);
 const notifications = new HaNotifications({ service: await notificationService(path.join(DATA_DIR, 'options.json')),
   onError: () => { void store.recordLog('error', 'ha-notification', 'S25 오류 알림 전송에 실패했습니다. HA 알림 서비스와 연결을 확인해 주세요.').catch(() => {}); }
 });
@@ -131,6 +133,11 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, settings);
     }
     if(url.pathname==="/api/phone-display"&&request.method==="GET"){const image=await siteMap.read();return json(response,200,{schema:1,settings:await uiSettings.read(),submitIntervalSeconds:(await submissionSettings.read()).intervalSeconds,photoSha256:createHash("sha256").update(image).digest("hex")});}
+    if(url.pathname==='/api/app-problems'&&request.method==='POST'){
+      try{return json(response,200,await appProblems.accept(await readJsonBody(request,2048)));}
+      catch(error){return json(response,error.statusCode===429?429:400,{ok:false,error:'invalid_or_limited_report'});}
+    }
+    if(url.pathname==='/api/app-problems'&&request.method==='GET')return json(response,200,{entries:(await store.listLogs(1000)).filter(entry=>entry.event==='app-problem')});
     if (url.pathname === "/api/ui-settings" && request.method === "GET") return json(response, 200, await uiSettings.read());
     if (url.pathname === "/api/ui-settings" && request.method === "PUT") {
       try { return json(response, 200, await uiSettings.save(await readJsonBody(request))); }
@@ -230,7 +237,7 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, { ok: true, entries: await store.listLogs(url.searchParams.get("limit")) });
     }
     if (url.pathname === "/api/logs/download" && request.method === "GET") {
-      const entries = await store.listLogs(1000);
+      const entries = (await store.listLogs(1000)).filter(entry=>url.searchParams.get('source')!=='app'||entry.event==='app-problem');
       const body = entries.slice().reverse().map(formatLogEntry).join("\n");
       const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
       response.writeHead(200, {
@@ -424,12 +431,12 @@ function json(response, status, value) {
   response.end(JSON.stringify(value));
 }
 
-async function readJsonBody(request) {
+async function readJsonBody(request, limit = 64 * 1024) {
   const chunks = [];
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 64 * 1024) throw new Error("요청 데이터가 너무 큽니다.");
+    if (size > limit) throw new Error("요청 데이터가 너무 큽니다.");
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");

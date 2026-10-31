@@ -85,7 +85,7 @@ final class ReservationTask {
         if(closing)return;closing=true;running=false;main.removeCallbacksAndMessages(null);AlarmReceiver.cancel(context);
         if(engine!=null){PhoneExecution old=engine;engine=null;old.cancel();}
         releaseCpu();store.watchDueElapsed(0);
-        store.state(stage,message==null?"작업 중지":message,false);context.getSystemService(NotificationManager.class).cancel(10+slot);
+        store.state(stage,message==null?"작업 중지":message,false);if(plan!=null&&!plan.demo()&&!lookup&&(stage.equals("FAILED")||stage.equals("CHECK_REQUIRED")))AppProblems.enqueue(context,"execution",stage.equals("CHECK_REQUIRED")?"check_required":"failed",stage.equals("CHECK_REQUIRED")?"CHECK_REQUIRED":"EXECUTION_FAILED","execution");context.getSystemService(NotificationManager.class).cancel(10+slot);
         context.getSystemService(NotificationManager.class).notify(20+slot,ReservationService.notice(context,store.message(),false,slot));owner.taskDone(slot);
     }
 }

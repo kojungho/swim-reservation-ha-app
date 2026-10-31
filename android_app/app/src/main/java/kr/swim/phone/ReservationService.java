@@ -27,7 +27,7 @@ public final class ReservationService extends Service {
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         String action=intent==null?"RECOVER":intent.getAction();int slot=intent==null?0:intent.getIntExtra("slot",0);
         if("STOP".equals(action)){if(slot<0){for(ReservationTask t:new ArrayList<>(tasks.values()))t.stop();PlanScheduler.stop(this);}else {ReservationTask task=tasks.get(slot);if(task!=null)task.stop();else PlanScheduler.stopSlot(this,slot);}return START_NOT_STICKY;}
-        dispatching=true;foreground();
+        PreflightService.cancelForExecution();dispatching=true;foreground();
         if("RECOVER".equals(action)){for(int n=0;n<=PhoneRuns.LIMIT;n++)if(new LocalStore(this,n).active())startTask(n,false,false);}
         else if(slot>=0&&slot<=PhoneRuns.LIMIT){ReservationTask task=tasks.get(slot);if(task!=null){if("WAKE".equals(action))task.wake();}else startTask(slot,"RUN".equals(action),intent.getBooleanExtra("lookup",false));}
         dispatching=false;if(tasks.isEmpty()){stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY;}foreground();return START_STICKY;

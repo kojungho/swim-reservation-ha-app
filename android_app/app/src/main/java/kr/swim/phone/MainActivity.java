@@ -159,7 +159,7 @@ public final class MainActivity extends Activity {
     private void safeSettings(Runnable action){try{action.run();}catch(Exception e){message("설정 화면을 열지 못했습니다. 시스템 앱 정보에서 직접 확인해 주세요.");}}
     private void open(Uri uri){try{startActivity(new Intent(Intent.ACTION_VIEW,uri));}catch(Exception e){message("브라우저를 열지 못했습니다.");}}
     private void message(String text){if(!isFinishing()&&screen!=null)screen.evaluateJavascript("window.showFloatingMessage?.("+JSONObject.quote(text)+",{error:true})",null);}
-    @Override protected void onResume(){super.onResume();if(store!=null)PhoneRuns.reconcile(this);if(updates!=null)updates.resume();if(displayConnection==null)displayConnection=new DisplayConnection(this,()->HaDisplay.reconnect(this));displayConnection.start();HaDisplay.reconnect(this);refreshRuntime();}
+    @Override protected void onResume(){super.onResume();if(store!=null){PhoneRuns.reconcile(this);try{PhoneRuns.reschedule(this);}catch(Exception ignored){}}if(updates!=null)updates.resume();if(displayConnection==null)displayConnection=new DisplayConnection(this,()->HaDisplay.reconnect(this));displayConnection.start();HaDisplay.reconnect(this);refreshRuntime();}
     @Override protected void onPause(){if(displayConnection!=null)displayConnection.stop();PhoneInspection.cancel();if(updates!=null)updates.pause();super.onPause();}
     Intent mapExportIntent(String id)throws Exception{
         new MapPhotos(this).registeredFile(id);

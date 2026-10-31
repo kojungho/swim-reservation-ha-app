@@ -14,10 +14,10 @@ public class MultiRunTest {
  }
  @Before public void setup(){c=RuntimeEnvironment.getApplication();LocalStore.testKey=new SecretKeySpec(new byte[32],"AES");PhoneSessions.testSupported=true;
   for(int n=0;n<=5;n++)c.getSharedPreferences(n==0?"phone-private":"phone-run-"+n,0).edit().clear().commit();
-  original=ReservationTask.factory;ReservationTask.factory=(context,plan,lookup,events)->{Fake f=new Fake(context,events);engines.put(RunContext.slot(context),f);return f;};
+  AppProblems.testPaused=true;original=ReservationTask.factory;ReservationTask.factory=(context,plan,lookup,events)->{Fake f=new Fake(context,events);engines.put(RunContext.slot(context),f);return f;};
   controller=Robolectric.buildService(ReservationService.class).create();service=controller.get();ReservationService.channel(c);
  }
- @After public void cleanup(){controller.destroy();ReservationTask.factory=original;PhoneSessions.testSupported=null;LocalStore.testKey=null;PhoneReads.testMode=false;}
+ @After public void cleanup(){controller.destroy();ReservationTask.factory=original;PhoneSessions.testSupported=null;LocalStore.testKey=null;PhoneReads.testMode=false;AppProblems.testPaused=false;}
  Plan plan(){Plan p=Plan.sample();p.mode="reserve";return p;}
  @Test public void immediateDefaultTitleUsesReservationDayNotCheckin()throws Exception{
   Plan p=plan();p.trigger=0;PhoneRepository repo=new PhoneRepository(c);

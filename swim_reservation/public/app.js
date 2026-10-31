@@ -294,6 +294,7 @@ function bindEvents() {
   }));
   elements.reservationLookupButton.addEventListener("click", () => perform(() => loadReservations()));
   elements.refreshLogsButton.addEventListener("click", () => perform(() => refreshLogs()));
+  document.getElementById('logSource')?.addEventListener('change',()=>perform(()=>refreshLogs()));
   elements.copyLogsButton.addEventListener("click", () => perform(() => copyLogs()));
   elements.saveLogsButton.addEventListener("click", () => perform(() => saveLogs()));
   elements.reservationSiteButton.addEventListener("click", () => openReservationSite());
@@ -1214,7 +1215,7 @@ function setButtonsDisabled(disabled) {
 }
 
 async function refreshLogs() {
-  const result = await request("logs?limit=300");
+  const result = await request(document.getElementById('logSource')?.value==='app'?'app-problems':"logs?limit=1000");
   const entries = [...(result.entries || [])].sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
   currentLogText = entries.map(formatLogEntry).join("\n");
   elements.logList.replaceChildren();
@@ -1256,7 +1257,7 @@ async function copyLogs() {
 }
 
 async function saveLogs() {
-  const response = await fetch(API("logs/download"));
+  const response = await fetch(API(document.getElementById('logSource')?.value==='app'?"logs/download?source=app":"logs/download"));
   if (!response.ok) throw new Error(`로그 파일 저장 실패 (${response.status})`);
   const blob = await response.blob();
   const link = document.createElement("a");

@@ -30,7 +30,7 @@ final class PlanScheduler {
         try {
             if(!lookup&&plan.trigger>SiteClock.now(c)){
                 store.state("WAITING","실행 예정 "+RunNotice.time(plan.trigger)+" (한국 시간) · 예약 대기",true);
-                AlarmReceiver.schedule(c,plan.trigger,slot);ClockSyncReceiver.arm(c,plan.trigger,slot);
+                AlarmReceiver.schedule(c,plan.trigger,slot);ClockSyncReceiver.arm(c,plan.trigger,slot);PreflightReceiver.arm(c,slot);
                 c.getSystemService(NotificationManager.class).notify(10+slot,ReservationService.notice(c,store.message(),true,slot));
             }else {
                 store.state("STARTING","폰 내부 예약 엔진 시작 준비",true);

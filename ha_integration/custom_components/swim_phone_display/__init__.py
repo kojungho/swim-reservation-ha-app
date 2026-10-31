@@ -1,8 +1,9 @@
-"""Opt-in, anonymous public display ONLY. All HA management auth remains unchanged."""
+"""Opt-in display and bounded anonymous diagnostics. HA management auth stays intact."""
 import json
 import hashlib
 import os
 import re
+import time
 
 import aiohttp
 import voluptuous as vol
@@ -11,7 +12,7 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import config_validation as cv
 
-from .public import MAX_PHOTO, SLUG, Snapshot
+from .public import MAX_PHOTO, SLUG, Snapshot, project_problem
 
 DOMAIN = "swim_phone_display"
 CONFIG_SCHEMA = vol.Schema(
@@ -54,7 +55,7 @@ async def async_setup(hass, config):
             raise ValueError("Supervisor unavailable")
         return response["data"]
 
-    async def fetch():
+    async def addon_base():
         slug = selected_slug
         if slug == "auto":
             addons = (await supervisor("/addons")).get("addons", [])
@@ -71,6 +72,10 @@ async def async_setup(hass, config):
         if info.get("hostname") != hostname or info.get("state") != "started":
             raise ValueError("Addon unavailable")
         base = "http://" + hostname + ":8099"
+        return base
+
+    async def fetch():
+        base = await addon_base()
         settings = json.loads(await read(base + "/api/ui-settings", 131072))
         submission = json.loads(await read(base + "/api/submission-settings", 4096))
         image = await read(base + "/api/site-map", MAX_PHOTO)
@@ -117,7 +122,47 @@ async def async_setup(hass, config):
             except Exception:
                 return web.Response(status=503, headers={"Cache-Control": "no-store"})
 
-    # No POST/PUT/DELETE, wildcard routes, command services or forwarding of caller headers.
+    report_budget = [0, 0]
+    class PublicProblem(HomeAssistantView):
+        url = "/api/swim_phone/problem"
+        name = "api:swim_phone:problem"
+        requires_auth = False
+
+        async def post(self, request):
+            # Anonymous, untrusted diagnostics only. No read route, arbitrary
+            # text, commands, caller headers, guest fields or reservation IDs.
+            if request.query_string or request.content_type != "application/json":
+                return web.Response(status=400)
+            minute = int(time.monotonic() // 60)
+            if minute != report_budget[0]:
+                report_budget[:] = [minute, 0]
+            if report_budget[1] >= 20:
+                return web.Response(status=429)
+            report_budget[1] += 1
+            try:
+                parts, size = [], 0
+                async for part in request.content.iter_chunked(2049):
+                    size += len(part)
+                    if size > 2048:
+                        return web.Response(status=413)
+                    parts.append(part)
+                value = project_problem(json.loads(b"".join(parts)))
+            except Exception:
+                return web.Response(status=400)
+            try:
+                base = await addon_base()
+                async with session.post(base + "/api/app-problems", json=value,
+                                        allow_redirects=False,
+                                        timeout=aiohttp.ClientTimeout(total=8)) as response:
+                    if response.status != 200:
+                        return web.Response(status=503)
+                    response.release()
+                return web.json_response({"ok": True, "id": value["id"]}, headers={"Cache-Control": "no-store"})
+            except Exception:
+                return web.Response(status=503)
+
+    # Display routes remain GET-only; one exact, rate-limited diagnostic POST.
     hass.http.register_view(PublicDisplay())
     hass.http.register_view(PublicMap())
+    hass.http.register_view(PublicProblem())
     return True

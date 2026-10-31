@@ -116,8 +116,13 @@ class RouteTest(unittest.IsolatedAsyncioTestCase):
                 return self
             async def __aexit__(self, *args):
                 pass
+            def release(self):
+                pass
 
         class Session:
+            def post(self, url, **options):
+                owner.calls.append((url, options))
+                return Reply({"ok": True, "id": options["json"]["id"]})
             def get(self, url, **options):
                 owner.calls.append((url, options))
                 replies = {
@@ -147,7 +152,10 @@ class RouteTest(unittest.IsolatedAsyncioTestCase):
         class Http:
             def register_view(_, view):
                 owner.views.append(view)
-                owner.app.router.add_get(view.url, view.get)
+                if hasattr(view, "get"):
+                    owner.app.router.add_get(view.url, view.get)
+                if hasattr(view, "post"):
+                    owner.app.router.add_post(view.url, view.post)
         self.hass = types.SimpleNamespace(http=Http())
         with patch.dict(os.environ, {"SUPERVISOR_TOKEN": "SERVER_ONLY_SECRET"}):
             self.assertTrue(await self.integration.async_setup(self.hass, {"swim_phone_display": {"publish": True, "addon_slug": "auto"}}))
@@ -182,3 +190,16 @@ class RouteTest(unittest.IsolatedAsyncioTestCase):
         count = len(self.views)
         self.assertTrue(await self.integration.async_setup(self.hass, {"swim_phone_display": {"publish": False}}))
         self.assertEqual(count, len(self.views))
+
+    async def test_problem_write_only_whitelist_and_no_caller_credentials(self):
+        event = {"id": "00000000-0000-4000-8000-000000000001", "clientId": "00000000-0000-4000-8000-000000000002", "version": "0.4.29", "versionCode": 35, "category": "preflight", "state": "failed", "code": "PAYMENT_METHOD_UNRECOGNIZED", "stage": "prepare", "occurredAt": 1793500000000}
+        response = await self.client.post("/api/swim_phone/problem", json=event, headers={"Authorization": "PRIVATE_CALLER", "Cookie": "PRIVATE_COOKIE"})
+        self.assertEqual(200, response.status)
+        self.assertEqual({"ok": True, "id": event["id"]}, await response.json())
+        url, options = self.calls[-1]
+        self.assertEqual("http://local-swim-reservation:8099/api/app-problems", url)
+        self.assertEqual(event, options["json"])
+        self.assertNotIn("headers", options)
+        self.assertEqual(405, (await self.client.get("/api/swim_phone/problem")).status)
+        self.assertEqual(400, (await self.client.post("/api/swim_phone/problem", json={**event, "phone": "PRIVATE"})).status)
+        self.assertEqual(413, (await self.client.post("/api/swim_phone/problem", data=b"x" * 2049, headers={"Content-Type": "application/json"})).status)

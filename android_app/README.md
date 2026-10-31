@@ -1,6 +1,6 @@
-## 현재 배포 빌드 · 0.4.28 / versionCode 34
+## 현재 배포 빌드 · 0.4.29 / versionCode 35
 
-전화번호 형식과 필수 약관 탐색을 보강하고, 예약자 정보에 실제 제출 직전 입력값을 별도 보존합니다. 기록에서 조회·삭제할 수 있으며 삭제는 실제 예약 취소가 아닙니다. 기존 예약자·일정은 그대로 유지합니다. [0.4.28 검증 보고서](TEST_RESULTS_0.4.28.md)
+폰 내부 예약 대기 일정도 실행 전날 오전 10시(08~19시 제한)에 1박 빈자리로 입력·약관·무통장입금 사전 점검을 하고 앱 알림으로 결과를 표시합니다. 최종 제출은 하지 않습니다. 앱 문제는 최소 익명 메타데이터만 HA 애드온 로그에 보내며 끊기면 암호화 대기열에서 재전송합니다. 기존 서명·예약자·일정·제출 기록은 유지합니다. [0.4.29 검증 보고서](TEST_RESULTS_0.4.29.md)
 
 공식 폼의 무통장입금 고정값을 지원합니다. 선택 버튼·드롭다운에서도 무통장만 선택하며, 확인할 수 없으면 다른 결제로 전환하지 않고 제출 전에 중단합니다. [0.4.27 검증 보고서](TEST_RESULTS_0.4.27.md)
 
@@ -10,7 +10,7 @@
 
 ```sh
 ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:lintRelease
-bash verify-release.sh app/build/outputs/apk/release/app-release.apk 34 0.4.28
+bash verify-release.sh app/build/outputs/apk/release/app-release.apk 35 0.4.29
 ```
 
 서명은 기존 `~/.android/debug.keystore`를 사용합니다. 다른 위치는 `SWIM_SIGNING_STORE`, 비밀번호·별칭은 `SWIM_SIGNING_STORE_PASSWORD`, `SWIM_SIGNING_KEY_PASSWORD`, `SWIM_SIGNING_ALIAS`로 지정합니다. 원래 인증서가 아니거나 키가 없으면 release 서명을 거부합니다. 키 파일은 저장소에 넣지 마세요. 현재 인증서는 기존 Android Debug 인증서이므로, release 빌드라고 해서 Google Play 배포용 인증서로 바뀌거나 Play Protect 승인이 보장되는 것은 아닙니다. 호환성을 위해 키를 새로 만들지 않습니다.

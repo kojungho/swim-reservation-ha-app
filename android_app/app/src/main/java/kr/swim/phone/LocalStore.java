@@ -60,6 +60,7 @@ public final class LocalStore {
     public void watchDueElapsed(long when){if(!prefs.edit().putLong("watch-due-elapsed",when).commit())throw new IllegalStateException("감시 시각 저장 실패");}
     public String message(){return prefs.getString("message","폰 내부 독립 실행 · HA 연결 없음");}
     public String log(){return prefs.getString("log","");}
+    public synchronized void appendLog(String message){String line=java.time.LocalTime.now(Plan.SEOUL).withNano(0)+" · "+message;String[] lines=(prefs.getString("log","")+line+"\n").split("\n");String log=String.join("\n",java.util.Arrays.copyOfRange(lines,Math.max(0,lines.length-100),lines.length))+"\n";if(!prefs.edit().putString("log",log).commit())throw new IllegalStateException("점검 로그 저장 실패");}
     public JSONObject availability(){try{return new JSONObject(prefs.getString("availability","{}"));}catch(Exception e){return new JSONObject();}}
     public void availability(Plan plan,java.util.Set<Integer> available,boolean ok){
         availability(plan,available,ok,false);

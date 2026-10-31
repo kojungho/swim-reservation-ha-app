@@ -13,7 +13,7 @@ public final class RecoveryReceiver extends BroadcastReceiver {
             catch(Exception e){s.state("FAILED","저장 일정 복원 실패 · 앱에서 확인하세요.",false);}
             android.app.NotificationManager notifications=c.getSystemService(android.app.NotificationManager.class);
             notifications.cancel(10+slot);
-            notifications.notify((s.active()?10:20)+slot,ReservationService.notice(c,s.message(),s.active(),slot));
+            notifications.notify((s.active()?10:20)+slot,ReservationService.notice(c,s.message(),s.active(),slot));PreflightReceiver.arm(c,slot);
         }
     }
 }

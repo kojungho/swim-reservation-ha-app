@@ -59,6 +59,7 @@ final class HaDisplay {
   try(Response r=client.newCall(new Request.Builder().url(url).get().build()).execute()){return body(r,max);}
  }
  static void sync(Context c,boolean force){
+  AppProblems.flush(c);
   if((!force&&System.currentTimeMillis()-lastAttempt<60000)||!busy.compareAndSet(false,true))return;lastAttempt=System.currentTimeMillis();
   worker.execute(()->{boolean success=false;try{refresh(c,origin(BuildConfig.DEFAULT_HA_URL));message="앱 화면 설정 동기화 완료";success=true;}
    catch(Exception error){message="공개 설정 연결 대기 · 마지막 설정 유지";}finally{busy.set(false);if(reconnectPending.getAndSet(false)&&!success)sync(c,true);}});
