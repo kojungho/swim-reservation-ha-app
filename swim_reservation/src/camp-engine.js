@@ -99,7 +99,7 @@ export class ReservationEngine extends LegacyEngine {
             this.recordTrace(step.step, 'start', { execution: 'single-browser-batch' });
             this.recordTrace(step.step, step.outcome, { elapsedMs: step.elapsedMs, checks: step.checks, invalidFields: step.step === result.failedStep ? result.invalidFields || [] : [] });
           }
-          if (!result.ok) throw Object.assign(fail(result.code, '예약자 정보·필수 약관을 일괄 입력한 결과를 검증하지 못했습니다. 제출하지 않습니다.'), { substep: result.failedStep });
+          if (!result.ok) throw Object.assign(fail(result.code, result.code === 'PAYMENT_METHOD_UNRECOGNIZED' ? '공식 폼의 무통장입금 방식을 확인하지 못했습니다. 최종 제출하지 않았습니다.' : '예약자 정보·필수 약관을 일괄 입력한 결과를 검증하지 못했습니다. 제출하지 않습니다.'), { substep: result.failedStep });
         });
         // No automatic POST retry, including timeouts, 403/429 and unknown receipts.
         const submit = async () => {
@@ -149,11 +149,11 @@ export class ReservationEngine extends LegacyEngine {
       if (verifyInputs) {
         const terms = [...form.querySelectorAll('input.js-agree[data-required="1"]')];
         checks.requiredTermsChecked = terms.length > 0 && terms.every(term => term.type === 'checkbox' && term.checked && !term.matches(':disabled'));
-        checks.bankSelected = form.querySelector('input[name="pay_method"][value="bank"]')?.checked === true;
         checks.nativeValid = form.checkValidity();
       }
       return checks;
     }, { fields: expected, verifyInputs });
+    if (verifyInputs) checks.bankSelected = (await this.page.locator('form.js-book').evaluate(fillCampForm, { paymentOnly: true })).ok === true;
     const title = await this.page.locator('.summary-card .sum-title').textContent().catch(() => '');
     checks.siteNameMatched = title.replace(/\s/g, '') === room.displayName;
     this.recordTrace(this.currentStep, 'checks', { checks });

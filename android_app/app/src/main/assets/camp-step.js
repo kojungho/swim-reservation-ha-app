@@ -8,7 +8,7 @@ function campStep(op,p){
     const expected={site,checkin:date,checkout,adults:String(p.adults),children:'0',infants:'0'};
     const checks={action:u.origin===location.origin&&u.pathname==='/camp/book.php'&&!u.search,method:form.method.toLowerCase()==='post',csrf:Boolean(form.querySelector('[name="_csrf"]')?.value),siteName:document.querySelector('.summary-card .sum-title')?.textContent.replace(/\s/g,'')===rooms.find(room=>room.siteId===p.site)?.displayName};
     for(const [key,value]of Object.entries(expected))checks[key]=form.querySelector(`[name="${key}"]`)?.value===value;
-    if(filled){const terms=[...form.querySelectorAll('input.js-agree[data-required="1"]')];checks.terms=terms.length>0&&terms.every(e=>e.type==='checkbox'&&e.checked&&!e.disabled);checks.bank=form.querySelector('[name="pay_method"][value="bank"]')?.checked===true;checks.valid=form.checkValidity();checks.name=form.querySelector('[name="name"]')?.value===p.name;checks.phone=form.querySelector('[name="phone"]')?.value===p.phone;}
+    if(filled){const terms=[...form.querySelectorAll('input.js-agree[data-required="1"]')];checks.terms=terms.length>0&&terms.every(e=>e.type==='checkbox'&&e.checked&&!e.disabled);checks.bank=fillCampForm(form,{paymentOnly:true}).ok===true;checks.valid=form.checkValidity();checks.name=form.querySelector('[name="name"]')?.value===p.name;checks.phone=form.querySelector('[name="phone"]')?.value===p.phone;}
     return {form,checks,ok:Object.values(checks).every(Boolean)};
   };
   if(op==='listing'){

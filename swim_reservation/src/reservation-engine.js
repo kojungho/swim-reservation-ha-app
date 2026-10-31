@@ -642,7 +642,7 @@ export class ReservationEngine {
           error.code = "NO_AVAILABLE_ROOM";
           throw error;
         } catch (error) {
-          profileStatuses[entry.index] = { ...profileStatuses[entry.index], room: error.room || profileStatuses[entry.index].room, details: error.details, state: ["ROOM_UNAVAILABLE", "NO_AVAILABLE_ROOM"].includes(error.code) ? "예약 실패" : "결과 확인 필요", message: userErrorMessage(error) };
+          profileStatuses[entry.index] = { ...profileStatuses[entry.index], room: error.room || profileStatuses[entry.index].room, details: error.details, state: error.details?.submitted === false || ["ROOM_UNAVAILABLE", "NO_AVAILABLE_ROOM"].includes(error.code) ? "예약 실패" : "결과 확인 필요", message: userErrorMessage(error) };
           await update();
           throw error;
         }

@@ -9,8 +9,16 @@ import { ReservationEngine } from "../src/reservation-engine.js";
 import { ReservationManager } from "../src/reservation-manager.js";
 import { lookupProfiles } from "../src/profile-lookup.js";
 
-const profiles = Array.from({ length: 5 }, (_, index) => ({ reserverName: `예약자${index + 1}`, depositorName: `입금자${index + 1}`, phone: `0101234567${index}`, birthDate: "19900101", roomPriority: [{ name: `객실${index}-1`, enabled: true }, { name: `객실${index}-2`, enabled: true }] }));
+const digits=['일','이','삼','사','오'];
+const profiles = Array.from({ length: 5 }, (_, index) => ({ reserverName: `예약자${digits[index]}`, depositorName: `입금자${digits[index]}`, phone: `0101234567${index}`, birthDate: "19900101", roomPriority: [{ name: `객실${index}-1`, enabled: true }, { name: `객실${index}-2`, enabled: true }] }));
 const sample = () => normalizeConfig({ startDate: "2026-12-04", nights: 1, triggerAt: "2026-10-01T00:00:00", bookingMode: "profiles-parallel", profiles });
+test('최종 미제출이 확인된 결제 폼 실패는 예약 실패로 표시하고 다른 객실로 자동 재시도하지 않는다',async()=>{
+ const statuses=[],calls=[],engine=new ReservationEngine({store:{updateStatus:async patch=>statuses.push(structuredClone(patch))}});
+ engine.prioritySessions=profiles.flatMap((profile,profileIndex)=>profile.roomPriority.map((room,index)=>({profileIndex,rank:index+1,room:room.name,config:{profile},status:{},engine:{close:async()=>{},runSingle:async()=>{
+  calls.push(`${profileIndex}-${index}`);if(profileIndex===0)throw Object.assign(new Error('결제 방식 확인 실패 · 미제출'),{code:'PAYMENT_METHOD_UNRECOGNIZED',details:{submitted:false}});return {room:room.name};
+ }}})));
+ assert.equal((await engine.run(sample(),{prepared:true})).length,4);assert.equal(statuses.at(-1).profileStatuses[0].state,'예약 실패');assert.equal(statuses.at(-1).profileStatuses[0].details.submitted,false);assert.equal(calls.includes('0-1'),false);
+});
 
 test("예약자 목록은 기존 정보만 한 번 이전하며 빈 기본 입력·설정 변경·전체 삭제로 다시 채워지지 않는다", async t => {
   const dir = await mkdtemp(path.join(tmpdir(), "swim-book-migration-"));
@@ -74,13 +82,13 @@ test("저장 내역의 개인별 순위는 공통 목록과 무관하며 기존 
   await store.saveConfig(config);
   const summary = (await store.listHistory())[0];
   assert.equal(summary.profilePriorities.length, 5);
-  assert.deepEqual(summary.profilePriorities[1], { index: 1, reserverName: "예약자2", enabledRooms: ["객실1-2", "객실1-1"] });
+  assert.deepEqual(summary.profilePriorities[1], { index: 1, reserverName: "예약자이", enabledRooms: ["객실1-2", "객실1-1"] });
   assert.equal(summary.enabledRooms.includes("사용하지 않는 공통 객실"), false);
   const loaded = await store.loadHistory(summary.id);
   assert.deepEqual(loaded.config.profiles, config.profiles);
   const multiple = { ...config, bookingMode: "multiple", multipleProfileIndex: 3 };
   await store.saveConfig(multiple);
-  assert.equal((await store.listHistory())[0].multipleProfileName, "예약자4");
+  assert.equal((await store.listHistory())[0].multipleProfileName, "예약자사");
 });
 
 test("조회 페이지 HTTP 오류와 정상 페이지 아님을 0건으로 판정하지 않는다", async () => {
@@ -105,7 +113,7 @@ test("5명의 각자 우선순위 준비는 최종 제출 없이 독립된 개�
   };
   await engine.prepare(config);
   assert.equal(prepared.length, 10);
-  assert.deepEqual(prepared.slice(0, 2), [{ name: "예약자1", room: "객실0-1", rank: 1 }, { name: "예약자1", room: "객실0-2", rank: 2 }]);
+  assert.deepEqual(prepared.slice(0, 2), [{ name: "예약자일", room: "객실0-1", rank: 1 }, { name: "예약자일", room: "객실0-2", rank: 2 }]);
   await engine.close();
 });
 

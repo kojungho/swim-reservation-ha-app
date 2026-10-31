@@ -1,4 +1,6 @@
-## 현재 배포 빌드 · 0.4.26 / versionCode 32
+## 현재 배포 빌드 · 0.4.27 / versionCode 33
+
+공식 폼의 무통장입금 고정값을 지원합니다. 선택 버튼·드롭다운에서도 무통장만 선택하며, 확인할 수 없으면 다른 결제로 전환하지 않고 제출 전에 중단합니다. [0.4.27 검증 보고서](TEST_RESULTS_0.4.27.md)
 
 앱·애드온의 필수 입력 검사는 스크롤·이력 확인을 방해하지 않습니다. 입력 오류는 칸 색상과 플로팅만 표시하고 포커스·스크롤·키패드를 강제로 바꾸지 않습니다. 다음 단계·등록·실행의 입력 검증은 유지합니다. 초기화는 기존 오류를 해제합니다. [0.4.26 검증 보고서](TEST_RESULTS_0.4.26.md)
 
@@ -6,7 +8,7 @@
 
 ```sh
 ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:lintRelease
-bash verify-release.sh app/build/outputs/apk/release/app-release.apk 32 0.4.26
+bash verify-release.sh app/build/outputs/apk/release/app-release.apk 33 0.4.27
 ```
 
 서명은 기존 `~/.android/debug.keystore`를 사용합니다. 다른 위치는 `SWIM_SIGNING_STORE`, 비밀번호·별칭은 `SWIM_SIGNING_STORE_PASSWORD`, `SWIM_SIGNING_KEY_PASSWORD`, `SWIM_SIGNING_ALIAS`로 지정합니다. 원래 인증서가 아니거나 키가 없으면 release 서명을 거부합니다. 키 파일은 저장소에 넣지 마세요. 현재 인증서는 기존 Android Debug 인증서이므로, release 빌드라고 해서 Google Play 배포용 인증서로 바뀌거나 Play Protect 승인이 보장되는 것은 아닙니다. 호환성을 위해 키를 새로 만들지 않습니다.
