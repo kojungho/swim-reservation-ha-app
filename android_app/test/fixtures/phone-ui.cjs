@@ -8,6 +8,8 @@ async function setup(browser,width=390,storedUi={}){
     window.Phone={request(raw){const {action,data}=JSON.parse(raw),s=window.nativeMock;s.calls.push({action,data});let result={};
       if(action==='load')result=s.vault;else if(action==='state')result=s.state;else if(action==='draft'){s.vault.draft=data;result=s.vault;}else if(action==='ui'){s.vault.ui=data;result=s.vault;}
       else if(action==='profilePut'){s.vault.profiles.push({id:'saved-'+s.vault.profiles.length,...data});result=s.vault;}
+      else if(action==='bookingRecords')result={entries:s.bookingRecords||[]};
+      else if(action==='bookingRecordDelete'){s.bookingRecords=(s.bookingRecords||[]).filter(entry=>entry.id!==data.id);result={};}
       else if(action==='planPut'){s.vault.plans.push({id:'plan-'+s.vault.plans.length,title:data.title||'모의 일정',plan:data.plan});result=s.vault;}
       else if(action==='draftReset'){s.vault.draft={mode:data.mode};delete (s.vault.drafts||{})[data.mode];result=s.vault;}
       else if(action==='planDelete'){s.vault.plans=s.vault.plans.filter(p=>p.id!==data.id);result=s.vault;}

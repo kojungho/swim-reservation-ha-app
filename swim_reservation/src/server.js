@@ -243,6 +243,9 @@ const server = http.createServer(async (request, response) => {
         return json(response, 503, { synced: false, error: error.message });
       }
     }
+    if(url.pathname==='/api/booking-records'&&request.method==='GET')return json(response,200,{entries:await store.bookings.list()});
+    const bookingRecordDelete=/^\/api\/booking-records\/([a-f0-9-]{36})$/.exec(url.pathname);
+    if(bookingRecordDelete&&request.method==='DELETE'){await store.bookings.delete(bookingRecordDelete[1]);return json(response,200,{ok:true});}
     if (url.pathname === "/api/history" && request.method === "GET") {
       return json(response, 200, { entries: await store.listHistory() });
     }

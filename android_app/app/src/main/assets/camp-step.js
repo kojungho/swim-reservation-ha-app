@@ -2,13 +2,14 @@ function campStep(op,p){
   const rooms=p.catalog.map((room,i)=>typeof room==='string'?{name:room,siteId:i+1,displayName:room.split('_').reverse().join('')}:room);
   const date=p.date,checkout=p.checkout,site=String(p.site);
   const fail=code=>({ok:false,code});
+  const personalValues=()=>({name:p.name,phone:p.phone,depositor:p.payer||p.name,request:p.request||'',arrive_time:p.arrival||''});
   const verify=filled=>{
     const forms=document.querySelectorAll('form.js-book');if(forms.length!==1)return null;
     const form=forms[0],u=new URL(form.action);
     const expected={site,checkin:date,checkout,adults:String(p.adults),children:'0',infants:'0'};
     const checks={action:u.origin===location.origin&&u.pathname==='/camp/book.php'&&!u.search,method:form.method.toLowerCase()==='post',csrf:Boolean(form.querySelector('[name="_csrf"]')?.value),siteName:document.querySelector('.summary-card .sum-title')?.textContent.replace(/\s/g,'')===rooms.find(room=>room.siteId===p.site)?.displayName};
     for(const [key,value]of Object.entries(expected))checks[key]=form.querySelector(`[name="${key}"]`)?.value===value;
-    if(filled){const terms=[...form.querySelectorAll('input.js-agree[data-required="1"]')];checks.terms=terms.length>0&&terms.every(e=>e.type==='checkbox'&&e.checked&&!e.disabled);checks.bank=fillCampForm(form,{paymentOnly:true}).ok===true;checks.valid=form.checkValidity();checks.name=form.querySelector('[name="name"]')?.value===p.name;checks.phone=form.querySelector('[name="phone"]')?.value===p.phone;}
+    if(filled){const validation=fillCampForm(form,{verifyOnly:true,fields:personalValues()});checks.terms=validation.checks?.requiredTermsChecked===true;checks.bank=validation.checks?.bankSelected===true;checks.valid=form.checkValidity();checks.personalFields=validation.ok===true;}
     return {form,checks,ok:Object.values(checks).every(Boolean)};
   };
   if(op==='listing'){
@@ -20,8 +21,11 @@ function campStep(op,p){
   if(op==='prepare'){
     if(!document.querySelector('form.js-book')){const text=document.querySelector('.msg-box')?.textContent||'';return fail(/체크인까지|오픈|예약.*시작|아직/.test(text)?'NOT_OPEN':/예약.*(불가|마감)|예약할 수 없|선택.*(없|불가)/.test(text)?'NO_ROOM':'FORM_UNRECOGNIZED');}
     const v=verify(false);if(!v?.ok)return {ok:false,code:'FORM_MISMATCH',checks:v?.checks||{}};
-    const result=fillCampForm(v.form,{fields:{name:p.name,phone:p.phone,depositor:p.payer||p.name,request:p.request||'',arrive_time:p.arrival||''}});
+    const result=fillCampForm(v.form,{fields:personalValues()});
     return {ok:result.ok,code:result.code,checks:v.checks,steps:result.steps};
+  }
+  if(op==='capture'){
+    const v=verify(true);if(!v?.ok||!p.consent)return fail('PRE_SUBMIT_MISMATCH');return fillCampForm(v.form,{verifyOnly:true,captureOnly:true,fields:personalValues()});
   }
   if(op==='submit'){
     const v=verify(true);if(!v?.ok||!p.consent)return fail('PRE_SUBMIT_MISMATCH');
@@ -31,7 +35,7 @@ function campStep(op,p){
   if(op==='receipt'){
     const r=readCampReservations({expectedName:p.name,rooms}),row=r.rows[0];
     const checks={recognized:r.kind==='detail',complete:Boolean(r.submissionComplete),pending:row?.paymentStatus==='pending',one:r.rows.length===1,room:row?.siteId===p.site,checkin:row?.stayDate===date,checkout:row?.checkout===checkout,nights:row?.nights===p.nights+'박',adults:row?.adults===p.adults};
-    return {ok:Object.values(checks).every(Boolean),checks};
+    return {ok:Object.values(checks).every(Boolean),checks,receipt:{id:row?.id||'',total:row?.total||'',status:row?.status||''}};
   }
   return fail('UNKNOWN_STEP');
 }

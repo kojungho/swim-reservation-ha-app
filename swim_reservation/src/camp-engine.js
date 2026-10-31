@@ -7,8 +7,10 @@ import { readCampReservations } from './camp-records.js';
 import { fillCampForm } from './camp-form.js';
 import { maskedProfile, safeCampError } from './camp-trace.js';
 import { openingRetryDelay } from './opening-readiness.js';
+import {randomUUID} from 'node:crypto';
 
 const fail = (code, message) => Object.assign(new Error(message), { code, safeToLog: true });
+const personalValues = config => { const profile=getProfiles(config)[0];return {name:profile.reserverName,phone:String(profile.phone||'').replace(/\D/g,''),depositor:profile.depositorName||profile.reserverName,request:config.request||'',arrive_time:config.arrivalTime||''}; };
 export class ReservationEngine extends LegacyEngine {
   supportsPrewarm = false;
   async traceStep(step, action) {
@@ -50,6 +52,7 @@ export class ReservationEngine extends LegacyEngine {
   }
   async runSingle(config, { allowFallback = true, beforeSubmit } = {}) {
     let submitted = false;
+    let bookingRecordId = null;
     this.traceContext.profile = maskedProfile(getProfiles(config)[0]);
     try {
       if ((config.paymentMethod || 'bank') !== 'bank') throw fail('MANUAL_PAYMENT_REQUIRED', '카드·계좌이체는 공식 사이트에서 직접 진행해 주세요. 현재 공식 안내는 무통장입금만 지원합니다.');
@@ -90,11 +93,7 @@ export class ReservationEngine extends LegacyEngine {
         if (!available) { this.recordTrace('site-unavailable', 'complete', { fallbackAllowed: true }); continue; }
         await this.traceStep('form-verify', () => this.assertForm(config, room));
         await this.traceStep('personal-fill', async () => {
-          const profile = getProfiles(config)[0];
-          const result = await form.evaluate(fillCampForm, { fields: {
-            name: profile.reserverName, phone: profile.phone.replace(/\D/g, ''), depositor: profile.depositorName || profile.reserverName,
-            request: config.request || '', arrive_time: config.arrivalTime || ''
-          } });
+          const result = await form.evaluate(fillCampForm, { fields: personalValues(config) });
           for (const step of result.steps || []) {
             this.recordTrace(step.step, 'start', { execution: 'single-browser-batch' });
             this.recordTrace(step.step, step.outcome, { elapsedMs: step.elapsedMs, checks: step.checks, invalidFields: step.step === result.failedStep ? result.invalidFields || [] : [] });
@@ -108,7 +107,12 @@ export class ReservationEngine extends LegacyEngine {
           await this.traceStep('consent-verify', async () => {
             if (config.autoFinalSubmit === false) throw fail('FINAL_CONSENT_REQUIRED', '최종 자동 제출 동의를 확인해 주세요.');
           });
-          submitted = true;
+          if(this.store.bookings){
+            const captured=await form.evaluate(fillCampForm,{verifyOnly:true,captureOnly:true,fields:personalValues(config)});
+            if(!captured.ok||!captured.entered)throw fail('FORM_MISMATCH','제출 직전 실제 입력 정보를 확인하지 못했습니다. 제출하지 않습니다.');
+            const id=randomUUID();await this.store.bookings.begin({id,entered:captured.entered,stay:{checkin:config.startDate,checkout:checkoutDate(config.startDate,config.nights),nights:config.nights,site:room.name,adults:config.adults||2}});bookingRecordId=id;
+          }
+          submitted=true;
           await this.traceStep('final-submit', async () => {
             const navigation = this.page.waitForURL(url => url.origin === new URL(CAMP_ROOT).origin && url.pathname === '/camp/done.php', { waitUntil: 'domcontentloaded', timeout: 20_000 });
             this.recordTrace('submit-click', 'start');
@@ -125,7 +129,8 @@ export class ReservationEngine extends LegacyEngine {
         };
         if (this.finalSubmitQueue) await this.finalSubmitQueue.run(submit, delayMs => this.recordTrace('final-delay', 'start', { delayMs }));
         else await submit();
-        await this.traceStep('receipt-verify', () => this.verifyCompletion(config));
+        const receipt=await this.traceStep('receipt-verify', () => this.verifyCompletion(config));
+        if(bookingRecordId)try{await this.store.bookings.complete(bookingRecordId,receipt);}catch{await this.store.recordLog?.('error','booking-record-save-error','예약은 완료됐지만 제출 기록의 완료 상태 갱신에 실패했습니다. 기록의 입력 정보로 예약을 조회해 주세요.');}
         await this.store.updateStatus({ state: 'success', stage: 'complete', selectedRoom: room.name, message: '예약 신청 완료 · 입금 대기입니다. 공식 안내의 기한 안에 직접 입금해 주세요.' });
         return { room: room.name, paymentStatus: 'pending' };
       }
@@ -147,13 +152,16 @@ export class ReservationEngine extends LegacyEngine {
         csrfPresent: Boolean(form.querySelector('[name="_csrf"]')?.value),
         ...Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, form.querySelector(`[name="${key}"]`)?.value === value])) };
       if (verifyInputs) {
-        const terms = [...form.querySelectorAll('input.js-agree[data-required="1"]')];
-        checks.requiredTermsChecked = terms.length > 0 && terms.every(term => term.type === 'checkbox' && term.checked && !term.matches(':disabled'));
         checks.nativeValid = form.checkValidity();
       }
       return checks;
     }, { fields: expected, verifyInputs });
-    if (verifyInputs) checks.bankSelected = (await this.page.locator('form.js-book').evaluate(fillCampForm, { paymentOnly: true })).ok === true;
+    if (verifyInputs) {
+      const validation=await this.page.locator('form.js-book').evaluate(fillCampForm,{verifyOnly:true,fields:personalValues(config)});
+      checks.personalFieldsVerified=validation.ok===true;
+      checks.bankSelected=validation.checks?.bankSelected===true;
+      checks.requiredTermsChecked=validation.checks?.requiredTermsChecked===true;
+    }
     const title = await this.page.locator('.summary-card .sum-title').textContent().catch(() => '');
     checks.siteNameMatched = title.replace(/\s/g, '') === room.displayName;
     this.recordTrace(this.currentStep, 'checks', { checks });
@@ -170,6 +178,7 @@ export class ReservationEngine extends LegacyEngine {
     if (!Object.values(checks).every(Boolean)) {
       throw Object.assign(fail('COMPLETION_UNVERIFIED', '예약 완료 화면의 예약번호·예약자·사이트·숙박일·입금대기를 일치 확인하지 못했습니다. 예약 조회로 확인해 주세요. 재제출하지 않습니다.'), { checks });
     }
+    return {id:row.id,total:row.total,status:row.status};
   }
   async prepareMultiple(config) {
     await this.close();

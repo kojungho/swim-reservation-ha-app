@@ -55,4 +55,6 @@
 .site-choice-positioned .site-choice-tools button{min-height:40px;padding:8px 12px;white-space:nowrap}
 .monthly-controls #monthlyPrevButton,.monthly-controls #monthlyNextButton{box-sizing:border-box;width:36px;min-width:36px;height:44px;min-height:44px;padding:0!important;display:grid;place-items:center}
 .monthly-controls #monthlyQueryButton{height:44px;min-height:44px;padding:6px 10px}
+.submitted-booking-record{border:1px solid #dbe4df;border-radius:10px;padding:10px;margin-top:3px}
+.submitted-booking-record p{margin:5px 0;overflow-wrap:anywhere;white-space:pre-wrap}
 

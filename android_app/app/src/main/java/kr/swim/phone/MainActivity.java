@@ -18,7 +18,7 @@ import java.io.*;
 /** Bundled add-on presentation; native, server-independent reservation service remains separate. */
 public final class MainActivity extends Activity {
     static final String UI_HOST="phone.swim.invalid";
-    static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","toast.js","phone-features.js","booking-flow.js","booking-flow.css","ha-map.png","date-picker.js","stay-calendar.js","site-choice.js","site-map.png");
+    static final Set<String> UI_FILES=Set.of("index.html","styles.css","phone.css","phone.js","toast.js","phone-features.js","booking-flow.js","booking-flow.css","ha-map.png","date-picker.js","stay-calendar.js","site-choice.js","site-map.png","submitted-records.js");
     WebView screen;
     AppUpdates updates;
     DisplayConnection displayConnection;
@@ -74,6 +74,8 @@ public final class MainActivity extends Activity {
             Object result;
             switch(action){
                 case "load":result=repository.load().put("rooms",new JSONArray(RoomCatalog.NAMES)).put("version",BuildConfig.VERSION_NAME);break;
+                case "bookingRecords":result=new JSONObject().put("entries",new BookingRecords(this).list());break;
+                case "bookingRecordDelete":new BookingRecords(this).delete(data.getString("id"));result="저장 기록만 삭제했습니다. 실제 예약은 취소되지 않습니다.";break;
                 case "checkUpdates":main.post(()->updates.check(true));result="앱 업데이트 확인 중";break;
                 case "showKeyboard":main.post(()->{int requestId=++keyboardRequest;if(screen!=null&&!isFinishing()&&!isDestroyed()){screen.requestFocus();screen.postDelayed(()->{if(requestId==keyboardRequest&&!isFinishing()&&!isDestroyed()&&screen.hasWindowFocus()){android.view.inputmethod.InputMethodManager keyboard=getSystemService(android.view.inputmethod.InputMethodManager.class);if(keyboard!=null)keyboard.showSoftInput(screen,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);}},100);}});result="입력 준비";break;
                 case "hideKeyboard":main.post(()->{keyboardRequest++;if(screen!=null){android.view.inputmethod.InputMethodManager keyboard=getSystemService(android.view.inputmethod.InputMethodManager.class);if(keyboard!=null)keyboard.hideSoftInputFromWindow(screen.getWindowToken(),0);}});result="목록 선택 준비";break;

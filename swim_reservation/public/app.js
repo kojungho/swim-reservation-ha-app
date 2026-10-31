@@ -985,10 +985,10 @@ function setReservationLookupLoading(delta) {
   if (spinner) spinner.hidden = !loading;
   elements.reservationList.setAttribute("aria-busy", String(loading));
 }
-async function loadReservations() {
+async function loadReservations(profileOverride) {
   const id = ++savedLookupRequest;
   const selected=Number(elements.siteProfileSelect.value)-1;
-  const profiles = bookingBook[selected]?[bookingIdentity(bookingBook[selected])]:[];
+  const profiles = Array.isArray(profileOverride)?profileOverride:bookingBook[selected]?[bookingIdentity(bookingBook[selected])]:[];
   if(!profiles.length){showMessage("예약자를 선택하세요.",true);return;}
   savedLookupController?.abort();const controller=new AbortController();savedLookupController=controller;
   setReservationLookupLoading(1);

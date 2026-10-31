@@ -2,6 +2,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { Store } from "./store.js";
+import {BookingRecords} from './booking-records.js';
 import { Scheduler } from "./scheduler.js";
 import { normalizeConfig, validateConfig, getProfiles, bookingOpenIso, triggerEpoch } from "./config.js";
 import { operationTrace, maskedProfile } from './camp-trace.js';
@@ -29,6 +30,7 @@ export class PlanManager {
   async createRuntime(row) {
     if (row.kind === "watch") row.watchEndsAt = normalizeWatchEndsAt(row.watchEndsAt);
     const store = new Store(path.join(this.dataDir, "plans", row.id));
+    store.bookings=new BookingRecords(this.dataDir);
     await store.init();
     const recordLog = store.recordLog.bind(store);
     store.recordLog = async (level, event, message, details) => {

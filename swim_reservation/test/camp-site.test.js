@@ -100,8 +100,11 @@ test('오픈 반영 재조회 중 폼이 열리면 진행하고 최종 제출은
 });
 test('실행 시각에 새 폼을 입력하고 필수 약관·무통장 제출 1회 및 영수증을 검증한다', { skip: !executablePath }, async t => {
   const f = await fixture(t);
+  const saved=[];let completed;
+  f.engine.store.bookings={begin:async record=>saved.push(structuredClone(record)),complete:async(id,value)=>{completed={id,value};}};
   assert.equal(f.engine.supportsPrewarm, false);
   await f.engine.runSingle(config());
+  assert.equal(saved.length,1);assert.equal(saved[0].entered.name,'테스트예약자');assert.equal(saved[0].entered.phone,'01000000000');assert.equal(saved[0].entered.fields.find(field=>field.role==='depositor').value,'테스트예약자');assert.ok(!JSON.stringify(saved).includes('fake-session-csrf'));assert.equal(completed.id,saved[0].id);assert.ok(completed.value.id);
   const posts = f.requests.filter(request => request.method === 'POST');
   assert.equal(posts.length, 1);
   const body = new URLSearchParams(posts[0].data);

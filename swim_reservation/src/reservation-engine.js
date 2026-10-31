@@ -739,6 +739,7 @@ export class ReservationEngine {
   createChildSession(config, room) {
     const status = {};
     const scopedStore = {
+      bookings: this.store.bookings,
       updateStatus: async (patch) => Object.assign(status, patch),
       recordLog: (...args) => this.store.recordLog?.(...args)
     };
@@ -765,7 +766,7 @@ export class ReservationEngine {
     const roomPriority = config.bookingMode === "profiles-parallel" ? profileEntry.profile.roomPriority : config.roomPriority;
     const enabledRooms = roomPriority.filter((item) => item.enabled);
     const rank = room ? enabledRooms.findIndex((item) => item.name === room) + 1 : 1;
-    const scopedStore = { updateStatus: async (patch) => Object.assign(status, patch), recordLog: (...args) => this.store.recordLog?.(...args) };
+    const scopedStore = { bookings:this.store.bookings, updateStatus: async (patch) => Object.assign(status, patch), recordLog: (...args) => this.store.recordLog?.(...args) };
     const childConfig = {
       ...config,
       bookingMode: "priority",

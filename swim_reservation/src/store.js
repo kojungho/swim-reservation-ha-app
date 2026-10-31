@@ -2,10 +2,12 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { defaultConfig, normalizeConfig, getProfiles, normalizeProfile } from "./config.js";
 import { normalizeLookupProfiles } from "./lookup-profiles.js";
+import {BookingRecords} from './booking-records.js';
 
 export class Store {
   constructor(dataDir) {
     this.dataDir = dataDir;
+    this.bookings=new BookingRecords(dataDir);
     this.configPath = path.join(dataDir, "reservation-config.json");
     this.profilesPath = path.join(dataDir, "reservation-profiles.json");
     this.lookupProfilesPath = path.join(dataDir, "reservation-lookup-profiles.json");

@@ -18,6 +18,7 @@ export async function serveStatic(pathname, response) {
     "/booking-flow.css": ["booking-flow.css", "text/css; charset=utf-8"],
     "/toast.js": ["toast.js", "text/javascript; charset=utf-8"],
     "/app.js": ["app.js", "text/javascript; charset=utf-8"],
+    "/submitted-records.js": ["submitted-records.js", "text/javascript; charset=utf-8"],
     "/workspace.js": ["workspace.js", "text/javascript; charset=utf-8"],
     "/editor-drafts.js": ["editor-drafts.js", "text/javascript; charset=utf-8"],
     "/stay-calendar.js": ["stay-calendar.js", "text/javascript; charset=utf-8"],

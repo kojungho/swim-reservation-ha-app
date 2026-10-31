@@ -9,6 +9,21 @@ const executablePath = [process.env.CHROMIUM_PATH, '/usr/bin/chromium', '/Applic
 const html = `<form><input type="hidden" name="_csrf" value="FAKE-UNTOUCHED"><input name="name" maxlength="30" required><input type="tel" name="phone" required><input name="depositor"><textarea name="request"></textarea><select name="arrive_time"><option value=""></option><option value="14:00 ~ 15:00">14시</option></select><input type="radio" name="pay_method" value="bank"><input type="radio" name="pay_method" value="card" checked><input type="checkbox" class="js-agree" data-required="1" name="agree_refund" required><input type="checkbox" name="marketing"><button type="submit">신청</button></form>`;
 const values = { fields: { name: '모의예약자', phone: '01000000000', depositor: '모의입금자', request: '모의 요청', arrive_time: '14:00 ~ 15:00' } };
 const fixedHtml=html.replace('<input type="radio" name="pay_method" value="bank"><input type="radio" name="pay_method" value="card" checked>','<input type="hidden" name="pay_method" value="bank">');
+test('바뀐 이름·전화번호 라벨과 하이픈 형식·필수 환불/개인정보 약관을 찾아 입력하고 선택 약관은 남긴다',{skip:!executablePath},async t=>{
+ const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());const page=await browser.newPage();
+ const source=fixedHtml.replace('<input name="name" maxlength="30" required>','<label for="guest_v2">예약자명 (필수)</label><input name="guest_v2" id="guest_v2" required>').replace('<input type="tel" name="phone" required>','<label for="contact_v2">휴대폰 번호 (필수)</label><input type="tel" name="contact_v2" id="contact_v2" placeholder="010-0000-0000" pattern="[0-9]{3}-[0-9]{3,4}-[0-9]{4}" required>').replace('<input type="checkbox" class="js-agree" data-required="1" name="agree_refund" required>','<label><input type="checkbox" name="refund_v2" required>[필수] 취소·환불 규정 동의</label><label><input type="checkbox" name="privacy_v2" required>[필수] 개인정보 수집·이용 동의</label><label><input type="checkbox" name="ads_v2" data-required="0">[선택] 마케팅 동의</label>');
+ await page.setContent(source);assert.equal((await page.locator('form').evaluate(fillCampForm,values)).ok,true);assert.equal(await page.locator('#guest_v2').inputValue(),values.fields.name);assert.equal(await page.locator('#contact_v2').inputValue(),'010-0000-0000');assert.equal(await page.locator('[name=refund_v2]').isChecked(),true);assert.equal(await page.locator('[name=privacy_v2]').isChecked(),true);assert.equal(await page.locator('[name=ads_v2]').isChecked(),false);
+ assert.equal((await page.locator('form').evaluate(fillCampForm,{verifyOnly:true,...values})).ok,true);
+ await page.locator('#contact_v2').fill('010-9999-9999');assert.equal((await page.locator('form').evaluate(fillCampForm,{verifyOnly:true,...values})).ok,false);assert.equal(await page.locator('#contact_v2').inputValue(),'010-9999-9999');
+});
+test('10/11자리 번호를 세 칸 형식에 맞추고 다른 번호·모호한 전화칸·알 수 없는 필수 약관은 제출 전에 거부한다',{skip:!executablePath},async t=>{
+ const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());const page=await browser.newPage();
+ const input='<input type="tel" name="phone" required>',parts='<label>휴대폰 번호<select name="phone1"><option>010</option><option>011</option></select><input name="phone2" maxlength="4" required><input name="phone3" maxlength="4" required></label>';
+ for(const number of ['01012345678','0111234567']){await page.setContent(fixedHtml.replace(input,parts));const fields={...values.fields,phone:number};assert.equal((await page.locator('form').evaluate(fillCampForm,{fields})).ok,true);assert.equal(await page.locator('[name=phone1]').inputValue(),number.slice(0,3));assert.equal(await page.locator('[name=phone2]').inputValue(),number.slice(3,-4));assert.equal(await page.locator('[name=phone3]').inputValue(),number.slice(-4));assert.equal((await page.locator('form').evaluate(fillCampForm,{fields,verifyOnly:true})).ok,true);}
+ for(const source of [fixedHtml.replace(input,'<label>전화번호<input name="unknown_a"></label><label>전화번호<input name="unknown_b"></label>'),fixedHtml.replace('name="marketing"','name="marketing" checked'),fixedHtml.replace('name="marketing"','name="unknown_required" required')]){
+  await page.setContent(source);assert.equal((await page.locator('form').evaluate(fillCampForm,values)).ok,false);assert.equal(await page.locator('[name=name]').inputValue(),'');
+ }
+});
 test('카드가 기본이거나 결제 선택이 드롭다운이어도 무통장만 선택하고 지원되지 않으면 중단한다', {skip:!executablePath},async t=>{
  const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());const page=await browser.newPage();
  await page.setContent(fixedHtml.replace('<input type="hidden" name="pay_method" value="bank">','<select name="pay_method"><option value="card" selected>카드</option><option value="bank">무통장입금</option><option value="transfer">계좌이체</option></select>'));
@@ -36,13 +51,16 @@ test('서버·Android 폼과 제출 직전 검사는 같은 고정 무통장 처
  assert.equal(native.slice(native.indexOf('function fillCampForm('),native.indexOf('\n\n// Runs inside the browser.')),fillCampForm.toString());
  const hidden={site:'1',checkin:'2027-01-19',checkout:'2027-01-20',adults:'2',children:'0',infants:'0'};
  const source=fixedHtml.replace('<form>','<div class="summary-card"><div class="sum-title">하늘존해</div></div><form class="js-book" action="/camp/book.php" method="post">'+Object.entries(hidden).map(([k,v])=>`<input type=hidden name="${k}" value="${v}">`).join('')).replace('type="submit"','type="submit" class="js-pay"');
- await page.route('https://camp.test/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:source}));await page.goto('https://camp.test/camp/book.php');await page.addScriptTag({content:native+'\n'+step});
+ let activeSource=source;await page.route('https://camp.test/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:activeSource}));await page.goto('https://camp.test/camp/book.php');await page.addScriptTag({content:native+'\n'+step});
  const p={catalog:[{name:'해_하늘존',siteId:1,displayName:'하늘존해'}],site:1,date:hidden.checkin,checkout:hidden.checkout,adults:2,name:values.fields.name,phone:values.fields.phone,payer:values.fields.depositor,request:'',arrival:'',consent:true};
  const prepared=await page.evaluate(p=>campStep('prepare',p),p);assert.equal(prepared.ok,true,JSON.stringify(prepared));
- const target={page,recordTrace(){},currentStep:'pre-submit-verify'},config={startDate:p.date,nights:1,adults:2},room=p.catalog[0];await CampEngine.prototype.assertForm.call(target,config,room,{verifyInputs:true});
+ const target={page,recordTrace(){},currentStep:'pre-submit-verify'},config={startDate:p.date,nights:1,adults:2,profile:{reserverName:p.name,phone:p.phone,depositorName:p.payer}},room=p.catalog[0];await CampEngine.prototype.assertForm.call(target,config,room,{verifyInputs:true});
  await page.evaluate(()=>{window.mockSubmits=0;document.querySelector('form').addEventListener('submit',event=>{event.preventDefault();window.mockSubmits++;});});assert.equal((await page.evaluate(p=>campStep('submit',p),p)).ok,true);assert.equal(await page.evaluate(()=>mockSubmits),1);
  await page.locator('[name=pay_method]').evaluate(e=>e.value='card');await assert.rejects(CampEngine.prototype.assertForm.call(target,config,room,{verifyInputs:true}),error=>error.code==='FORM_MISMATCH');
  assert.equal((await page.evaluate(p=>campStep('submit',p),p)).code,'PRE_SUBMIT_MISMATCH');assert.equal(await page.locator('[name=pay_method]').inputValue(),'card');assert.equal(await page.evaluate(()=>mockSubmits),1);
+ activeSource=source.replace('<input type="tel" name="phone" required>','<label>휴대폰 번호<input type="tel" name="new_contact" pattern="[0-9]{3}-[0-9]{4}-[0-9]{4}" required></label>').replace('<input type="checkbox" class="js-agree" data-required="1" name="agree_refund" required>','<label><input type="checkbox" name="new_refund" required>[필수] 취소 환불 규정 동의</label>');
+ await page.reload();await page.addScriptTag({content:native+'\n'+step});const adapted=await page.evaluate(p=>campStep('prepare',p),p);assert.equal(adapted.ok,true,JSON.stringify(adapted));await CampEngine.prototype.assertForm.call(target,config,room,{verifyInputs:true});assert.equal(await page.locator('[name=new_contact]').inputValue(),'010-0000-0000');
+ await page.evaluate(()=>document.querySelector('form').addEventListener('submit',event=>event.preventDefault()));assert.equal((await page.evaluate(p=>campStep('submit',p),p)).ok,true);
 });
 test('한 번의 브라우저 평가로 전체 입력·필수 동의를 마치며 CSRF·선택 동의는 보존하고 제출하지 않는다', { skip: !executablePath }, async t => {
   const browser = await chromium.launch({ executablePath, headless: true }); t.after(() => browser.close());
@@ -73,9 +91,9 @@ test('일괄 입력의 실패 항목 이름만 기록하고 입력값·약관 �
   await page.setContent(html.replace('type="tel"', 'type="tel" pattern="[0-9]{2}"'));
   const result = await page.locator('form').evaluate(fillCampForm, values);
   assert.equal(result.ok, false);
-  assert.equal(result.failedStep, 'input-verify');
+  assert.equal(result.failedStep, 'form-controls-check');
   assert.deepEqual(result.invalidFields, ['phone']);
-  assert.equal(result.steps.at(-1).checks.nativeValid, false);
+  assert.equal(result.steps.at(-1).checks.fieldsRecognized, false);
   assert.ok(!JSON.stringify(result).includes(values.fields.phone));
 });
 test('필드·약관 변경 또는 잘못된 선택값은 입력 전 검증에서 거부한다', { skip: !executablePath }, async t => {
