@@ -50,7 +50,7 @@ export class ReservationEngine extends LegacyEngine {
     await this.traceStep('catalog-save', () => persistCatalog());
     return rooms;
   }
-  async runSingle(config, { allowFallback = true, beforeSubmit } = {}) {
+  async runSingle(config, { allowFallback = true, beforeSubmit, checkOnly = false } = {}) {
     let submitted = false;
     let bookingRecordId = null;
     this.traceContext.profile = maskedProfile(getProfiles(config)[0]);
@@ -100,6 +100,12 @@ export class ReservationEngine extends LegacyEngine {
           }
           if (!result.ok) throw Object.assign(fail(result.code, result.code === 'PAYMENT_METHOD_UNRECOGNIZED' ? '공식 폼의 무통장입금 방식을 확인하지 못했습니다. 최종 제출하지 않았습니다.' : '예약자 정보·필수 약관을 일괄 입력한 결과를 검증하지 못했습니다. 제출하지 않습니다.'), { substep: result.failedStep });
         });
+        // Preflight uses the identical fill/validation path, but never creates a
+        // submission record, invokes the final queue, or clicks a submit button.
+        if (checkOnly) {
+          await this.traceStep('pre-submit-verify', () => this.assertForm(config, room, { verifyInputs: true }));
+          return { verified: true, room: room.name, submitted: false };
+        }
         // No automatic POST retry, including timeouts, 403/429 and unknown receipts.
         const submit = async () => {
           if (beforeSubmit) await this.traceStep('deadline-verify', () => beforeSubmit());

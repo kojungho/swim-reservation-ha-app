@@ -1,6 +1,6 @@
 {
   "name": "swim-reservation-ha-app",
-  "version": "2.15.33",
+  "version": "2.15.34",
   "private": true,
   "type": "module",
   "engines": {

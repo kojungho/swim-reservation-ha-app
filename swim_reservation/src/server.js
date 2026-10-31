@@ -22,6 +22,7 @@ import { PlanManager, singleBookingConfig } from "./plan-manager.js";
 import { MonthCache } from "./month-cache.js";
 import { SubmissionSettings } from "./submission-settings.js";
 import { HaNotifications, notificationService } from './ha-notifications.js';
+import { ReservationPreflight } from './reservation-preflight.js';
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
@@ -56,6 +57,19 @@ const plans = new PlanManager({ dataDir: DATA_DIR, timeSync,
   canInspect: () => !scheduler.running && !scheduler.preparing,
   log: (...args) => store.recordLog(...args)
 });
+const preflight = new ReservationPreflight({ dataDir: DATA_DIR, now: () => timeSync.now(),
+  list: async () => {
+    const entries = await plans.list(), status = await store.getStatus();
+    if (status.state === 'waiting' && scheduler.armed) entries.push({ id: 'default', kind: 'scheduled', enabled: true, config: scheduler.armedConfig || await store.getConfig(), status });
+    return entries;
+  },
+  canCheck: () => !scheduler.running && !scheduler.preparing && !plans.busy && !inspections.jobs.size,
+  engineFactory: plan => new ReservationEngine({
+    store: { updateStatus: async () => {}, recordLog: (level, event, message, details) => store.recordLog(level, 'preflight-step', `사전 점검: ${message}`, { ...details, planId: plan.id }) },
+    executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', traceContext: { planId: plan.id, operation: 'preflight' }
+  }),
+  log: (...args) => store.recordLog(...args)
+});
 const reservationManager = new ReservationManager({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", log: (...args) => store.recordLog(...args) });
 const monthCache = new MonthCache({ dataDir: DATA_DIR, now: () => timeSync.now(),
   countsOnly: true,
@@ -83,6 +97,8 @@ if (legacyStatus.state === 'waiting' && legacyStatus.armedConfig?.siteVersion !=
   await store.updateStatus({ state: "failed", stage: "exception", message: error.message });
 });
 await plans.init();
+await preflight.init();
+preflight.start();
 await monthCache.init();
 await monthCache.configure(0); // Monthly availability is on-demand only; no background timer.
 
@@ -393,6 +409,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     scheduler.armed = false;
     scheduler.cancelRequested = true;
     scheduler.operation++;
+    await preflight.close();
     await plans.close();
     await monthCache.close();
     await inspections.cancelAll();
