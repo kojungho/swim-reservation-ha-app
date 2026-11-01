@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { chromium } from 'playwright-core';
-import { ReservationPreflight, preflightDue, preflightDates, preflightWindow, inspectReservationPreflight } from '../src/reservation-preflight.js';
+import { ReservationPreflight, preflightDue, preflightDates, preflightWindow, inspectReservationPreflight, dailyPreflightConfig, dailyPreflightDates } from '../src/reservation-preflight.js';
 import { ReservationEngine } from '../src/camp-engine.js';
 import { HaNotifications } from '../src/ha-notifications.js';
 
@@ -27,6 +27,47 @@ async function fixture(t, inspect = async () => ({ submitted: false })) {
   const manager = new ReservationPreflight(options); await manager.init(); t.after(() => manager.close());
   return { manager, options, rows, logs, set: value => { now = epoch(value); }, count: () => count };
 }
+test('대기 일정이 없어도 매일10시 한 번, 서버 재시작·설정 변경 중복 없음, 다음날 새 점검', async t => {
+  const f=await fixture(t);f.rows.length=0;f.options.dailyConfig=async()=>dailyPreflightConfig(config);f.manager.dailyConfig=f.options.dailyConfig;
+  await f.manager.tick();assert.equal(f.count(),0);f.set('2030-09-30T10:00:00');await Promise.all([f.manager.tick(),f.manager.tick()]);assert.equal(f.count(),1);assert.equal(f.logs[0][3].kind,'daily');
+  const restored=new ReservationPreflight(f.options);await restored.init();await restored.tick();assert.equal(f.count(),1);await restored.close();
+  f.set('2030-10-01T10:00:00');await f.manager.tick();assert.equal(f.count(),2);assert.equal(f.rows.length,0);assert.equal(f.manager.entries.length,2);
+});
+test('일일 점검은 야간·10시 전 실행하지 않고 지연 기동 시 주간에만 보충한다',async t=>{
+  const f=await fixture(t);f.rows.length=0;f.manager.dailyConfig=async()=>dailyPreflightConfig(config);
+  for(const time of ['00:00:00','07:59:59','09:59:59','19:00:00']){f.set('2030-09-30T'+time);await f.manager.tick();}assert.equal(f.count(),0);
+  f.set('2030-09-30T18:00:00');await f.manager.tick();assert.equal(f.count(),1);
+});
+test('일일 점검 실패도 당일 반복하지 않고 다음날 다시 검사하며 예약에 영향이 없다',async t=>{
+  const f=await fixture(t,async()=>{throw Object.assign(new Error('PRIVATE'),{code:'PAYMENT_METHOD_UNRECOGNIZED',step:'personal-fill'});});f.rows.length=0;f.manager.dailyConfig=async()=>dailyPreflightConfig(config);
+  f.set('2030-09-30T10:00:00');await f.manager.tick();await f.manager.tick();assert.equal(f.count(),1);assert.equal(f.logs[0][3].state,'failed');assert.ok(!JSON.stringify(f.logs).includes('PRIVATE'));
+  f.set('2030-10-01T10:00:00');await f.manager.tick();assert.equal(f.count(),2);
+});
+test('일일 설정 읽기 실패는 개인정보 원문 없이 기록·알림하고 브라우저를 열지 않는다',async t=>{
+  const f=await fixture(t);f.rows.length=0;f.manager.dailyConfig=async()=>{throw new Error('PRIVATE_CONFIG');};f.set('2030-09-30T10:00:00');await f.manager.tick();assert.equal(f.count(),0);assert.equal(f.logs[0][3].code,'PREFLIGHT_CONFIG_UNAVAILABLE');assert.equal(f.logs[0][3].kind,'daily');assert.ok(!JSON.stringify(f.logs).includes('PRIVATE_CONFIG'));
+});
+test('일일 점검도 실제 실행 직전·진행 중에는 양보하고 이후 같은 날 점검한다',async t=>{
+  const f=await fixture(t);f.manager.dailyConfig=async()=>dailyPreflightConfig(config);f.set('2030-09-30T10:00:00');f.rows[0].config.triggerAt='2030-09-30T10:03:00';await f.manager.tick();assert.equal(f.count(),0);
+  f.rows.length=0;f.manager.canCheck=()=>false;await f.manager.tick();assert.equal(f.count(),0);f.manager.canCheck=()=>true;await f.manager.tick();assert.equal(f.count(),1);
+});
+test('지난날 실행 중 서버가 종료된 일일 점검은 중단 알림 후 당일 새 검사',async t=>{
+  const f=await fixture(t);f.rows.length=0;f.options.dailyConfig=async()=>dailyPreflightConfig(config);f.manager.dailyConfig=f.options.dailyConfig;f.set('2030-09-30T10:00:00');await f.manager.tick();
+  f.manager.entries[0].state='checking';f.manager.entries[0].reported=false;await f.manager.persist();f.set('2030-10-01T08:00:00');const restored=new ReservationPreflight(f.options);await restored.init();await restored.tick();assert.equal(f.count(),1);assert.equal(f.logs.at(-1)[3].state,'interrupted');
+  f.set('2030-10-01T10:00:00');await restored.tick();assert.equal(f.count(),2);await restored.close();
+});
+test('일일 점검 설정은 유효 예약자 한 명 또는 점검용 값을 복사하며 제출 동의·원래 설정을 바꾸지 않는다',()=>{
+  const original=structuredClone(config),daily=dailyPreflightConfig(config);assert.equal(daily.profiles.length,1);assert.equal(daily.autoFinalSubmit,false);assert.equal(daily.preflightDaily,true);assert.equal(daily.startDate,'');assert.deepEqual(config,original);daily.profiles[0].phone='different';assert.equal(config.profiles[0].phone,'01000000000');
+  const sample=dailyPreflightConfig({profiles:[]});assert.equal(sample.preflightProfileSource,'sample');assert.equal(sample.profiles[0].reserverName,'점검예약자');
+});
+test('달력 잔여 수로 후보를 찾고 과거·마감·아직 열리지 않은 날짜는 제외한다',async()=>{
+  const urls=[],engine={traceStep:async(step,action)=>action(),navigate:async url=>{urls.push(url);const month=new URL(url).searchParams.get('ym');return{json:async()=>({ok:true,ym:month,open:'2030-10-31',days:{[month+'-05']:2,[month+'-06']:0}})};}};
+  assert.deepEqual(await dailyPreflightDates(engine,epoch('2030-09-30T10:00:00')),['2030-10-05']);assert.equal(urls.length,3);
+});
+test('일일 정상은 로그만, 실패·미완료는 일일 점검 알림으로 전달한다',async()=>{
+  const calls=[],n=new HaNotifications({token:'fake',fetchImpl:async(url,options)=>{calls.push(JSON.parse(options.body));return{ok:true};}});
+  for(const state of ['passed','failed','unavailable'])n.observe({event:'preflight-result',details:{planId:'daily-health',kind:'daily',key:state,state,code:'PAYMENT_METHOD_UNRECOGNIZED',step:'personal-fill'}});
+  await Promise.all([...n.pending]);assert.equal(calls.length,2);assert.ok(calls.every(call=>call.title.includes('일일 점검')));assert.ok(calls[0].message.includes('무통장입금'));
+});
 test('예약 전날 점검 한 번, 동시 tick·재시작 중복 없음, 원래 대기·설정 보존', async t => {
   const f = await fixture(t); const original = structuredClone(f.rows);
   await f.manager.tick(); assert.equal(f.count(), 0);
@@ -102,4 +143,9 @@ test('사이트 스크립트가 입력 중 POST를 시도해도 네트워크에�
     return route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<div class="room-list"><a class="room-card" href="/camp/site.php?${new URL(req.url()).searchParams}&site=1"><span class="room-name">하늘존해</span></a></div>` });
   });
   await assert.rejects(inspectReservationPreflight(engine, config, epoch('2030-09-30T10:00:00')), e => e.code === 'PREFLIGHT_WRITE_BLOCKED'); assert.equal(writes, 0);
+});
+test('일일 점검은 달력→실제 빈자리→동일 입력·약관·결제 검증까지 진행하고 제출은 없다',{skip:!executablePath},async t=>{
+  t.mock.method(Date,'now',()=>epoch('2030-09-30T10:00:00'));const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());let writes=0,calendars=0;const logs=[];
+  const engine=new ReservationEngine({browserProvider:()=>browser,store:{updateStatus:async()=>{},recordLog:async(...e)=>logs.push(e),bookings:{begin(){throw new Error('must not record');}}}});await engine.ensurePage();await engine.context.route('**/*',async route=>{const req=route.request(),u=new URL(req.url());if(req.method()!=='GET'){writes++;return route.abort();}if(u.pathname==='/camp/api.php'){calendars++;const month=u.searchParams.get('ym');return route.fulfill({json:{ok:true,ym:month,open:'2030-11-30',days:{[month+'-05']:2}}});}if(u.pathname==='/camp/book.php')return route.fulfill({contentType:'text/html; charset=utf-8',body:form(req.url(),false)});return route.fulfill({contentType:'text/html; charset=utf-8',body:`<div class="room-list"><a class="room-card" href="/camp/site.php?${u.searchParams}&site=1"><span class="room-name">하늘존해</span></a></div>`});});
+  const result=await inspectReservationPreflight(engine,dailyPreflightConfig(config),epoch('2030-09-30T10:00:00'));assert.equal(result.checkin,'2030-10-05');assert.equal(result.submitted,false);assert.equal(calendars,3);assert.equal(writes,0);assert.ok(logs.some(e=>e[3]?.step==='pre-submit-verify'&&e[3].outcome==='complete'));assert.ok(!logs.some(e=>e[3]?.step==='submit-click'));
 });

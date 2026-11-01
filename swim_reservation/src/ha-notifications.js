@@ -17,6 +17,7 @@ export class HaNotifications {
     const d = entry.details || {};
     const id = String(d.planId || 'default');
     if (entry.event === 'preflight-result') {
+      if (d.kind === 'daily' && d.state === 'passed') return; // Daily success stays in the log; only issues push.
       const result = preflightNotification(d);
       const key = `preflight:${id}:${d.key || ''}`;
       if (!result || !this.token || !this.service || this.sent.has(key) || this.pending.size >= 50) return;
@@ -67,11 +68,16 @@ export class HaNotifications {
 }
 
 export function preflightNotification(d) {
+  if (d.kind === 'daily') {
+    const original = preflightNotification({ ...d, kind: 'scheduled' });
+    if (!original) return null;
+    return { title: original.title.replace('사전 점검', '일일 점검'), message: original.message.replace('기존 예약 대기는 유지됩니다.', '예약 일정은 변경하지 않았습니다.') };
+  }
   const suffix = ' 최종 제출하지 않았으며 기존 예약 대기는 유지됩니다. 알림을 눌러 실행 기록을 확인하세요.';
   if (d.state === 'passed') return { title: '쉼오지 예약 · 사전 점검 통과', message: '열린 날짜의 1박 빈자리로 예약자 입력·무통장입금·필수 약관을 확인했습니다. 실제 예약 접수 여부는 점검 대상이 아닙니다.' + suffix };
   if (d.state === 'unavailable') return { title: '쉼오지 예약 · 사전 점검 미완료', message: '점검한 날짜에 예약 가능한 빈자리가 없어 입력 단계까지 확인하지 못했습니다.' + suffix };
   if (!['failed', 'interrupted'].includes(d.state)) return null;
-  const steps = { 'room-lookup': '객실 조회', 'browser-ready': '브라우저 연결', 'form-detect': '예약 폼 탐색', 'form-ready': '예약 폼 준비', 'form-verify': '기간·사이트 대조', 'personal-fill': '예약자 입력·결제·약관', 'pre-submit-verify': '입력값·결제·약관 최종 확인' };
+  const steps = { 'calendar-fetch': '잔여 자리 달력 조회', 'calendar-parse': '달력 응답 해석', 'calendar-verify': '달력 잔여 자리 대조', 'profile-read': '점검 설정 읽기', 'room-lookup': '객실 조회', 'browser-ready': '브라우저 연결', 'form-detect': '예약 폼 탐색', 'form-ready': '예약 폼 준비', 'form-verify': '기간·사이트 대조', 'personal-fill': '예약자 입력·결제·약관', 'pre-submit-verify': '입력값·결제·약관 최종 확인' };
   const causes = { PAYMENT_METHOD_UNRECOGNIZED: '무통장입금 항목을 확인하지 못했습니다.', FORM_FIELDS_UNRECOGNIZED: '입력 항목 또는 필수 약관을 확인하지 못했습니다.', SITE_RATE_LIMIT: '사이트에서 요청을 제한했습니다.', SITE_HTTP_ERROR: '사이트가 정상 응답하지 않았습니다.', SITE_CONNECTION: '사이트에 연결하지 못했습니다.', PREFLIGHT_INTERRUPTED: '점검이 중단되었거나 제한 시간을 넘었습니다.', PREFLIGHT_WRITE_BLOCKED: '입력 중 전송 시도가 있어 차단했습니다.' };
   return { title: '쉼오지 예약 · 사전 점검 확인 필요', message: `${steps[d.step] || '예약 양식 점검'}: ${causes[d.code] || '정상 진행을 확인하지 못했습니다. 상세 로그 확인이 필요합니다.'}` + suffix };
 }

@@ -22,7 +22,7 @@ import { PlanManager, singleBookingConfig } from "./plan-manager.js";
 import { MonthCache } from "./month-cache.js";
 import { SubmissionSettings } from "./submission-settings.js";
 import { HaNotifications, notificationService } from './ha-notifications.js';
-import { ReservationPreflight } from './reservation-preflight.js';
+import { ReservationPreflight, dailyPreflightConfig } from './reservation-preflight.js';
 import { AppProblems } from './app-problems.js';
 
 const PORT = Number(process.env.PORT || 8099);
@@ -60,6 +60,7 @@ const plans = new PlanManager({ dataDir: DATA_DIR, timeSync,
   log: (...args) => store.recordLog(...args)
 });
 const preflight = new ReservationPreflight({ dataDir: DATA_DIR, now: () => timeSync.now(),
+  dailyConfig: async () => dailyPreflightConfig(await store.getConfig(), await store.getSavedProfiles()),
   list: async () => {
     const entries = await plans.list(), status = await store.getStatus();
     if (status.state === 'waiting' && scheduler.armed) entries.push({ id: 'default', kind: 'scheduled', enabled: true, config: scheduler.armedConfig || await store.getConfig(), status });
