@@ -12,7 +12,7 @@ const at = (date, hour) => Date.parse(`${date}T${String(hour).padStart(2, '0')}:
 export function preflightDue(trigger) { return at(day(trigger - DAY), 10); }
 export function preflightWindow(now) { return now >= at(day(now), 8) && now < at(day(now), 19); }
 export function preflightKey(plan) { return createHash('sha256').update(JSON.stringify([plan.id, plan.config])).digest('hex'); }
-export function dailyPreflightKey(now) { return createHash('sha256').update(`daily-catalog-v2:${day(now)}`).digest('hex'); }
+export function dailyPreflightKey(now) { return createHash('sha256').update(`daily-catalog-v3:${day(now)}`).digest('hex'); }
 export function dailyPreflightConfig(config, profiles = []) {
   const valid = p => validPersonName(p.reserverName) && /^01\d{8,9}$/.test(p.phone || '') && String(p.depositorName || '').length <= 50;
   const profile = [...profiles, ...getProfiles(config)].find(valid);

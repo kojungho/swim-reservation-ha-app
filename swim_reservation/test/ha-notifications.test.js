@@ -19,7 +19,7 @@ test('booking failures notify only S25 without raw private data, with timeout an
   assert.equal(calls[0].options.headers.Authorization, 'Bearer token');
   assert.ok(calls[0].options.signal);
   assert.ok(!calls[0].options.body.includes('SECRET'));
-  assert.match(JSON.parse(calls[0].options.body).data.clickAction, /swim_reservation$/);
+  assert.equal(JSON.parse(calls[0].options.body).data.clickAction, '/app/76980dac_swim_reservation');
 });
 
 test('watch failures throttled per plan, serious booking failures still notify; new run resets', async () => {

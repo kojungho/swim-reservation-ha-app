@@ -1,4 +1,4 @@
-import { CAMP_ROOT, catalog, campUrl, checkoutDate, readCampListing, saveVerifiedCatalog } from './camp-site.js';
+import { CAMP_ROOT, catalog, campUrl, checkoutDate, saveVerifiedCatalog } from './camp-site.js';
 import { validateCampSites } from './camp-site-identity.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -12,10 +12,34 @@ export async function checkDailyCatalog(engine, config, dates, now, signal, {del
   let reads = 0;
   const pace = async () => { stop(); if (reads++ && delayMs) await sleep(delayMs, undefined, {signal}); stop(); };
   if (!first || before.length > 128) throw fail('CATALOG_MISMATCH');
+  const resources = route => ['image','media','font','script'].includes(route.request().resourceType()) ? route.abort() : route.fallback();
+  await engine.context.route('**/*',resources);
+  try {
+  await engine.traceStep('catalog-session-ready',()=>engine.navigate(campUrl({...config,startDate:first,nights:1})));
+  const read = async (url, step, detail = false) => engine.traceStep(step, async () => {
+    // Fetch static public HTML without opening/rendering each gallery page.
+    // Context routing still enforces the preflight's GET-only network guard.
+    const response = await engine.page.evaluate(async url => {
+      const controller = new AbortController(), timer = setTimeout(()=>controller.abort(),10000);
+      try {
+        const r = await fetch(url,{method:'GET',credentials:'same-origin',redirect:'error',cache:'no-store',signal:controller.signal});
+        if(!r.ok)return {status:r.status};
+        if(Number(r.headers.get('content-length'))>1048576)return {status:r.status,oversize:true};
+        const html=await r.text();return {status:r.status,url:r.url,html:html.length<=1048576?html:'',oversize:html.length>1048576};
+      } catch { return {status:0}; } finally { clearTimeout(timer); }
+    },url);
+    engine.recordTrace(step,'http',{httpStatus:response.status,method:'GET',url});
+    if(response.status!==200)throw fail(response.status===429?'SITE_RATE_LIMIT':response.status?'SITE_HTTP_ERROR':'SITE_CONNECTION');
+    if(response.oversize||response.url!==url)throw fail('CATALOG_MISMATCH');
+    return engine.page.evaluate(({html,detail})=>{
+      const d=new DOMParser().parseFromString(html,'text/html');
+      if(!detail)return {recognized:Boolean(d.querySelector('.room-list')),cards:[...d.querySelectorAll('a.room-card[href]')].map(a=>({href:a.getAttribute('href'),displayName:a.querySelector('.room-name')?.textContent||''}))};
+      const titles=d.querySelectorAll('.detail-heading'),quotes=d.querySelectorAll('form.js-quote');return {title:titles.length===1?titles[0].textContent:'',count:quotes.length,site:quotes[0]?.dataset.site,ci:quotes[0]?.dataset.ci,co:quotes[0]?.dataset.co};
+    },{html:response.html,detail});
+  });
   for (const startDate of dates.slice(0, 7)) {
     await pace(); const trial = { ...config, startDate, nights: 1 };
-    await engine.traceStep('catalog-list-fetch', () => engine.navigate(campUrl(trial)));
-    const parsed = await engine.page.evaluate(readCampListing);
+    const parsed = await read(campUrl(trial),'catalog-list-fetch');
     const result = validateCampSites(parsed, { root: CAMP_ROOT, checkin: startDate, checkout: checkoutDate(startDate, 1) });
     if (!result.ok) throw fail(result.code);
     for (const room of result.cards) {
@@ -28,12 +52,8 @@ export async function checkDailyCatalog(engine, config, dates, now, signal, {del
   if (ids.length > 128) throw fail('CATALOG_MISMATCH');
   const entries = [], names = new Set(), trial = { ...config, startDate: first, nights: 1 };
   for (const id of ids) {
-    await pace(); await engine.traceStep('catalog-detail-fetch', () => engine.navigate(campUrl(trial, 'site.php', id)));
-    const detail = await engine.page.evaluate(() => {
-      const title = document.querySelectorAll('.detail-heading'), quote = document.querySelectorAll('form.js-quote');
-      return { title: title.length === 1 ? title[0].textContent : '', count: quote.length, site: quote[0]?.dataset.site, ci: quote[0]?.dataset.ci, co: quote[0]?.dataset.co };
-    });
-    const result = validateCampSites({ recognized: true, cards: [{ href: engine.page.url(), displayName: detail.title }] }, { root: CAMP_ROOT, checkin: first, checkout: checkoutDate(first, 1) });
+    await pace(); const url=campUrl(trial,'site.php',id),detail=await read(url,'catalog-detail-fetch',true);
+    const result = validateCampSites({ recognized: true, cards: [{ href: url, displayName: detail.title }] }, { root: CAMP_ROOT, checkin: first, checkout: checkoutDate(first, 1) });
     // Detail URL is site.php too. Independent DOM identifiers must agree.
     if (!result.ok || detail.count !== 1 || detail.site !== String(id) || detail.ci !== first || detail.co !== checkoutDate(first, 1)) throw fail('CATALOG_MISMATCH');
     const room = result.cards[0];
@@ -50,4 +70,5 @@ export async function checkDailyCatalog(engine, config, dates, now, signal, {del
   await engine.onCatalogUpdated?.(entries);
   if ((config.preflightRequestedSites || []).some(name => !names.has(name))) throw fail('CATALOG_REQUESTED_SITE_MISSING');
   return result;
+  } finally { await engine.context.unroute('**/*',resources).catch(()=>{}); }
 }
