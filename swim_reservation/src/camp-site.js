@@ -6,6 +6,8 @@ export const CAMP_ROOT = 'https://www.swimozicamp.com/camp/';
 export const SITE_VERSION = 'swimozicamp-v1';
 export const catalog = new Map(ROOM_NAMES.map((name, index) => [name, { name, siteId: index + 1, displayName: name.split('_').reverse().join('') }]));
 let catalogFile;
+let verifiedCatalog = { checkedAt: 0, entries: [] };
+export const catalogSnapshot = () => structuredClone(verifiedCatalog);
 let writes = Promise.resolve();
 export async function initCatalog(file) {
   catalogFile = file;
@@ -19,6 +21,14 @@ export async function initCatalog(file) {
   }
   catalog.clear();
   for (const [name, room] of restored) catalog.set(name, room);
+  try { const checked = JSON.parse(await readFile(file + '.verified', 'utf8')); if (Number.isSafeInteger(checked.checkedAt) && checked.checkedAt > 0 && Array.isArray(checked.entries)) verifiedCatalog = checked; }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+}
+export async function saveVerifiedCatalog(entries, checkedAt) {
+  const snapshot = { checkedAt, entries: structuredClone(entries) };
+  if (catalogFile) { await writeFile(catalogFile + '.verified.tmp', JSON.stringify(snapshot), { mode: 0o600 }); await rename(catalogFile + '.verified.tmp', catalogFile + '.verified'); }
+  catalog.clear(); for (const room of entries) catalog.set(room.name, room);
+  await persistCatalog(); verifiedCatalog = snapshot;
 }
 export async function persistCatalog() {
   if (!catalogFile) return;

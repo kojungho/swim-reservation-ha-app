@@ -4,6 +4,7 @@ import path from 'node:path';
 import { bookingOpenIso, triggerEpoch, getProfiles } from './config.js';
 import { validPersonName } from './person-name.js';
 import { monthlyUrl, parseCampCalendar } from './camp-monthly.js';
+import { checkDailyCatalog } from './camp-catalog-check.js';
 
 const DAY = 86400000, OFFSET = 9 * 3600000;
 const day = now => new Date(now + OFFSET).toISOString().slice(0, 10);
@@ -11,7 +12,7 @@ const at = (date, hour) => Date.parse(`${date}T${String(hour).padStart(2, '0')}:
 export function preflightDue(trigger) { return at(day(trigger - DAY), 10); }
 export function preflightWindow(now) { return now >= at(day(now), 8) && now < at(day(now), 19); }
 export function preflightKey(plan) { return createHash('sha256').update(JSON.stringify([plan.id, plan.config])).digest('hex'); }
-export function dailyPreflightKey(now) { return createHash('sha256').update(`daily:${day(now)}`).digest('hex'); }
+export function dailyPreflightKey(now) { return createHash('sha256').update(`daily-catalog-v2:${day(now)}`).digest('hex'); }
 export function dailyPreflightConfig(config, profiles = []) {
   const valid = p => validPersonName(p.reserverName) && /^01\d{8,9}$/.test(p.phone || '') && String(p.depositorName || '').length <= 50;
   const profile = [...profiles, ...getProfiles(config)].find(valid);
@@ -34,9 +35,9 @@ export async function dailyPreflightDates(engine, now, signal) {
     const response = await engine.traceStep('calendar-fetch', () => engine.navigate(monthlyUrl(month)));
     const raw = await engine.traceStep('calendar-parse', () => response.json());
     const calendar = await engine.traceStep('calendar-verify', async () => parseCampCalendar(raw, month));
-    dates.push(...calendar.days.filter(d => d.date > current && !d.beforeOpen && d.availableCount > 0).map(d => d.date));
+    dates.push(...calendar.days.filter(d => d.date > current && !d.beforeOpen && d.availableCount > 0).map(d => ({date:d.date,count:d.availableCount})));
   }
-  return dates.slice(0,7);
+  return dates.sort((a,b)=>b.count-a.count||a.date.localeCompare(b.date)).slice(0,7).map(d=>d.date);
 }
 
 // Separate browser/store from the waiting reservation. The network guard blocks
@@ -59,6 +60,7 @@ export async function inspectReservationPreflight(engine, config, now, signal) {
     await engine.context.route('**/*', guard);
     let candidate;
     const dates = config.preflightDaily ? await dailyPreflightDates(engine, now, signal) : preflightDates(now);
+    const catalogCheck = config.preflightDaily ? await checkDailyCatalog(engine, config, dates.length ? dates : preflightDates(now).slice(0,1), now, signal) : undefined;
     for (const startDate of dates) {
       if (startDate.slice(0, 7) === config.startDate.slice(0, 7)) continue;
       if (signal?.aborted) throw problem('PREFLIGHT_INTERRUPTED', 'room-lookup');
@@ -74,7 +76,7 @@ export async function inspectReservationPreflight(engine, config, now, signal) {
       if (mutationBlocked) throw problem('PREFLIGHT_WRITE_BLOCKED', 'pre-submit-verify');
       if (!result?.verified || result.submitted !== false) throw problem('PREFLIGHT_NOT_VERIFIED', 'pre-submit-verify');
     }
-    return { checkin: candidate.startDate, nights: 1, site: candidate.roomPriority[0].name, profilesChecked: getProfiles(config).length, submitted: false };
+    return { checkin: candidate.startDate, nights: 1, site: candidate.roomPriority[0].name, profilesChecked: getProfiles(config).length, submitted: false, ...(catalogCheck ? {catalogCheck} : {}) };
   } finally {
     signal?.removeEventListener('abort', abort);
     await engine.close();
@@ -123,7 +125,7 @@ export class ReservationPreflight {
       const waiting = plans.filter(p => p.enabled && p.kind === 'scheduled' && p.status.state === 'waiting' && p.status.stage === 'armed' && p.config.siteVersion === 'swimozicamp-v1');
       if (this.dailyConfig && now >= at(day(now), 10) && !this.entries.some(e => e.key === dailyPreflightKey(now) && e.reported)) {
         let config;
-        try { config = await this.dailyConfig(); }
+        try { config = await this.dailyConfig(); config.preflightRequestedSites = [...new Set(plans.filter(p=>p.enabled).flatMap(p=>[...(p.config.roomPriority||[]), ...getProfiles(p.config).flatMap(profile=>profile.roomPriority||[])]).filter(r=>r.enabled).map(r=>r.name))]; }
         catch { config = { preflightConfigError: true }; }
         waiting.push({ id: 'daily-health', kind: 'daily', enabled: true, config, status: { state: 'waiting' } });
       }

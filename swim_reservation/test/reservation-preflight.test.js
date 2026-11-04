@@ -8,6 +8,7 @@ import { chromium } from 'playwright-core';
 import { ReservationPreflight, preflightDue, preflightDates, preflightWindow, inspectReservationPreflight, dailyPreflightConfig, dailyPreflightDates } from '../src/reservation-preflight.js';
 import { ReservationEngine } from '../src/camp-engine.js';
 import { HaNotifications } from '../src/ha-notifications.js';
+import { catalog } from '../src/camp-site.js';
 
 const epoch = value => Date.parse(value + '+09:00');
 const config = { startDate: '2030-12-03', nights: 2, triggerAt: '2030-10-01T00:00:00', siteVersion: 'swimozicamp-v1', bookingMode: 'profiles-parallel', adults: 2,
@@ -147,5 +148,6 @@ test('사이트 스크립트가 입력 중 POST를 시도해도 네트워크에�
 test('일일 점검은 달력→실제 빈자리→동일 입력·약관·결제 검증까지 진행하고 제출은 없다',{skip:!executablePath},async t=>{
   t.mock.method(Date,'now',()=>epoch('2030-09-30T10:00:00'));const browser=await chromium.launch({executablePath,headless:true});t.after(()=>browser.close());let writes=0,calendars=0;const logs=[];
   const engine=new ReservationEngine({browserProvider:()=>browser,store:{updateStatus:async()=>{},recordLog:async(...e)=>logs.push(e),bookings:{begin(){throw new Error('must not record');}}}});await engine.ensurePage();await engine.context.route('**/*',async route=>{const req=route.request(),u=new URL(req.url());if(req.method()!=='GET'){writes++;return route.abort();}if(u.pathname==='/camp/api.php'){calendars++;const month=u.searchParams.get('ym');return route.fulfill({json:{ok:true,ym:month,open:'2030-11-30',days:{[month+'-05']:2}}});}if(u.pathname==='/camp/book.php')return route.fulfill({contentType:'text/html; charset=utf-8',body:form(req.url(),false)});return route.fulfill({contentType:'text/html; charset=utf-8',body:`<div class="room-list"><a class="room-card" href="/camp/site.php?${u.searchParams}&site=1"><span class="room-name">하늘존해</span></a></div>`});});
-  const result=await inspectReservationPreflight(engine,dailyPreflightConfig(config),epoch('2030-09-30T10:00:00'));assert.equal(result.checkin,'2030-10-05');assert.equal(result.submitted,false);assert.equal(calendars,3);assert.equal(writes,0);assert.ok(logs.some(e=>e[3]?.step==='pre-submit-verify'&&e[3].outcome==='complete'));assert.ok(!logs.some(e=>e[3]?.step==='submit-click'));
+  await engine.context.route('**/camp/site.php?**',route=>{const u=new URL(route.request().url()),id=Number(u.searchParams.get('site')),room=[...catalog.values()].find(r=>r.siteId===id);return route.fulfill({contentType:'text/html; charset=utf-8',body:`<h1 class="detail-heading">${room.displayName}</h1><form class="js-quote" data-site="${id}" data-ci="${u.searchParams.get('ci')}" data-co="${u.searchParams.get('co')}"></form>`});});
+  const result=await inspectReservationPreflight(engine,dailyPreflightConfig(config),epoch('2030-09-30T10:00:00'));assert.equal(result.checkin,'2030-10-05');assert.equal(result.submitted,false);assert.equal(result.catalogCheck.checkedCount,14);assert.equal(calendars,3);assert.equal(writes,0);assert.ok(logs.some(e=>e[3]?.step==='pre-submit-verify'&&e[3].outcome==='complete'));assert.ok(!logs.some(e=>e[3]?.step==='submit-click'));
 });

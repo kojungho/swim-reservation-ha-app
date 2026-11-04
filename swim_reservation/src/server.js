@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeConfig, normalizeProfile, validateProfile, triggerEpoch, validateConfig, getProfiles } from "./config.js";
-import { campUrl, SITE_VERSION, initCatalog } from './camp-site.js';
+import { campUrl, SITE_VERSION, initCatalog, catalogSnapshot } from './camp-site.js';
 const reservationUrl = startDate => campUrl({ startDate, nights: 1 });
 import { ReservationEngine } from "./camp-engine.js";
 import { Scheduler } from "./scheduler.js";
@@ -67,10 +67,10 @@ const preflight = new ReservationPreflight({ dataDir: DATA_DIR, now: () => timeS
     return entries;
   },
   canCheck: () => !scheduler.running && !scheduler.preparing && !plans.busy && !inspections.jobs.size,
-  engineFactory: plan => new ReservationEngine({
+  engineFactory: plan => Object.assign(new ReservationEngine({
     store: { updateStatus: async () => {}, recordLog: (level, event, message, details) => store.recordLog(level, 'preflight-step', `사전 점검: ${message}`, { ...details, planId: plan.id }) },
     executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', traceContext: { planId: plan.id, operation: 'preflight' }
-  }),
+  }), { onCatalogUpdated: entries => store.mergeDiscoveredRooms(entries.map(room => room.name)) }),
   log: (...args) => store.recordLog(...args)
 });
 const reservationManager = new ReservationManager({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", log: (...args) => store.recordLog(...args) });
@@ -133,7 +133,8 @@ const server = http.createServer(async (request, response) => {
       await store.recordLog("info", "submission-settings", `다인·다중 예약 최종 제출 간격을 ${settings.intervalSeconds}초로 저장했습니다.`, settings);
       return json(response, 200, settings);
     }
-    if(url.pathname==="/api/phone-display"&&request.method==="GET"){const image=await siteMap.read();return json(response,200,{schema:1,settings:await uiSettings.read(),submitIntervalSeconds:(await submissionSettings.read()).intervalSeconds,photoSha256:createHash("sha256").update(image).digest("hex")});}
+    if(url.pathname==="/api/site-catalog"&&request.method==="GET")return json(response,200,catalogSnapshot());
+    if(url.pathname==="/api/phone-display"&&request.method==="GET"){const image=await siteMap.read();return json(response,200,{schema:1,settings:await uiSettings.read(),submitIntervalSeconds:(await submissionSettings.read()).intervalSeconds,photoSha256:createHash("sha256").update(image).digest("hex"),siteCatalog:catalogSnapshot()});}
     if(url.pathname==='/api/app-problems'&&request.method==='POST'){
       try{return json(response,200,await appProblems.accept(await readJsonBody(request,2048)));}
       catch(error){return json(response,error.statusCode===429?429:400,{ok:false,error:'invalid_or_limited_report'});}

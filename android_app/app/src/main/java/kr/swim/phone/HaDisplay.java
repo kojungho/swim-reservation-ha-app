@@ -52,7 +52,9 @@ final class HaDisplay {
   for(String key:new String[]{"menuSpacing","floatingSize","dateInputVersion"})if(source.opt(key) instanceof Number){double n=source.getDouble(key);int min=key.equals("floatingSize")?44:0,max=key.equals("floatingSize")?64:key.equals("menuSpacing")?16:1;if(n==Math.rint(n)&&n>=min&&n<=max)settings.put(key,(int)n);}
   Object interval=display.opt("submitIntervalSeconds");
   if(!(interval instanceof Number)||((Number)interval).doubleValue()!=Math.rint(((Number)interval).doubleValue())||((Number)interval).doubleValue()<0||((Number)interval).doubleValue()>60)throw new IOException("제출 간격 불일치");
-  return new JSONObject().put("settings",settings).put("photoSha256",display.getString("photoSha256")).put("submitIntervalSeconds",((Number)interval).intValue());
+  JSONObject safe=new JSONObject().put("settings",settings).put("photoSha256",display.getString("photoSha256")).put("submitIntervalSeconds",((Number)interval).intValue());
+  if(display.has("siteCatalog"))safe.put("siteCatalog",RoomCatalog.projectSnapshot(display.getJSONObject("siteCatalog")));
+  return safe;
  }
  static byte[] get(String url,int max)throws Exception{
   // No cookies/auth headers/redirects. Public data cannot choose another URL.
@@ -74,6 +76,7 @@ final class HaDisplay {
    BitmapFactory.Options bounds=new BitmapFactory.Options();bounds.inJustDecodeBounds=true;BitmapFactory.decodeByteArray(image,0,image.length,bounds);if(bounds.outWidth<1||bounds.outHeight<1||bounds.outWidth>2400||bounds.outHeight>2400)throw new IOException("사진 형식 불일치");
    AtomicFile target=new AtomicFile(file);FileOutputStream out=target.startWrite();try{out.write(image);target.finishWrite(out);}catch(Exception e){target.failWrite(out);throw e;}
   }
+  if(display.has("siteCatalog"))RoomCatalog.applyServer(c,display.getJSONObject("siteCatalog"));
   display.put("hasPhoto",true).put("updatedAt",System.currentTimeMillis());vault(c).saveDocument("ha-display",display);
   File[] files=c.getFilesDir().listFiles();if(files!=null)for(File previous:files)if(previous.getName().matches("ha-display-[a-f0-9]{64}\\.png")&&!previous.equals(file))previous.delete();
  }

@@ -30,6 +30,16 @@ def source():
 
 
 class ProjectionTest(unittest.TestCase):
+    def test_public_catalog_contains_only_checked_site_names_numbers_and_time(self):
+        raw = {"checkedAt": 1800000000000, "entries": [{"name": "해_하늘존", "displayName": "하늘존해", "siteId": 11, "phone": "PRIVATE"}], "profiles": ["PRIVATE"]}
+        self.assertNotIn("PRIVATE", json.dumps(public.project_catalog(raw)))
+        value = source(); value["siteCatalog"] = raw
+        self.assertEqual(11, public.project(value, png())["siteCatalog"]["entries"][0]["siteId"])
+        for bad in (True, 1.5, 10001, "1"):
+            invalid = {**raw, "entries": [{**raw["entries"][0], "siteId": bad}]}
+            with self.assertRaises(ValueError): public.project_catalog(invalid)
+        with self.assertRaises(ValueError): public.project_catalog({**raw, "entries": raw["entries"] * 2})
+
     def test_all_app_menu_flags_pass_but_unknown_private_keys_do_not(self):
         raw = source()
         raw["settings"]["appMenus"].update(book=False, people=False, monthly=False, logs=False, privateToken="secret")
@@ -131,6 +141,7 @@ class RouteTest(unittest.IsolatedAsyncioTestCase):
                     "http://local-swim-reservation:8099/api/ui-settings": {**source()["settings"], "profiles": ["PRIVATE"]},
                     "http://local-swim-reservation:8099/api/submission-settings": {"intervalSeconds": 0},
                     "http://local-swim-reservation:8099/api/site-map": png(),
+                    "http://local-swim-reservation:8099/api/site-catalog": {"checkedAt": 0, "entries": [], "profiles": ["PRIVATE"]},
                 }
                 return Reply(replies[url])
 
@@ -173,7 +184,7 @@ class RouteTest(unittest.IsolatedAsyncioTestCase):
         text = await response.text()
         self.assertNotIn("PRIVATE", text)
         self.assertNotIn("SERVER_ONLY_SECRET", text)
-        self.assertEqual(5, len(self.calls))
+        self.assertEqual(6, len(self.calls))
         for url, options in self.calls:
             self.assertFalse(options["allow_redirects"])
             self.assertEqual({"Authorization": "Bearer SERVER_ONLY_SECRET"} if url.startswith("http://supervisor/") else {}, options["headers"])

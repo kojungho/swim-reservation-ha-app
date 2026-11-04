@@ -79,9 +79,10 @@ async def async_setup(hass, config):
         settings = json.loads(await read(base + "/api/ui-settings", 131072))
         submission = json.loads(await read(base + "/api/submission-settings", 4096))
         image = await read(base + "/api/site-map", MAX_PHOTO)
+        catalog = json.loads(await read(base + "/api/site-catalog", 65536))
         raw = {"schema": 1, "settings": settings,
                "submitIntervalSeconds": submission.get("intervalSeconds"),
-               "photoSha256": hashlib.sha256(image).hexdigest()}
+               "photoSha256": hashlib.sha256(image).hexdigest(), "siteCatalog": catalog}
         return raw, image
 
     snapshot = Snapshot(fetch)

@@ -30,6 +30,27 @@ def project_problem(raw):
     return dict(raw)
 
 
+def project_catalog(raw):
+    if not isinstance(raw, dict) or type(raw.get("checkedAt")) is not int or not 0 <= raw["checkedAt"] <= 4102444800000 or not isinstance(raw.get("entries"), list) or len(raw["entries"]) > 128:
+        raise ValueError("Invalid catalog")
+    entries, names, ids = [], set(), set()
+    for room in raw["entries"]:
+        if not isinstance(room, dict):
+            raise ValueError("Invalid site")
+        name, display, site = room.get("name"), room.get("displayName"), room.get("siteId")
+        if not isinstance(name, str) or not 1 <= len(name) <= 80 or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in name) or not isinstance(display, str) or not 1 <= len(display) <= 80 or type(site) is not int or not 1 <= site <= 10000:
+            raise ValueError("Invalid site")
+        match = re.fullmatch(r"(하늘존|산맥존)(.+)", display)
+        canonical = f"{match[2]}_{match[1]}" if match else display
+        if canonical != name or name in names or site in ids:
+            raise ValueError("Ambiguous site")
+        names.add(name); ids.add(site)
+        entries.append({"name": name, "displayName": display, "siteId": site})
+    if bool(entries) != (raw["checkedAt"] > 0):
+        raise ValueError("Incomplete catalog")
+    return {"checkedAt": raw["checkedAt"], "entries": entries}
+
+
 def project(raw, image):
     if not isinstance(raw, dict) or type(raw.get("schema")) is not int or raw["schema"] != 1:
         raise ValueError("Invalid schema")
@@ -72,7 +93,10 @@ def project(raw, image):
         if type(value) is int and low <= value <= high:
             settings[key] = value
     # Never copy profiles, schedules, logs, tokens, gallery entries, URLs or unknown fields.
-    return {"schema": 1, "settings": settings, "submitIntervalSeconds": interval, "photoSha256": digest}
+    value = {"schema": 1, "settings": settings, "submitIntervalSeconds": interval, "photoSha256": digest}
+    if "siteCatalog" in raw:
+        value["siteCatalog"] = project_catalog(raw["siteCatalog"])
+    return value
 
 
 class Snapshot:

@@ -21,7 +21,17 @@ final class RoomCatalog {
         Map<String,Integer> fresh=new LinkedHashMap<>();Set<Integer> seen=new HashSet<>();for(int i=0;i<found.length();i++){JSONObject room=found.getJSONObject(i);String name=room.getString("name");int id=room.getInt("siteId");if(name.isBlank()||name.length()>80||id<1||id>10000||!display(name).equals(room.getString("displayName"))||fresh.containsKey(name)||!seen.add(id))throw new IllegalArgumentException("사이트 목록 형식·중복 불일치");fresh.put(name,id);}
         Map<String,Integer> next=snapshot?new LinkedHashMap<>():new LinkedHashMap<>(ids);next.entrySet().removeIf(e->seen.contains(e.getValue())&&!fresh.containsKey(e.getKey()));next.putAll(fresh);
         ids.clear();ids.putAll(next);NAMES.clear();NAMES.addAll(next.keySet());
-        if(persist)new LocalStore(context,0).saveDocument("catalog-v1",new JSONObject().put("entries",entries()));
+        if(persist){LocalStore vault=new LocalStore(context,0);JSONObject old=vault.loadDocument("catalog-v1");vault.saveDocument("catalog-v1",new JSONObject().put("entries",entries()).put("localCheckedAt",System.currentTimeMillis()).put("serverCheckedAt",old==null?0:old.optLong("serverCheckedAt")));}
+    }
+    static JSONObject projectSnapshot(JSONObject raw)throws Exception{
+        Object stamp=raw.opt("checkedAt");if(!(stamp instanceof Number)||((Number)stamp).doubleValue()!=Math.rint(((Number)stamp).doubleValue())||((Number)stamp).doubleValue()<0||((Number)stamp).doubleValue()>4102444800000L)throw new IllegalArgumentException("사이트 확인 시각 불일치");
+        long checked=((Number)stamp).longValue();JSONArray source=raw.getJSONArray("entries"),safe=new JSONArray();Set<String> names=new HashSet<>();Set<Integer> seen=new HashSet<>();if(source.length()>128||(source.length()>0)!=(checked>0))throw new IllegalArgumentException("사이트 목록 불일치");
+        for(int i=0;i<source.length();i++){JSONObject r=source.getJSONObject(i);Object value=r.opt("siteId");String name=r.getString("name"),display=r.getString("displayName");if(!(value instanceof Number)||((Number)value).doubleValue()!=Math.rint(((Number)value).doubleValue())||((Number)value).doubleValue()<1||((Number)value).doubleValue()>10000)throw new IllegalArgumentException("사이트 번호 불일치");int id=((Number)value).intValue();if(name.isBlank()||name.length()>80||name.matches(".*[\\p{Cntrl}\\s].*")||display.length()>80||!display(name).equals(display)||!names.add(name)||!seen.add(id))throw new IllegalArgumentException("사이트 중복·이름 불일치");safe.put(new JSONObject().put("name",name).put("displayName",display).put("siteId",id));}
+        return new JSONObject().put("checkedAt",checked).put("entries",safe);
+    }
+    static synchronized boolean applyServer(Context context,JSONObject source)throws Exception{
+        JSONObject checked=projectSnapshot(source);long at=checked.getLong("checkedAt");LocalStore vault=new LocalStore(context,0);JSONObject old=vault.loadDocument("catalog-v1");if(at==0||PhoneRuns.executing(context)||old!=null&&(old.optLong("serverCheckedAt")>=at||old.optLong("localCheckedAt")>at))return false;
+        vault.saveDocument("catalog-v1",new JSONObject().put("entries",checked.getJSONArray("entries")).put("serverCheckedAt",at).put("localCheckedAt",at));merge(context,checked.getJSONArray("entries"),false,true);return true;
     }
     static String label(String name){int split=name.lastIndexOf('_');return split<0?name:name.substring(split+1)+" · "+name.substring(0,split);}
     static List<String> parse(String value){return new ArrayList<>(new LinkedHashSet<>(Arrays.stream(value.split("[,\\n]")).map(String::trim).filter(s->!s.isEmpty()).collect(java.util.stream.Collectors.toList())));}
