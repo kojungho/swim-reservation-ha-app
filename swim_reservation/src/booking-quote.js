@@ -32,7 +32,7 @@ export async function bookingQuote(input,{fetcher=fetch,now=Date.now()}={}){
   const config={startDate:String(input.startDate||''),nights:Number(input.nights),adults:Number(input.adults||2)};
   checkoutDate(config.startDate,config.nights);
   const names=[...new Set(input.roomNames||[])];
-  if(!names.length||names.length>14||names.some(name=>!catalog.has(name))||![1,2].includes(config.adults))throw Error('숙박 기간·선택 사이트·성인 인원을 확인하세요.');
+  if(!names.length||names.length>catalog.size||names.some(name=>!catalog.has(name))||![1,2].includes(config.adults))throw Error('숙박 기간·선택 사이트·성인 인원을 확인하세요.');
   const [year,month]=config.startDate.split('-').map(Number),opening=Date.UTC(year,month-3,1)-9*3600000;
   const quotes=names.map(name=>({name,total:null,nightlyRates:[]}));if(now<opening)return {quotes,reason:'오픈 전 · 금액 미확인'};
   const signal=AbortSignal.timeout(12000);let reason='공식 금액 미확인';

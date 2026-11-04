@@ -45,8 +45,16 @@ export class ReservationEngine extends LegacyEngine {
     await this.traceStep('browser-ready', () => this.ensurePage());
     if (triggerEpoch(bookingOpenIso(config.startDate)) > Date.now()) return [...catalog.values()].map(room => ({ ...room, available: false, status: 'unknown', serverProvided: false, options: [] }));
     await this.traceStep('room-lookup', () => this.navigate(campUrl(config)));
-    const rooms = await this.traceStep('listing-verify', async () => mergeListing(await this.page.evaluate(readCampListing), config));
-    this.recordTrace('listing-verify', 'checks', { siteCount: rooms.length, availableCount: rooms.filter(room => room.available).length });
+    const previous = new Map(catalog);
+    const rooms = await this.traceStep('listing-verify', async () => {
+      const parsed = await this.page.evaluate(readCampListing);
+      if (!parsed.recognized) {
+        const notice = await this.page.locator('.msg-box').innerText().catch(() => '');
+        if (/체크인까지|오픈|예약.*시작|아직/.test(notice)) throw fail('BOOKING_NOT_OPEN', '공식 사이트가 아직 예약 오픈 전으로 안내합니다.');
+      }
+      return mergeListing(parsed, config);
+    });
+    this.recordTrace('listing-verify', 'checks', { siteCount: rooms.length, availableCount: rooms.filter(room => room.available).length, addedSites: rooms.filter(room => !previous.has(room.name)).map(room => room.name), changedSites: rooms.filter(room => previous.has(room.name) && previous.get(room.name).siteId !== room.siteId).map(room => room.name) });
     await this.traceStep('catalog-save', () => persistCatalog());
     return rooms;
   }
@@ -59,8 +67,26 @@ export class ReservationEngine extends LegacyEngine {
       await this.traceStep('browser-ready', () => this.ensurePage());
       const candidates = config.roomPriority.filter(room => room.enabled);
       if (!candidates.length) throw fail('NO_AVAILABLE_ROOM', '예약할 사이트를 선택해 주세요.');
+      // Resolve by the requested name against a fresh list BEFORE opening any
+      // personal-information form. Never execute a cached numeric preference.
+      let liveRooms, listingReads = 0;
+      const resolutionGeneration = this.closeGeneration || 0;
+      for (;;) {
+        listingReads++;
+        try { liveRooms = await this.inspect(config); break; }
+        catch (error) {
+          if (error.code !== 'BOOKING_NOT_OPEN') throw error;
+          const trigger = triggerEpoch(config.triggerAt);
+          const delay = openingRetryDelay({ submitted, notice: '아직 예약 오픈 전', reads: listingReads, trigger, now: Date.now() });
+          if (delay === null) throw error;
+          await this.traceStep('opening-wait', () => sleep(delay));
+          if (resolutionGeneration !== (this.closeGeneration || 0)) throw fail('BOOKING_CANCELED', '중지된 예약은 재조회하지 않습니다.');
+        }
+      }
+      if (liveRooms.some(room => room.serverProvided === false)) throw fail('BOOKING_NOT_OPEN', '예약 오픈 전입니다. 사이트 번호를 추정하지 않습니다.');
       for (const candidate of candidates) {
-        const room = catalog.get(candidate.name);
+        const room = liveRooms.find(room => room.name === candidate.name && room.available === true);
+        if (!room) { this.recordTrace('site-unavailable', 'complete', { requestedSite: candidate.name, fallbackAllowed: allowFallback }); if (allowFallback) continue; throw fail('NO_AVAILABLE_ROOM', '선택한 사이트명이 최신 공식 빈자리 목록에 없습니다.'); }
         await this.traceStep('site-resolve', async () => {
           if (!room) throw fail('UNKNOWN_SITE', '사이트 번호를 확인하지 못했습니다. 빈자리 목록을 먼저 조회해 주세요.');
         });
@@ -74,7 +100,7 @@ export class ReservationEngine extends LegacyEngine {
           if (await this.traceStep('form-detect', () => this.page.locator('form.js-book').count())) break;
           const notice = await this.page.locator('.msg-box').innerText().catch(() => '');
           const trigger = triggerEpoch(config.triggerAt);
-          const delay = openingRetryDelay({ submitted, notice, reads: attempt + 1, trigger, now: Date.now() });
+          const delay = openingRetryDelay({ submitted, notice, reads: listingReads + attempt + 1, trigger, now: Date.now() });
           if (delay === null) break;
           await this.traceStep('opening-wait', () => sleep(delay));
           if (openingGeneration !== (this.closeGeneration || 0)) throw fail('BOOKING_CANCELED', '중지된 예약은 재조회하지 않습니다.');
@@ -154,7 +180,9 @@ export class ReservationEngine extends LegacyEngine {
     const expected = { site: String(room.siteId), checkin: config.startDate, checkout: checkoutDate(config.startDate, config.nights), adults: String(config.adults || 2), children: '0', infants: '0' };
     const checks = await this.page.locator('form.js-book').evaluate((form, { fields, verifyInputs }) => {
       const action = new URL(form.action);
-      const checks = { actionMatched: action.origin === location.origin && action.pathname === '/camp/book.php', methodMatched: form.method.toLowerCase() === 'post',
+      const page = new URL(location.href);
+      const single = (key, value) => page.searchParams.getAll(key).length === 1 && page.searchParams.get(key) === value;
+      const checks = { pageMatched: page.origin === 'https://www.swimozicamp.com' && page.pathname === '/camp/book.php' && !page.username && !page.password && !page.hash && single('site', fields.site) && single('ci', fields.checkin) && single('co', fields.checkout), actionMatched: action.origin === location.origin && action.pathname === '/camp/book.php' && !action.search, methodMatched: form.method.toLowerCase() === 'post',
         csrfPresent: Boolean(form.querySelector('[name="_csrf"]')?.value),
         ...Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, form.querySelector(`[name="${key}"]`)?.value === value])) };
       if (verifyInputs) {

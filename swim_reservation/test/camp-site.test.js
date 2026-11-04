@@ -35,11 +35,12 @@ test('월별 API의 오픈 전 양수 수치를 예약 가능으로 표시하지
   assert.equal(data.days[7].beforeOpen, true);
   assert.ok(data.days[7].rooms.every(room => room.status === 'unknown'));
 });
-test('새 번호는 공개 목록에서 발견하면 후보에 추가하며 중복 번호 충돌은 거절한다', t => {
-  t.after(() => catalog.delete('새사이트_산맥존'));
+test('새 번호를 추가하고 번호가 재사용되면 최신 이름에 연결한다', t => {
+  const before=new Map(catalog);t.after(() => {catalog.clear();for(const [name,room]of before)catalog.set(name,room);});
   const parsed = { recognized: true, cards: [{ href: campUrl(config(), 'site.php', 15), displayName: '산맥존새사이트' }] };
   assert.equal(mergeListing(parsed, config()).find(room => room.siteId === 15).name, '새사이트_산맥존');
-  assert.throws(() => mergeListing({ recognized: true, cards: [{ ...parsed.cards[0], displayName: '산맥존다른이름' }] }, config()));
+  const changed=mergeListing({ recognized: true, cards: [{ ...parsed.cards[0], displayName: '산맥존다른이름' }] }, config());
+  assert.equal(changed.find(room=>room.name==='다른이름_산맥존').siteId,15);assert.equal(catalog.has('새사이트_산맥존'),false);
 });
 test('새 엔진의 예약 대기는 실행 전 사전 입력을 호출하지 않는다', async t => {
   let prepared = 0, now = Date.parse('2026-10-31T14:59:50Z');
@@ -78,10 +79,23 @@ async function fixture(t, { html = form, postStatus = 200, done = receipt } = {}
     if (url.origin !== new URL(CAMP_ROOT).origin) return route.abort();
     // Use a fresh client navigation: Playwright may not route server redirect chains.
     if (request.method() === 'POST') return route.fulfill({ status: postStatus, contentType: 'text/html; charset=utf-8', body: postStatus === 200 ? `<script>location.href='${CAMP_ROOT}done.php?t=FAKE-PRIVATE-TOKEN'</script>` : 'Too many requests' });
-    return route.fulfill({ contentType: 'text/html; charset=utf-8', body: url.pathname.endsWith('/done.php') ? done : html });
+    const listing=`<div class="room-list"><a class="room-card" href="${campUrl(config(),'site.php',11)}"><span class="room-name">산맥존숨</span></a></div>`;
+    return route.fulfill({ contentType: 'text/html; charset=utf-8', body: url.pathname==='/camp/'?listing:url.pathname.endsWith('/done.php') ? done : html });
   });
   return { engine, status, logs, requests };
 }
+test('예약 시작 전에 최신 목록의 이름으로 번호 교환을 해결하고 다른 사이트에 제출하지 않는다', { skip: !executablePath }, async t => {
+  const before=new Map(catalog);t.after(()=>{catalog.clear();for(const [name,room]of before)catalog.set(name,room);});
+  const f=await fixture(t,{html:form.replace('name="site" value="11"','name="site" value="1"')});
+  await f.engine.context.route('**/camp/?**',route=>{f.requests.push({method:'GET',url:route.request().url()});return route.fulfill({contentType:'text/html; charset=utf-8',body:`<div class="room-list"><a class="room-card" href="${campUrl(config(),'site.php',1)}"><span class="room-name">산맥존숨</span></a><a class="room-card" href="${campUrl(config(),'site.php',11)}"><span class="room-name">하늘존해</span></a></div>`});});
+  const result=await f.engine.runSingle(config(),{checkOnly:true});
+  assert.equal(result.room,'숨_산맥존');assert.equal(result.submitted,false);
+  assert.equal(catalog.get('숨_산맥존').siteId,1);assert.equal(catalog.get('해_하늘존').siteId,11);
+  assert.equal(new URL(f.requests[0].url).pathname,'/camp/');
+  const books=f.requests.filter(r=>new URL(r.url).pathname==='/camp/book.php');assert.equal(books.length,1);assert.equal(new URL(books[0].url).searchParams.get('site'),'1');
+  assert.equal(f.requests.filter(r=>r.method==='POST').length,0);
+  assert.ok(f.logs.some(entry=>entry[3]?.changedSites?.includes('숨_산맥존')));
+});
 test('오픈 반영 지연은 최대 5회 GET이며 중지 후 추가 조회·POST는 없다', { skip: !executablePath }, async t => {
   const notice='<div class="msg-box">아직 예약 오픈 전입니다.</div>';
   const f=await fixture(t,{html:notice});
@@ -90,7 +104,7 @@ test('오픈 반영 지연은 최대 5회 GET이며 중지 후 추가 조회·PO
   assert.equal(f.requests.filter(r=>r.method==='GET').length,5);assert.equal(f.requests.filter(r=>r.method==='POST').length,0);
   const g=await fixture(t,{html:notice});let settled;const result=g.engine.runSingle(current()).then(()=>null,e=>e);
   while(!g.logs.some(entry=>entry[3]?.step==='opening-wait'&&entry[3]?.outcome==='start'))await new Promise(r=>setTimeout(r,20));
-  await g.engine.close();settled=await result;assert.ok(settled);assert.equal(g.requests.length,1);
+  await g.engine.close();settled=await result;assert.ok(settled);assert.equal(g.requests.length,2);
 });
 test('오픈 반영 재조회 중 폼이 열리면 진행하고 최종 제출은 1회만 한다', { skip: !executablePath }, async t => {
   const f=await fixture(t);let reads=0;

@@ -40,7 +40,7 @@ final class PhonePreflightEngine implements PhoneExecution {
   String op=operation.equals("preflight")?operation:"preflight-"+operation;
   web.evaluateJavascript("(()=>{try{"+helpers+";return JSON.stringify(campStep("+JSONObject.quote(op)+","+input+","+JSONObject.quote(loaded)+"))}catch(e){return JSON.stringify({ok:false,code:'DOM_ERROR'})}})()",raw->{if(ended)return;try{JSONObject r=new JSONObject((String)new JSONTokener(raw).nextValue());
    if(!r.optBoolean("ok")){finish("failed",r.optString("code","FORM_MISMATCH"),operation);return;}
-   if(operation.equals("listing")){JSONArray available=r.getJSONArray("available");String name=null;for(int i=0;i<available.length()&&name==null;i++){int id=available.getInt(i);for(String known:RoomCatalog.NAMES)if(RoomCatalog.id(known)==id){site=id;name=known;break;}}if(name==null){nextDate();return;}trial.rooms=name;personIndex=0;nextPerson();}
+   if(operation.equals("listing")){try{RoomCatalog.merge(context,r.getJSONArray("catalog"),true);}catch(Exception mismatch){finish("failed","CATALOG_MISMATCH","listing");return;}JSONArray available=r.getJSONArray("available");String name=null;for(int i=0;i<available.length()&&name==null;i++){int id=available.getInt(i);for(String known:RoomCatalog.NAMES)if(RoomCatalog.id(known)==id){site=id;name=known;break;}}if(name==null){nextDate();return;}trial.rooms=name;personIndex=0;nextPerson();}
    else if(operation.equals("prepare")){operation="preflight";evaluate();}
    else if(operation.equals("preflight")){personIndex++;nextPerson();}
   }catch(Exception e){finish("failed","DOM_ERROR",operation);}});

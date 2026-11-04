@@ -1,5 +1,6 @@
 import { ROOM_NAMES } from './config.js';
 import { readFile, writeFile, rename } from 'node:fs/promises';
+import { validateCampSites } from './camp-site-identity.js';
 
 export const CAMP_ROOT = 'https://www.swimozicamp.com/camp/';
 export const SITE_VERSION = 'swimozicamp-v1';
@@ -10,12 +11,14 @@ export async function initCatalog(file) {
   catalogFile = file;
   let saved;
   try { saved = JSON.parse(await readFile(file, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; return; }
+  const restored = new Map();
   for (const room of saved) {
     if (!Number.isSafeInteger(room.siteId) || room.siteId < 1 || canonicalName(room.displayName) !== room.name) throw new Error('저장된 사이트 목록 형식을 확인해 주세요.');
-    const existing = [...catalog.values()].find(item => item.siteId === room.siteId || item.name === room.name);
-    if (existing && (existing.name !== room.name || existing.siteId !== room.siteId)) throw new Error('저장된 사이트 번호가 충돌합니다.');
-    catalog.set(room.name, room);
+    if (restored.has(room.name) || [...restored.values()].some(item => item.siteId === room.siteId)) throw new Error('저장된 사이트 번호가 충돌합니다.');
+    restored.set(room.name, room);
   }
+  catalog.clear();
+  for (const [name, room] of restored) catalog.set(name, room);
 }
 export async function persistCatalog() {
   if (!catalogFile) return;
@@ -45,19 +48,12 @@ export function readCampListing() {
 }
 export function mergeListing(parsed, config) {
   if (!parsed.recognized) throw new Error('새 사이트의 정상적인 빈자리 목록을 확인하지 못했습니다. 빈자리 0개로 처리하지 않습니다.');
-  const cards = parsed.cards.map(card => {
-    const url = new URL(card.href);
-    const id = Number(url.searchParams.get('site'));
-    if (url.origin !== new URL(CAMP_ROOT).origin || url.pathname !== '/camp/site.php' || url.searchParams.get('ci') !== config.startDate || url.searchParams.get('co') !== checkoutDate(config.startDate, config.nights) || !Number.isSafeInteger(id) || id < 1 || !card.displayName) throw new Error('사이트 목록의 날짜 또는 사이트 식별값이 다릅니다.');
-    return { siteId: id, name: canonicalName(card.displayName), displayName: card.displayName };
-  });
-  const combined = new Map(catalog);
-  for (const card of cards) {
-    const old = combined.get(card.name);
-    if (old && old.siteId !== card.siteId) throw new Error('기존 사이트의 번호가 변경되었습니다. 자동 예약을 중지합니다.');
-    if ([...combined.values()].some(item => item.siteId === card.siteId && item.name !== card.name)) throw new Error('사이트 번호와 이름이 충돌합니다. 자동 예약을 중지합니다.');
-    combined.set(card.name, card);
-  }
+  const result = validateCampSites(parsed, { root: CAMP_ROOT, checkin: config.startDate, checkout: checkoutDate(config.startDate, config.nights) }, [...catalog.values()]);
+  if (!result.ok) throw Object.assign(new Error('공식 사이트 이름·번호·URL·숙박 기간이 일치하지 않거나 중복되었습니다. 최종 제출하지 않습니다.'), { code: result.code, safeToLog: true });
+  const cards = result.cards;
+  // Retire stale aliases for reused numbers, without rewriting saved preferences.
+  // A site absent from the live list is never eligible for this lookup/run.
+  for (const [name, room] of catalog) if (!cards.some(card => card.name === name) && cards.some(card => card.siteId === room.siteId)) catalog.delete(name);
   for (const card of cards) catalog.set(card.name, card);
   return [...catalog.values()].map(room => ({ ...room, available: cards.some(card => card.siteId === room.siteId), status: cards.some(card => card.siteId === room.siteId) ? 'available' : 'unavailable', serverProvided: true, options: [] }));
 }
