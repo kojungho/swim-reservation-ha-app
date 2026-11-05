@@ -46,11 +46,30 @@ function siteChoiceMessage(){
   if(states.some(s=>['unknown','checking','checking-before-open'].includes(s.kind)))return '선택한 전체 기간을 조회한 뒤 가능한 사이트만 추가할 수 있습니다. 미확인은 0곳이 아닙니다.';
   return states.some(s=>s.kind==='available')?'목록에는 같은 사이트로 전체 숙박 기간이 가능한 곳만 표시합니다.':'선택 기간에 예약 가능한 사이트가 없습니다. 날짜별 빈자리가 있어도 같은 사이트의 연박은 불가능할 수 있습니다.';
 }
+const siteNumbers = new Map();
+function rememberSiteNumbers(entries) {
+  for (const entry of entries || []) {
+    if (typeof entry?.name === 'string' && Number.isSafeInteger(entry.siteId) && entry.siteId > 0) {
+      for (const [name, id] of siteNumbers) if (id === entry.siteId && name !== entry.name) siteNumbers.delete(name);
+      siteNumbers.set(entry.name, entry.siteId);
+    }
+  }
+}
+async function refreshSiteNumbers() {
+  try {
+    const result = await request('site-identities', { timeoutMs: 3000 });
+    if (Array.isArray(result.entries)) { siteNumbers.clear(); rememberSiteNumbers(result.entries); }
+  } catch { /* Keep the last known labels when the server is temporarily unavailable. */ }
+}
+function siteChoiceLabel(name) {
+  const id = siteNumbers.get(name);
+  return `${id ? `${id} ` : ''}${shortRoomText(name)}`;
+}
 function siteChoiceEditor(items,prefix=''){
   let removed=0;
   for(const item of items)if(item.enabled&&['booked','unavailable'].includes(siteChoiceState(item.name).kind)){item.enabled=false;removed++;}
   if(removed){document.getElementById('roomDragStatus').textContent='선택 기간에 예약 불가한 사이트 '+removed+'개를 선택에서 제외했습니다.';if(typeof captureEditorDraft==='function')captureEditorDraft();}
-  return createSiteChoiceEditor({items,canSelect:canSelectRoom,status:siteChoiceState,prefix,ranked:workspaceTab!=='watch'&&elements.bookingMode.value!=='multiple',message:siteChoiceMessage(),onChange:()=>{
+  return createSiteChoiceEditor({items,label:siteChoiceLabel,canSelect:canSelectRoom,status:siteChoiceState,prefix,ranked:workspaceTab!=='watch'&&elements.bookingMode.value!=='multiple',message:siteChoiceMessage(),onChange:()=>{
     editorGeneration++;renderRooms();if(typeof captureEditorDraft==='function')captureEditorDraft();
   }});
 }
@@ -152,6 +171,7 @@ const AVAILABILITY_LABELS = {
 init().catch((error) => showMessage(error.message, true));
 
 async function init() {
+  await refreshSiteNumbers();
   const config = await request("config");
   loadConfig({ ...config, profiles: [{}], profile2: {}, useSecondProfile: false, multipleProfileIndex: 0, editorProfileIndex: 0 });
   bindEvents();
@@ -1063,6 +1083,7 @@ async function copyDiagnostics() {
 }
 
 function renderInspection(result, { beforeOpen = false, addedRooms = [] } = {}) {
+  rememberSiteNumbers(result);
   availabilityContext = `${elements.startDate.value}/${Number(elements.nights.value)}`;
   const existingNames = new Set(rooms.map((room) => room.name));
   for (const found of result) {
@@ -1162,6 +1183,8 @@ async function refreshAvailability() {
   const nights = Number(elements.nights.value);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !Number.isInteger(nights)) return;
   const requestId = ++availabilityRequest;
+  await refreshSiteNumbers();
+  if (requestId !== availabilityRequest) return;
   availabilityByRoom.clear();
   const beforeOpen = isBeforeOpen(startDate);
   if(plannedSiteChoices()){
