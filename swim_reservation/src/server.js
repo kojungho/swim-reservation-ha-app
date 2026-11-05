@@ -12,6 +12,8 @@ import { Scheduler } from "./scheduler.js";
 import { Store } from "./store.js";
 import { reservationCheckUrl, ReservationManager } from "./camp-manager.js";
 import { SiteTimeSync } from "./site-time.js";
+import { chromium } from "playwright-core";
+import { InspectionBrowser, attachInspectionBrowser } from "./inspection-browser.js";
 import { InspectionService } from "./inspection-service.js";
 import { SiteMap } from "./site-map.js";
 import { UiSettings } from "./ui-settings.js";
@@ -44,12 +46,16 @@ const getFinalSubmitInterval = async () => (await submissionSettings.read()).int
 const engine = new ReservationEngine({ store, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", getFinalSubmitInterval });
 const timeSync = new SiteTimeSync();
 const scheduler = new Scheduler({ store, engine, timeSync });
+const inspectionBrowser = new InspectionBrowser(() => chromium.launch({
+  executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", headless: true,
+  args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--lang=ko-KR"]
+}));
 const inspections = new InspectionService(
   () => {
     const reader = new ReservationEngine({ store, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium" });
     const inspectRooms = reader.inspect.bind(reader);
     reader.inspect = config => config.month ? inspectMonth(reader, config) : config.calendarDate ? inspectCalendarDay(reader, config) : inspectRooms(config);
-    return reader;
+    return attachInspectionBrowser(reader, inspectionBrowser);
   },
   () => !scheduler.running && !scheduler.preparing && !plans.busy
 );
@@ -423,6 +429,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     await plans.close();
     await monthCache.close();
     await inspections.cancelAll();
+    await inspectionBrowser.close();
     await engine.close();
     server.close(() => process.exit(0));
   });
