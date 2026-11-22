@@ -32,6 +32,16 @@ export async function openIssuerPopup(page, pg) {
   const [issuer] = await Promise.all([page.waitForEvent('popup'), next.click()]);
   return issuer;
 }
+export async function cardInputControls(page) {
+  const inputs = page.locator('input:not([type="hidden"])');
+  const controls = await inputs.evaluateAll(elements => elements.map((e,index)=>{
+    const text = [e.getAttribute('aria-label'),e.getAttribute('title'),e.getAttribute('placeholder'),...[...e.labels||[]].map(label=>label.textContent)].filter(Boolean).map(t=>t.replace(/\s+/g,''));
+    const safe = s=>/^[A-Za-z_][A-Za-z0-9_-]{0,47}$/.test(s||'')?s:'other';
+    return {index,id:safe(e.id),name:safe(e.name),type:['text','password','tel','number'].includes(e.type)?e.type:'other',visible:!!e.getClientRects().length,readOnly:e.readOnly,card:text.some(t=>/^카드번호(?:입력|\[-\]없이입력)?$/.test(t))||e.autocomplete==='cc-number',cvc:text.some(t=>/^CVC번호(?:입력|뒤3자리)?$/i.test(t))||e.autocomplete==='cc-csc'};
+  }));
+  const card = controls.filter(e=>e.visible&&e.card), cvc = controls.filter(e=>e.visible&&e.cvc);
+  return {controls,card:card.length===1?inputs.nth(card[0].index):null,cvc:cvc.length===1?inputs.nth(cvc[0].index):null};
+}
 export const REVIEW_ERRORS = {
   CARD_FORMAT: '카드번호·CVC 3자리·일반결제 비밀번호 6자리를 확인하세요.',
   VAULT_PASSPHRASE: '저장소 해제 암호는 12~256자로 입력하세요.', VAULT_OPEN_FAILED: '해제 암호 또는 저장소 파일을 확인하세요.',
@@ -39,6 +49,7 @@ export const REVIEW_ERRORS = {
   KEYPAD_OCR_FAILED: '키패드 숫자를 판독하지 못해 입력을 중지했습니다.', KEYPAD_AMBIGUOUS: '숫자 10개의 위치를 확실히 구별하지 못해 중지했습니다.',
   KEYPAD_MOVED: '키패드 위치가 바뀌어 입력을 중지했습니다.', KEYPAD_INPUT_UNVERIFIED: '키패드 입력 결과를 확인하지 못해 중지했습니다.',
   ISSUER_PAGE_MISMATCH: '예상한 삼성 일반결제 화면이 아닙니다. 추가 인증·등록은 직접 확인하세요.',
+  ISSUER_FIELDS_UNRECOGNIZED: '삼성 카드번호·CVC 입력란을 유일하게 확인하지 못해 중지했습니다.',
   ORDER_MISMATCH: '공식 사이트의 객실·기간·인원·금액을 대조하지 못해 중지했습니다.',
   REVIEW_FAILED: '검토 중 화면 또는 연결 문제가 발생했습니다. 자동 재시도하지 않습니다.', REVIEW_TIMEOUT: '검토 제한 시간이 지나 브라우저를 닫았습니다.',
   PG_FRAME_NOT_READY: '이니시스 결제창의 실제 연결 주소를 확인하지 못해 중지했습니다.',
@@ -63,7 +74,7 @@ export class CardReview {
   async stop() { this.generation++; clearTimeout(this.timer); this.busy = false; this.stage('stopped'); const browser = this.browser; this.browser = null; await browser?.close().catch(() => {}); }
   start(config, card, { fixture = null, connectionOnly = false } = {}) {
     if (this.busy) throw cardError('REVIEW_BUSY');
-    this.busy = true; this.guard = null; this.pgFrame = null; this.pgControls = []; this.step = 'browser'; this.stage('browser'); const generation = ++this.generation;
+    this.busy = true; this.guard = null; this.pgFrame = null; this.pgControls = []; this.issuerControls = []; this.step = 'browser'; this.stage('browser'); const generation = ++this.generation;
     this.timer = setTimeout(() => { void this.fail('REVIEW_TIMEOUT', generation); }, 180000); this.timer.unref?.();
     this.work = this.run(config, card, fixture, generation, connectionOnly).catch(error => this.fail(error.code, generation, error.name === 'TimeoutError' ? 'timeout' : 'screen-or-connection')).finally(() => { for (const field of Object.keys(card)) card[field] = ''; });
     return this.status();
@@ -77,7 +88,7 @@ export class CardReview {
     if (this.generation !== generation + 1) return;
     const safeCode = Object.hasOwn(REVIEW_ERRORS, code) ? code : 'REVIEW_FAILED';
     const failedStep = Object.hasOwn(STEPS, this.step) ? this.step : 'browser';
-    this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode], failedStep, stepLabel: STEPS[failedStep], failureType, pgControls, blockedRequests: this.guard?.recentBlocked || [] });
+    this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode], failedStep, stepLabel: STEPS[failedStep], failureType, pgControls, issuerControls:this.issuerControls||[], blockedRequests: this.guard?.recentBlocked || [] });
     await this.log('error', 'card-review', '카드 자동입력 검토 중지', { code: safeCode, failedStep, failureType }).catch?.(() => {});
   }
   async run(config, card, fixture, generation, connectionOnly = false) {
@@ -135,16 +146,18 @@ export class CardReview {
     assertSamsungPage(issuer, '300');
     this.step = 'issuer-summary'; const summary = await issuer.locator('body').innerText();
     if (!summary.includes('쉼오지캠프') || !summary.includes(config.amount.toLocaleString('en-US') + '원')) throw cardError('ORDER_MISMATCH');
+    const fields = await cardInputControls(issuer); this.issuerControls = fields.controls;
+    if (!fields.card || !fields.cvc) throw cardError('ISSUER_FIELDS_UNRECOGNIZED');
     if (connectionOnly) {
-      this.step = 'card-keypad'; this.stage('card-check'); await checkKeypad(issuer, issuer.getByRole('textbox', { name: '카드 번호', exact: true }), { ocr: this.ocr });
-      this.step = 'cvc-keypad'; this.stage('cvc-check'); await checkKeypad(issuer, issuer.getByRole('textbox', { name: 'CVC번호', exact: true }), { ocr: this.ocr });
-      if (!await issuer.getByRole('textbox').evaluateAll(elements => elements.every(e => e.value.length === 0))) throw cardError('FIELD_NOT_EMPTY');
+      this.step = 'card-keypad'; this.stage('card-check'); await checkKeypad(issuer, fields.card, { ocr: this.ocr });
+      this.step = 'cvc-keypad'; this.stage('cvc-check'); await checkKeypad(issuer, fields.cvc, { ocr: this.ocr });
+      if (!await issuer.locator('input:not([type="hidden"])').evaluateAll(elements => elements.every(e => e.value.length === 0))) throw cardError('FIELD_NOT_EMPTY');
       await guard.stopNetwork(context); this.stage('connected', { connectionOnly: true, networkBlocked: true, cardDataEntered: false });
       clearTimeout(this.timer); this.timer = setTimeout(() => { void this.stop(); }, 60000); this.timer.unref?.();
       await this.log('info','card-review','결제창 연결·키패드 검토 완료 · 카드 정보 입력 없음',{connectionOnly:true}); return;
     }
-    this.step = 'card-keypad'; this.stage('card'); await fillKeypad(issuer, issuer.getByRole('textbox', { name: '카드 번호', exact: true }), card.cardNumber, { ocr: this.ocr });
-    this.step = 'cvc-keypad'; this.stage('cvc'); await fillKeypad(issuer, issuer.getByRole('textbox', { name: 'CVC번호', exact: true }), card.cvc, { ocr: this.ocr });
+    this.step = 'card-keypad'; this.stage('card'); await fillKeypad(issuer, fields.card, card.cardNumber, { ocr: this.ocr });
+    this.step = 'cvc-keypad'; this.stage('cvc'); await fillKeypad(issuer, fields.cvc, card.cvc, { ocr: this.ocr });
     const next = issuer.getByRole('button', { name: '다음', exact: true });
     if (!await next.isEnabled()) throw cardError('KEYPAD_INPUT_UNVERIFIED');
     this.step = 'card-auth'; await next.click(); await issuer.waitForURL(url => samsungStep(url.href) === '301'); assertSamsungPage(issuer, '301');
