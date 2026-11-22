@@ -58,11 +58,11 @@ window.buildDisplayReceipt=function(value){
  window.applyBookingMenus=function(settings={},target=phone?'app':'addon'){
   const choices=settings[target+'Menus']||{};if(phone)labels.none='메뉴 없음';
   const visibleModes=phone?[...modes,'book','people','monthly','logs']:modes;
-  for(const tab of visibleModes){const item=document.querySelector('[data-workspace-tab="'+tab+'"]');setHidden(item,choices[tab]===false);if(phone){const name=settings.appMenuLabels?.[tab]||({priority:'단독 예약',multiple:'다중 예약','profiles-parallel':'다인 예약',watch:'취소 대기'})[tab]||labels[tab];labels[tab]=name;if(item&&item.textContent!==name)item.textContent=name;}}
+  for(const tab of visibleModes){const item=document.querySelector('[data-workspace-tab="'+tab+'"]');setHidden(item,choices[tab]===false||['priority','multiple'].includes(tab));if(phone){const name=settings.appMenuLabels?.[tab]||({priority:'단독 예약',multiple:'다중 예약','profiles-parallel':'다인 예약',watch:'취소 대기'})[tab]||labels[tab];labels[tab]=name;if(item&&item.textContent!==name)item.textContent=name;}}
   if(phone)setHidden(document.querySelector('[data-workspace-tab=settings]'),true);
   const current=typeof workspaceTab==='string'?workspaceTab:'priority';
   if(phone&&byId('workspaceMenuLabel')&&byId('workspaceMenuLabel').textContent!==labels[current])byId('workspaceMenuLabel').textContent=labels[current];
-  if((visibleModes.includes(current)&&choices[current]===false)||(phone&&current==='none'&&visibleModes.some(m=>choices[m]!==false))){const next=visibleModes.find(m=>choices[m]!==false)||(phone?'none':'people');phone?switchTab(next):switchWorkspaceTab(next);if(next==='none')byId('workspaceMenuLabel').textContent='메뉴 없음';}
+  if((visibleModes.includes(current)&&choices[current]===false)||(phone&&current==='none'&&visibleModes.some(m=>choices[m]!==false))){const next=visibleModes.find(m=>!['priority','multiple'].includes(m)&&choices[m]!==false)||(phone?'none':'people');phone?switchTab(next):switchWorkspaceTab(next);if(next==='none')byId('workspaceMenuLabel').textContent='메뉴 없음';}
  };
  window.applyDisplaySync=function(state){
   if(!phone)return;
@@ -225,8 +225,9 @@ window.buildDisplayReceipt=function(value){
   bodies.forEach((item,i)=>{item.toggle.disabled=!ready[i];const disabled=String(!ready[i]);if(item.toggle.getAttribute('aria-disabled')!==disabled)item.toggle.setAttribute('aria-disabled',disabled);if(!ready[i])setHidden(item.body,true);else if(!item.ready)setHidden(item.body,false);item.ready=ready[i];const expanded=String(!item.body.hidden);if(item.toggle.getAttribute('aria-expanded')!==expanded)item.toggle.setAttribute('aria-expanded',expanded);});
   const trigger=byId('triggerAt')?.closest('label');setHidden(trigger,!validDate||workspaceTab==='watch'||!beforeOpening());
   const planned=validDate&&beforeOpening(),name=byId('planName');setHidden(name.closest('label'),!planned);
+  const cardReviewMode=!phone&&byId('bookingPayment')?.value==='card-review'&&workspaceTab!=='watch';
   const immediate=validDate&&!planned&&workspaceTab!=='watch';
-  setHidden(byId('planCard')?.querySelector('.plan-registration'),immediate);
+  setHidden(byId('planCard')?.querySelector('.plan-registration'),immediate&&!cardReviewMode);
   byId('planCard')?.querySelectorAll(':scope>p').forEach(el=>setHidden(el,immediate));
   const reserveButton=phone?document.querySelector('[data-phone-run]'):byId('runNowButton');if(reserveButton&&reserveButton.textContent!=='예약 하기')reserveButton.textContent='예약 하기';
   if(autoNamed&&name.value!==generatedName){autoNamed=false;pendingName=name.value;}
@@ -263,6 +264,7 @@ window.buildDisplayReceipt=function(value){
   if(phone){window.applyBookingMenus(uiSettings);setHidden(byId('settingsCard'),true);for(const id of ['galleryDeleteSelected','galleryDeleteAll','siteMapUploadButton','mapGallery'])setHidden(byId(id),true);setHidden(document.querySelector('.gallery-heading'),true);
    if(Date.now()-lastSync>60000&&!document.hidden){lastSync=Date.now();try{api('haSync');}catch(e){/* Keep cached display, no booking state changes. */}}
   }else if(typeof uiSettings!=='undefined')window.applyBookingMenus(uiSettings);
+  if(!phone)window.updateBookingPayment?.();
   const states=(phone?vault.rooms.map(phoneChoiceState):rooms.map(r=>siteChoiceState(r.name)));
   if(states.length&&states.every(s=>['unavailable','booked'].includes(s.kind))){const key=date+'/'+nights;if(lastNoRoom!==key){lastNoRoom=key;notify('선택한 기간에 예약 가능한 사이트가 없습니다.');}}else lastNoRoom='';
  }

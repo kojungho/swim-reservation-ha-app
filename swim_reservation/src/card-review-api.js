@@ -1,3 +1,4 @@
+import { prepareBookingReview, publicBookingJobs } from './booking-card-review.js';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { CardVault, cardError } from './card-vault.js';
 import { CardReview, REVIEW_ERRORS, reviewInput } from './card-review.js';
@@ -24,7 +25,7 @@ export class CardReviewApi {
         response.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"});response.end(png);return true;
       }
       if (url.pathname === '/api/card-review/options' && request.method === 'GET') return reply(200, { profiles: (await this.store.getSavedProfiles()).map((p, index) => ({ index, name: p.reserverName })), sites: [...catalog.values()].map(s => ({ id: s.siteId, name: s.name })) });
-      if (!['POST', 'PUT', 'DELETE'].includes(request.method) || !['/api/card-review/vault', '/api/card-review/start', '/api/card-review/connection-test', '/api/card-review/self-test', '/api/card-review/stop'].includes(url.pathname)) return reply(404, { code: 'NOT_FOUND' });
+      if (!['POST', 'PUT', 'DELETE'].includes(request.method) || !['/api/card-review/vault', '/api/card-review/start', '/api/card-review/connection-test', '/api/card-review/self-test', '/api/card-review/stop', '/api/card-review/booking-prepare', '/api/card-review/booking-start'].includes(url.pathname)) return reply(404, { code: 'NOT_FOUND' });
       const supplied = Buffer.from(String(request.headers['x-swim-card-review'] || ''));
       if (supplied.length !== 64 || !timingSafeEqual(supplied, Buffer.from(this.csrf)) || request.headers['sec-fetch-site'] === 'cross-site') return reply(403, { code: 'REVIEW_FORBIDDEN', error: '검토 화면을 다시 열어 주세요.' });
       if (this.pending) throw cardError('REVIEW_BUSY');
@@ -34,6 +35,13 @@ export class CardReviewApi {
       if (url.pathname === '/api/card-review/vault' && request.method === 'DELETE') return reply(200, { vault: await this.vault.remove() });
       input = await readPrivateBody(request);
       if (url.pathname === '/api/card-review/vault' && request.method === 'PUT') return reply(200, { vault: await this.vault.save(input, input.passphrase) });
+      if (url.pathname === '/api/card-review/booking-prepare' && request.method === 'POST') {
+        this.booking = null;
+        const jobs = await prepareBookingReview(input.config);
+        const id = randomBytes(24).toString('hex'), expiresAt = Date.now() + 300000;
+        this.booking = { id, expiresAt, jobs, attempted: new Set() };
+        return reply(200, { id, expiresAt, jobs: publicBookingJobs(jobs), mode: 'review-only' });
+      }
       if (url.pathname === '/api/card-review/self-test' && request.method === 'POST') {
         const config = { startDate: '2027-01-27', nights: 1, adults: 2, siteId: 1, amount: 60000, profile: { reserverName: '로컬 검토', phone: '01000000000' } };
         return reply(202, { review: this.review.start(config, { ...FIXTURE_CARD }, { fixture: createReviewFixture(config) }) });
@@ -42,13 +50,27 @@ export class CardReviewApi {
         const config = reviewInput(input, await this.store.getSavedProfiles());
         return reply(202, { review: this.review.start(config, {}, { connectionOnly: true }) });
       }
-      if (url.pathname === '/api/card-review/start' && request.method === 'POST') {
+      if (['/api/card-review/start','/api/card-review/booking-start'].includes(url.pathname) && request.method === 'POST') {
         if (Date.now() < this.unlockAfter) return reply(429, { error: '해제 시도가 많습니다. 1분 뒤 다시 시도하세요.' });
-        const config = reviewInput(input, await this.store.getSavedProfiles());
+        let config, key;
+        const integrated = url.pathname === '/api/card-review/booking-start';
+        if (integrated) {
+          const b = this.booking, index = input.index;
+          if (!b || b.id !== input.id || b.expiresAt < Date.now() || !Number.isInteger(index) || !b.jobs[index] || input.consent !== true) throw cardError('REVIEW_INPUT');
+          config = b.jobs[index]; key = config.profileIndex + ':' + config.siteId;
+          // A diagnostic and a full run each require an explicit action. Never retry an order automatically.
+          key += input.connectionOnly === true ? ':connection' : ':fill';
+          if (b.attempted.has(key)) throw cardError('REVIEW_ALREADY_ATTEMPTED');
+          if (input.connectionOnly === true) {
+            b.attempted.add(key);
+            return reply(202, {review:this.review.start(config, {}, {connectionOnly:true})});
+          }
+        } else config = reviewInput(input, await this.store.getSavedProfiles());
         let card;
         try { card = await this.vault.open(input.passphrase); this.failedUnlocks = 0; }
         catch (error) { if (++this.failedUnlocks >= 5) { this.unlockAfter = Date.now() + 60000; this.failedUnlocks = 0; } throw error; }
         if (!this.canStart()) { for (const key of Object.keys(card)) card[key] = ''; throw cardError('REVIEW_BUSY'); }
+        if (integrated) this.booking.attempted.add(key);
         return reply(202, { review: this.review.start(config, card) });
       }
       return reply(405, { code: 'METHOD_NOT_ALLOWED' });
@@ -62,7 +84,7 @@ export class CardReviewApi {
 async function readPrivateBody(request) {
   const chunks = []; let size = 0;
   try {
-    for await (const chunk of request) { size += chunk.length; if (size > 4096) throw cardError('REVIEW_INPUT'); chunks.push(chunk); }
+    for await (const chunk of request) { size += chunk.length; if (size > 65536) throw cardError('REVIEW_INPUT'); chunks.push(chunk); }
     const buffer = Buffer.concat(chunks); try { const result = JSON.parse(buffer.toString('utf8') || '{}'); if (!result || Array.isArray(result) || typeof result !== 'object') throw cardError('REVIEW_INPUT'); return result; } finally { buffer.fill(0); }
   } finally { for (const chunk of chunks) chunk.fill(0); }
 }

@@ -553,6 +553,13 @@ function renderMonthlyDayDetails() {
 }
 
 function loadConfig(config) {
+  if (config.bookingMode !== 'profiles-parallel') {
+    const source = config.profiles || [config.profile1 || config.profile || {}];
+    const profile = source[config.multipleProfileIndex || 0] || source[0] || {};
+    const selected = (config.roomPriority || []).filter(r=>r.enabled);
+    const profiles = config.bookingMode === 'multiple' && selected.length ? selected.map(r=>({...profile,roomPriority:[{...r}]})) : [{...profile,roomPriority:config.roomPriority || []}];
+    config = {...config,bookingMode:'profiles-parallel',profiles,multipleProfileIndex:0};
+  }
   editorGeneration++;
   roomDrag?.cancel?.();
   elements.startDate.value = config.startDate || "";
@@ -927,7 +934,7 @@ function updateImmediateBookingVisibility() {
   const now = currentSiteTime();
   const trigger = Date.parse(`${elements.triggerAt.value}+09:00`);
   const opening = Date.parse(`${bookingOpenIso(elements.startDate.value)}+09:00`);
-  const allowed = !window.stayCalendar?.planned(elements.startDate.value,Number(elements.nights.value)) && !editingPlan && ["priority", "multiple", "profiles-parallel"].includes(workspaceTab) &&
+  const allowed = document.getElementById('bookingPayment')?.value !== 'card-review' && !window.stayCalendar?.planned(elements.startDate.value,Number(elements.nights.value)) && !editingPlan && ["priority", "multiple", "profiles-parallel"].includes(workspaceTab) &&
     Number.isFinite(now) && Number.isFinite(trigger) && Number.isFinite(opening) && trigger <= now && opening <= now;
   elements.runNowButton.hidden = !allowed;
   const showExecutionTime = workspaceTab !== "watch" && plannedSiteChoices();

@@ -13,7 +13,7 @@
     <header>
       <div>
         <div class="header-meta"><p class="eyebrow">HOME ASSISTANT APP</p><button id="serverTimeButton" type="button" aria-haspopup="dialog" aria-controls="serverTimeDialog"><span>서버시간</span><strong id="siteClock">동기화 중</strong></button></div>
-        <div class="app-title-row"><h1>쉼오지 예약 도우미</h1><button id="bookingHelpButton" class="info-button" type="button" aria-label="예약 모드별 사용 방법" aria-haspopup="dialog" aria-controls="bookingHelpDialog" title="예약 모드별 사용 방법">ⓘ</button><div id="statusBadge" class="badge idle">불러오는 중</div></div>
+        <div class="app-title-row"><h1>쉼오지 예약 도우미</h1><button id="bookingHelpButton" class="info-button" type="button" aria-label="예약 사용 방법" aria-haspopup="dialog" aria-controls="bookingHelpDialog" title="예약 사용 방법">ⓘ</button><div id="statusBadge" class="badge idle">불러오는 중</div></div>
       </div>
     </header>
     <div id="connectionNotice" class="connection-notice" role="status" aria-live="polite" hidden><span id="connectionMessage"></span><button id="reconnectButton" type="button" class="secondary">다시 연결</button></div>
@@ -24,10 +24,8 @@
     </section>
 
     <div class="workspace-menu-floating">
-    <button id="workspaceMenuButton" type="button" aria-expanded="false" aria-controls="workspaceMenu" aria-label="메뉴 열기"><span class="menu-bars" aria-hidden="true"><span></span><span></span><span></span></span><span id="workspaceMenuLabel">단독 예약</span><span aria-hidden="true">▾</span></button>
+    <button id="workspaceMenuButton" type="button" aria-expanded="false" aria-controls="workspaceMenu" aria-label="메뉴 열기"><span class="menu-bars" aria-hidden="true"><span></span><span></span><span></span></span><span id="workspaceMenuLabel">다인 예약</span><span aria-hidden="true">▾</span></button>
     <nav id="workspaceMenu" class="workspace-tabs" aria-label="예약 도우미 페이지" hidden>
-      <button type="button" data-workspace-tab="priority">단독 예약</button>
-      <button type="button" data-workspace-tab="multiple">다중 예약</button>
       <button type="button" data-workspace-tab="profiles-parallel">다인 예약</button>
       <button type="button" data-workspace-tab="watch">취소 대기</button>
       <button type="button" data-workspace-tab="book">예약자 정보</button>
@@ -82,7 +80,7 @@
         <label id="checkoutField" hidden><span class="stay-label-line"><span>퇴실일</span><output id="stayNightsDisplay" hidden>—</output></span><input id="checkoutDate" type="date"></label>
         <div class="booking-mode-field">
           <div class="booking-mode-label"><label for="bookingMode">예약 방식</label></div>
-          <select id="bookingMode"><option value="priority">단독 예약</option><option value="multiple">다중 예약</option><option value="profiles-parallel">다인 예약</option></select>
+          <select id="bookingMode"><option value="priority">단독 예약</option><option value="multiple">다중 예약</option><option value="profiles-parallel" selected>다인 예약</option></select>
         </div>
       </div>
       <details id="reservationConnectionDetails" class="booking-details"><summary>예약 실행일·예약 정보</summary><div id="triggerDetails" hidden><label>예약 실행 시간<input id="triggerAt" type="datetime-local" step="1"></label></div><div class="grid two"><div class="generated"><span>날짜 확인 숫자</span><strong id="epochValue">—</strong></div><div class="generated"><span>예약 오픈일</span><strong id="openAtValue">—</strong></div></div><div class="booking-link-field"><span>예약 페이지 링크</span><a id="reservationUrl" target="_blank" rel="noopener noreferrer" aria-disabled="true">입실일을 먼저 선택해 주세요.</a></div></details>
@@ -118,7 +116,8 @@
         <label>도착 예정 시간 (선택)<select id="campArrival"><option value="">선택 안 함</option><option>14:00 ~ 15:00</option><option>15:00 ~ 16:00</option><option>16:00 ~ 17:00</option><option>17:00 ~ 18:00</option><option>18:00 ~ 19:00</option><option>19:00 이후</option></select></label>
         <label>요청사항 (선택)<textarea id="campRequest" maxlength="1000"></textarea></label>
       </div>
-      <p>새 공식 사이트 · 자동 예약은 무통장입금만 지원합니다. 실행 시각에 입력·동의·제출합니다. 오픈 전 객실 선택은 후보 지정이며 빈자리를 보장하지 않습니다. 카드·계좌이체 및 전화 취소는 공식 사이트에서 직접 진행해 주세요.</p>
+      <label>결제 방식<select id="bookingPayment"><option value="bank">무통장입금 예약</option><option value="card-review">삼성카드 · 최종 결제 전 검토</option></select></label>
+      <p>한 행은 객실 하나의 예약입니다. 한 명은 단독 예약, 여러 명은 다인 예약, 같은 예약자를 여러 행에 선택하면 여러 객실을 예약할 수 있습니다. 각 행에서 선택한 객실은 우선순위 후보입니다. 카드 검토는 현재 조건으로 즉시 실행하며, 일정 예약과 최종 결제는 지원하지 않습니다.</p>
       <a class="button secondary" href="https://www.swimozicamp.com/camp/lookup.php" target="_blank" rel="noopener noreferrer">공식 예약확인 열기</a>
     </section>
 
@@ -193,20 +192,8 @@
   </dialog>
   <dialog id="serverTimeDialog" class="booking-help-dialog" aria-labelledby="serverTimeTitle"><div class="booking-help-heading"><h2 id="serverTimeTitle">쉼오지 서버 시간</h2><button id="serverTimeClose" type="button" class="secondary">닫기</button></div><strong id="serverTimeValue">동기화 중</strong><div class="site-time-panel"><p id="siteTimeMeta">예약 사이트 서버 시간을 확인하고 있습니다.</p><button id="siteTimeSyncButton" class="secondary" type="button" aria-label="동기화">동기화</button></div></dialog>
   <dialog id="bookingHelpDialog" class="booking-help-dialog" aria-labelledby="bookingHelpTitle">
-    <div class="booking-help-heading"><h2 id="bookingHelpTitle">예약 모드별 사용 방법</h2><button id="bookingHelpCloseButton" class="secondary" type="button" aria-label="사용 방법 닫기">닫기</button></div>
+    <div class="booking-help-heading"><h2 id="bookingHelpTitle">예약 사용 방법</h2><button id="bookingHelpCloseButton" class="secondary" type="button" aria-label="사용 방법 닫기">닫기</button></div>
     <p id="bookingHelpCurrent" class="booking-help-current"></p>
-    <details data-booking-help="priority">
-      <summary>단독 예약</summary>
-      <p>선택한 예약자 한 명으로 우선순위 중 객실 하나를 예약합니다.</p>
-      <ol><li>날짜·박수·실행 시각과 예약자 한 명의 정보를 선택하거나 입력합니다.</li><li>객실을 체크하고 두 줄 손잡이를 끌어 원하는 순서로 정합니다.</li><li>미래 시각 예약은 아래 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘예약 하기’을 사용할 수 있습니다.</li></ol>
-      <p class="booking-help-warning">객실이 확실히 마감된 경우에만 다음 순위를 시도합니다. 제출 결과가 불확실하면 중복 방지를 위해 중단합니다.</p>
-    </details>
-    <details data-booking-help="multiple">
-      <summary>다중 예약</summary>
-      <p>선택한 예약자 한 명으로 체크한 객실을 모두 예약하는 방식입니다. 순위별 대체 예약이 아닙니다.</p>
-      <ol><li>날짜·박수·실행 시각과 예약자 한 명의 정보를 입력합니다.</li><li>동시에 예약할 객실을 최대 5개까지 체크합니다. 객실 우선순위는 없습니다.</li><li>미래 시각 예약은 저장 이력에서 등록한 뒤 목록의 시작을 누릅니다. 실행 시각이 지났고 예약이 오픈된 경우 ‘예약 하기’을 사용할 수 있습니다.</li></ol>
-      <p class="booking-help-warning">체크한 객실 수만큼 실제 예약이 생성될 수 있습니다. 일부 객실만 성공할 수 있으니 완료 후 예약확인에서 결과를 확인하세요.</p>
-    </details>
     <details data-booking-help="watch">
       <summary>취소 대기</summary>
       <p>취소 객실 조회 종료일을 비워두면 숙박 시작일 00시에 종료하며 당일 예약은 하지 않습니다. 마감을 직접 지정하면 그 시각을 우선 적용하므로 당일 감시도 허용할 수 있습니다. 일정 목록에 마감이 표시되며 저장·불러오기와 재시작 후에도 유지됩니다.</p>
@@ -249,6 +236,17 @@
   </dialog>
   <dialog id="settingsHelpDialog" class="help-dialog"><div class="site-map-heading"><strong>안내</strong><button id="settingsHelpClose" type="button" aria-label="닫기">×</button></div><p id="settingsHelpText"></p></dialog>
   <dialog id="mapZoomDialog" class="site-map-dialog"><div class="site-map-heading"><strong>사진 확대</strong><button id="mapZoomClose" type="button" aria-label="닫기">×</button></div><img id="mapZoomImage" alt="사이트 위치 사진 확대"></dialog>
+  <dialog id="bookingCardDialog" class="booking-help-dialog" aria-labelledby="bookingCardTitle">
+    <h2 id="bookingCardTitle">예약 조건으로 삼성카드 검토</h2>
+    <p>예약자별 후보 하나를 선택해 각각 검토하세요. 미결제 주문을 생성하며 최종 결제 전 통신을 차단합니다. 실패 시 자동 재시도하지 않습니다.</p>
+    <p id="bookingCardConditions"></p>
+    <label>검토할 예약자·객실 후보<select id="bookingCardJob"></select></label>
+    <label>저장소 해제 암호<input id="bookingCardUnlock" type="password" autocomplete="new-password" minlength="12" maxlength="256"></label>
+    <label><input id="bookingCardConsent" type="checkbox">미결제 주문 생성과 필수 약관 동의에 동의합니다. 최종 결제는 하지 않습니다.</label>
+    <div class="actions"><button id="bookingCardConnect" type="button">카드 없이 연결 확인</button><button id="bookingCardFill" type="button">자동입력 검토 시작</button><button id="bookingCardStop" class="danger" type="button">검토 중지·입력값 폐기</button><button id="bookingCardClose" class="secondary" type="button">닫기</button></div>
+    <p id="bookingCardStatus" role="status" aria-live="polite"></p>
+    <p><a href="card-review">카드 암호화 저장·샘플 테스트</a></p>
+  </dialog>
   <script src="toast.js" defer></script>
 <script src="stay-calendar.js"></script>
   <script src="site-choice.js"></script>
@@ -259,5 +257,6 @@
   <script src="app.js"></script>
   <script src="booking-flow.js"></script>
   <script src="submitted-records.js"></script>
+  <script src="booking-card-review.js"></script>
 </body>
 </html>

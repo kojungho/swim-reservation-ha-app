@@ -1,6 +1,6 @@
 import { cardError } from './card-vault.js';
 import { samsungStep } from './card-review-guard.js';
-import { checkoutDate } from './camp-site.js';
+import { checkoutDate, catalog } from './camp-site.js';
 
 // Publicly documented synthetic test card. This fixture never opens the network.
 export const FIXTURE_CARD = Object.freeze({ cardNumber: '378282246310005', cvc: '123', password: '123456' });
@@ -38,7 +38,7 @@ export function createReviewFixture(config) {
         if (!guard.allow({ url: request.url(), method: request.method(), navigation: request.isNavigationRequest() })) { guard.blocked++; record.blockedApproval ||= guard.frozen; return route.abort(); }
         let html;
         if (url.hostname === 'www.swimozicamp.com' && url.pathname === '/camp/book.php') {
-          html = request.method() === 'POST' ? '<iframe name="inipay" style="width:700px;height:650px" src="about:blank"></iframe><form method="post" target="inipay" action="https://stdpay.inicis.com/payMain/pay"></form><script src="https://stdux.inicis.com/stdpay/pc/js/plugins.js"></script><script>fixtureOpenPG()</script>' : `<form class="js-book" method="post" action="https://www.swimozicamp.com/camp/book.php">${Object.entries({ _csrf: 'synthetic-csrf', site: config.siteId, checkin: config.startDate, checkout: checkoutDate(config.startDate,config.nights), adults: config.adults, children: 0, infants: 0 }).map(([name, value]) => `<input type="hidden" name="${name}" value="${value}">`).join('')}<input name="name"><input name="phone"><input name="pay_method" type="radio" value="card"><input name="agree_refund" type="checkbox"><div class="sum-title">하늘존해</div><p>총 금액 60,000원</p><button type="submit">결제하기</button></form>`;
+          html = request.method() === 'POST' ? '<iframe name="inipay" style="width:700px;height:650px" src="about:blank"></iframe><form method="post" target="inipay" action="https://stdpay.inicis.com/payMain/pay"></form><script src="https://stdux.inicis.com/stdpay/pc/js/plugins.js"></script><script>fixtureOpenPG()</script>' : `<form class="js-book" method="post" action="https://www.swimozicamp.com/camp/book.php">${Object.entries({ _csrf: 'synthetic-csrf', site: config.siteId, checkin: config.startDate, checkout: checkoutDate(config.startDate,config.nights), adults: config.adults, children: 0, infants: 0 }).map(([name, value]) => `<input type="hidden" name="${name}" value="${value}">`).join('')}<input name="name"><input name="phone"><input name="arrive_time"><textarea name="request"></textarea><input name="pay_method" type="radio" value="card"><input name="agree_refund" type="checkbox"><div class="sum-title">${[...catalog.values()].find(r=>r.siteId===config.siteId).displayName}</div><p>총 금액 60,000원</p><button type="submit">결제하기</button></form>`;
         } else if (url.hostname === 'stdux.inicis.com' && url.pathname === '/stdpay/pc/js/plugins.js') {
           return route.fulfill({status:200,contentType:'application/javascript',body:'function fixtureOpenPG(){document.forms[0].submit()}'});
         } else if (url.hostname === 'stdpay.inicis.com' && url.pathname === '/payMain/pay') {

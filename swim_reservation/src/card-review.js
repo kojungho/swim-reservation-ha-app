@@ -52,6 +52,8 @@ export async function connectionPreview(page, connectionOnly) {
 export const REVIEW_ERRORS = {
   CARD_FORMAT: '카드번호·CVC 3자리·일반결제 비밀번호 6자리를 확인하세요.',
   VAULT_PASSPHRASE: '저장소 해제 암호는 12~256자로 입력하세요.', VAULT_OPEN_FAILED: '해제 암호 또는 저장소 파일을 확인하세요.',
+  SECURITY_CLIENT_REQUIRED: 'HA에 삼성 IPinside 보안 프로그램이 없어 중지했습니다. 최종 결제는 진행하지 않았습니다.',
+  REVIEW_ALREADY_ATTEMPTED: '이 후보는 이미 검토했습니다. 실제 예약 상태를 확인한 뒤 새 검토를 준비하세요.',
   REVIEW_BUSY: '다른 예약·조회 또는 카드 검토가 진행 중입니다.', REVIEW_INPUT: '검토 날짜·사이트·예약자·금액과 동의를 확인하세요.',
   KEYPAD_OCR_FAILED: '키패드 숫자를 판독하지 못해 입력을 중지했습니다.', KEYPAD_AMBIGUOUS: '숫자 10개의 위치를 확실히 구별하지 못해 중지했습니다.',
   KEYPAD_MOVED: '키패드 위치가 바뀌어 입력을 중지했습니다.', KEYPAD_INPUT_UNVERIFIED: '키패드 입력 결과를 확인하지 못해 중지했습니다.',
@@ -98,6 +100,7 @@ export class CardReview {
     await browser?.close().catch(() => {});
     if (this.generation !== generation + 1) {preview?.fill(0);return;}
     this.previewBuffer=preview;this.previewExpiresAt=Date.now()+300000;
+    if (this.guard?.recentBlocked?.some(r=>r.resource==='/VbV/ipinside/ipinside_installV2.jsp')) code='SECURITY_CLIENT_REQUIRED';
     const safeCode = Object.hasOwn(REVIEW_ERRORS, code) ? code : 'REVIEW_FAILED';
     const failedStep = Object.hasOwn(STEPS, this.step) ? this.step : 'browser';
     this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode], failedStep, stepLabel: STEPS[failedStep], failureType, pgControls, issuerControls:issuerControls||[], runtimeErrors:[...this.runtimeErrors||[]],dialogChecks:this.dialogChecks||[], blockedRequests: this.guard?.recentBlocked || [] });
@@ -127,6 +130,13 @@ export class CardReview {
     if (!matched) throw cardError('ORDER_MISMATCH');
     this.step = 'order-fill'; await form.locator('[name="name"]').fill(config.profile.reserverName);
     await form.locator('[name="phone"]').fill(config.profile.phone);
+    for(const [name,value] of [['arrive_time',config.arrivalTime],['request',config.request]]) {
+      if(!value)continue;
+      const control=form.locator('[name="'+name+'"]');
+      if(await control.count()!==1)throw cardError('ORDER_MISMATCH');
+      if(await control.evaluate(e=>e.tagName)==='SELECT')await control.selectOption({label:value});else await control.fill(value);
+      if(await control.inputValue()!==value)throw cardError('ORDER_MISMATCH');
+    }
     await form.locator('[name="pay_method"][value="card"]').check();
     await form.locator('[name="agree_refund"]').check();
     this.stage('pg');

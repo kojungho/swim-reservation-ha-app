@@ -1,4 +1,4 @@
-let workspaceTab = "priority";
+let workspaceTab = "profiles-parallel";
 let editorGeneration = 0;
 let planRegistrationPending = false;
 let editingPlan = null;
@@ -81,6 +81,7 @@ function seoulToday() {
 }
 
 function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
+  if (tab === 'priority' || tab === 'multiple') tab = 'profiles-parallel';
   const modes = ["priority", "multiple", "profiles-parallel"];
   if (![...modes, "watch", "people", "monthly", "book", "logs", "settings"].includes(tab)) return;
   const entering = workspaceTab !== tab;
@@ -142,6 +143,7 @@ function switchWorkspaceTab(tab, { keepEditor = false } = {}) {
     }
   } else if (elements.monthlyDialog.open) elements.monthlyDialog.close();
   updateBookingProfileVisibility();
+  window.updateBookingPayment?.();
   document.querySelectorAll("main.shell > section.card:not([hidden]) .section-title > span").forEach((span, index) => { span.textContent = String(index + 1); });
   if (tab === "people" && entering) void (async () => {
     setReservationLookupLoading(1);
@@ -248,6 +250,10 @@ function resetPlanEditor(tab = workspaceTab) {
 }
 
 async function registerPlan(kind, start) {
+  if (document.getElementById('bookingPayment')?.value === 'card-review') {
+    if (kind === 'watch' || editingPlan) throw new Error('카드 검토는 다인 예약의 새 입력에서 실행하세요. 기존 일정은 변경하지 않습니다.');
+    return window.openBookingCardReview(readConfig());
+  }
   if (planRegistrationPending) throw new Error("일정을 등록 중입니다. 잠시 기다려 주세요.");
   const generation = editorGeneration, tab = workspaceTab, edit = editingPlan;
   const submittedDraft = editorSnapshot();

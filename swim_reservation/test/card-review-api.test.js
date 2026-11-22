@@ -33,3 +33,16 @@ test('connection preview rejects cross-site access, disables caching and expires
   assert.equal(out.code,200);assert.equal(out.headers['Cache-Control'],'no-store');assert.equal(out.headers['Content-Type'],'image/png');assert.equal(out.body,png);
   api.review.previewExpiresAt=Date.now()-1;const expired=response();await api.handle(request('GET'),expired,url);assert.equal(expired.code,404);assert.ok(png.every(n=>n===0));
 });
+test('integrated booking requires unexpired server conditions, explicit consent and never decrypts diagnostic runs',async()=>{
+  const api=new CardReviewApi({dataDir:'/unused',store:{},canStart:()=>true});
+  api.vault.open=async()=>assert.fail('must not decrypt diagnostics');
+  const config={startDate:'2099-01-27',nights:1,siteId:1,amount:60000,profileIndex:0,profile:{reserverName:'검토자',phone:'01000000000'}};
+  api.booking={id:'test',expiresAt:Date.now()+60000,jobs:[config],attempted:new Set()};
+  let count=0;api.review.start=(c,card,options)=>{assert.equal(c,config);assert.deepEqual(card,{});assert.equal(options.connectionOnly,true);count++;return {state:'browser',finalPaymentAttempted:false};};
+  const headers={'x-swim-card-review':api.csrf},url=new URL('https://ha.invalid/api/card-review/booking-start');
+  for(const body of [{id:'other',index:0,consent:true},{id:'test',index:0,consent:false}]){const out=response();await api.handle(request('POST',headers,body),out,url);assert.equal(out.code,400);}
+  const body={id:'test',index:0,consent:true,connectionOnly:true,amount:1,siteId:14};
+  const out=response();await api.handle(request('POST',headers,body),out,url);assert.equal(out.code,202);assert.equal(count,1);
+  const repeat=response();await api.handle(request('POST',headers,body),repeat,url);assert.equal(repeat.body.code,'REVIEW_ALREADY_ATTEMPTED');assert.equal(count,1);
+  api.booking.expiresAt=0;const expired=response();await api.handle(request('POST',headers,{...body,connectionOnly:false}),expired,url);assert.equal(expired.code,400);
+});
