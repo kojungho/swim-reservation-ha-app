@@ -44,5 +44,9 @@ test('OCR must identify a complete unique set of ten keys; no guessed digits',()
 test('blocked-request diagnostics omit queries, session IDs, body data and unknown path identifiers',()=>{
   const guard=new ReviewGuard();guard.noteBlocked({url:()=> 'https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX301.jsp;jsessionid=do-not-retain?card=378282246310005&cvc=123',method:()=> 'POST'});
   guard.noteBlocked({url:()=> 'https://unknown.invalid/sensitive-user-secret',method:()=> 'POST'});
-  assert.deepEqual(guard.recentBlocked,[{host:'vbv.samsungcard.co.kr',resource:'WBVTFX301.jsp',method:'POST'},{host:'external',resource:'unrecognized-resource',method:'POST'}]);
+  assert.deepEqual(guard.recentBlocked,[{host:'vbv.samsungcard.co.kr',resource:'/VbV/xacsv2/WBVTFX301.jsp',method:'POST'},{host:'external',resource:'unrecognized-resource',method:'POST'}]);
+  guard.noteBlocked({url:()=> 'https://vbv.samsungcard.co.kr/ACS/entry.jsp;jsessionid=private?card=private',method:()=> 'POST'});
+  assert.equal(guard.recentBlocked.at(-1).resource,'/ACS/entry.jsp');
+  guard.noteBlocked({url:()=> 'https://vbv.samsungcard.co.kr/378282246310005.jsp',method:()=> 'POST'});
+  assert.equal(guard.recentBlocked.at(-1).resource,'unrecognized-resource');
 });
