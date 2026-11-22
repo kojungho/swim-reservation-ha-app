@@ -24,6 +24,14 @@ test('official INICIS CDN permits static GET assets only and remains blocked aft
   for(const input of [{url,method:'POST'},{url,navigation:true},{url:'https://stdux.inicis.com/payMain/pay'},{url:'https://stdux.inicis.com/stdpay/stdjs/result.jsp'},{url:'https://stdux.inicis.com.evil.invalid/stdpay/stdjs/INIStdPay_third-party.js'}]) assert.equal(guard.allow(input),false);
   guard.freeze();assert.equal(guard.allow({url}),false);
 });
+test('only official one-time PG render and issuer-init POSTs are allowed before the password screen',()=>{
+  const guard=new ReviewGuard();
+  for(const path of ['/payMain/pay','/payMain/Card','/jsApi/visa3d/before','/payAuthentication/visa3d']){
+    const input={url:'https://stdpay.inicis.com'+path,method:'POST'};assert.equal(guard.allow(input),true);assert.equal(guard.allow(input),false);
+  }
+  for(const path of ['/payMain/done','/payMain/payDoneView','/jsApi/visa3d/after','/payMain/CardNext'])assert.equal(guard.allow({url:'https://stdpay.inicis.com'+path,method:'POST'}),false);
+  const stopped=new ReviewGuard();stopped.reachedPassword=true;assert.equal(stopped.allow({url:'https://stdpay.inicis.com/jsApi/visa3d/before',method:'POST'}),false);
+});
 test('request interception includes popup requests and websocket rejection',async()=>{
   const guard=new ReviewGuard();let routeHandler,wsHandler;await guard.install({async route(pattern,h){assert.equal(pattern,'**/*');routeHandler=h},async routeWebSocket(pattern,h){wsHandler=h}});
   let aborted=false;await routeHandler({request:()=>({url:()=> 'https://evil.invalid/pay',method:()=> 'POST',isNavigationRequest:()=>true}),abort:async()=>{aborted=true},continue:async()=>assert.fail('unexpected network')});assert.equal(aborted,true);

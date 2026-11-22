@@ -119,6 +119,8 @@ export class CardReview {
     this.step = 'pg-card'; await pg.getByRole('link', { name: '삼성카드', exact: true }).click();
     const popupPromise = page.waitForEvent('popup');
     this.step = 'issuer-popup'; await pg.locator('#CardBtn').click(); const issuer = await popupPromise;
+    // Official PG popup first opens /checkWin.jsp and posts /payAuthentication/visa3d.
+    await issuer.waitForURL(url => samsungStep(url.href) === '400');
     await issuer.waitForLoadState('domcontentloaded'); assertSamsungPage(issuer, '400');
     this.step = 'issuer-mode'; await issuer.getByRole('button', { name: /다른결제/ }).click();
     await issuer.getByRole('button', { name: /일반 결제 카드번호로 결제/ }).click();

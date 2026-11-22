@@ -7,7 +7,7 @@ export function samsungStep(address) {
 }
 // An independent network boundary, not a preference that the UI can disable.
 export class ReviewGuard {
-  constructor() { this.frozen = false; this.orderPosts = 0; this.authPosts = 0; this.reachedPassword = false; this.blocked = 0; this.recentBlocked = []; }
+  constructor() { this.frozen = false; this.orderPosts = 0; this.authPosts = 0; this.pgInitPosts = new Set(); this.reachedPassword = false; this.blocked = 0; this.recentBlocked = []; }
   noteBlocked(request) {
     let host = 'external', resource = 'unrecognized-resource';
     try {
@@ -15,6 +15,7 @@ export class ReviewGuard {
       if (['www.swimozicamp.com','stdpay.inicis.com','stdux.inicis.com','vbv.samsungcard.co.kr'].includes(url.hostname)) host = url.hostname;
       const filename = url.pathname.split(';')[0].split('/').pop();
       if (/^(?:WBVTFX\d{3}\.jsp|[A-Za-z_-]+(?:Servlet|\.js|\.css))$/.test(filename)) resource = filename;
+      if (host === 'stdpay.inicis.com' && ['/payMain/Card','/jsApi/visa3d/before','/payAuthentication/visa3d'].includes(url.pathname)) resource = url.pathname;
     } catch {}
     this.recentBlocked.push({ host, resource, method: ['GET','POST'].includes(request.method()) ? request.method() : 'OTHER' });
     this.recentBlocked = this.recentBlocked.slice(-8);
@@ -34,7 +35,13 @@ export class ReviewGuard {
     }
     if (u.hostname === 'stdpay.inicis.com') {
       // No merchant approval, auth/approval API, or result-return calls.
-      if (method === 'POST') return u.pathname === '/payMain/pay' && !this.reachedPassword;
+      if (method === 'POST') {
+        if (this.reachedPassword) return false;
+        // Public official scripts: setPaymethodView('Card') renders the terms;
+        // callVisa3d performs these two pre-card authentication-window requests.
+        if (['/payMain/pay','/payMain/Card','/jsApi/visa3d/before','/payAuthentication/visa3d'].includes(u.pathname) && !this.pgInitPosts.has(u.pathname)) { this.pgInitPosts.add(u.pathname); return true; }
+        return false;
+      }
       return method === 'GET' && !/(?:approve|authComplete|payReturn)/i.test(u.pathname);
     }
     const step = samsungStep(url);
