@@ -37,6 +37,14 @@ export function digitMap(keys) {
   if (keys.length !== 10 || keys.some(key => !/^\d$/.test(key.digit) || !Number.isFinite(key.x) || !Number.isFinite(key.y)) || new Set(keys.map(key => key.digit)).size !== 10) throw cardError('KEYPAD_AMBIGUOUS');
   return new Map(keys.map(key => [key.digit, { x: key.x, y: key.y }]));
 }
+export async function waitForKeypadReady(field, {timeout=30000,sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}) {
+  const deadline=Date.now()+timeout;
+  do {
+    if(await field.evaluate(e=>e.readOnly&&!e.disabled)) return;
+    await sleep(100);
+  } while(Date.now()<deadline);
+  throw cardError('KEYPAD_NOT_READY');
+}
 export async function inspectKeypad(page, ocr = recognizeDigit) {
   // The visible keyboard image and individual key rectangles, not vendor internals.
   const background = page.locator('img[alt="키패드"][id$="_bg_img"]:visible');
@@ -58,6 +66,7 @@ export async function inspectKeypad(page, ocr = recognizeDigit) {
 }
 export async function fillKeypad(page, field, value, { ocr = recognizeDigit, beforeTyping } = {}) {
   if (!/^\d+$/.test(value)) throw cardError('CARD_FORMAT');
+  await waitForKeypadReady(field);
   await field.click();
   const keyboard = await inspectKeypad(page, ocr);
   if (beforeTyping) await beforeTyping();
@@ -79,6 +88,7 @@ export async function fillKeypad(page, field, value, { ocr = recognizeDigit, bef
   return { entered: value.length };
 }
 export async function checkKeypad(page, field, { ocr = recognizeDigit } = {}) {
+  await waitForKeypadReady(field);
   await field.click(); const keyboard = await inspectKeypad(page, ocr);
   await closeKeypad(page, keyboard); return { digitsRecognized: 10 };
 }

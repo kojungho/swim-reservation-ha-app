@@ -48,6 +48,7 @@ export const REVIEW_ERRORS = {
   REVIEW_BUSY: '다른 예약·조회 또는 카드 검토가 진행 중입니다.', REVIEW_INPUT: '검토 날짜·사이트·예약자·금액과 동의를 확인하세요.',
   KEYPAD_OCR_FAILED: '키패드 숫자를 판독하지 못해 입력을 중지했습니다.', KEYPAD_AMBIGUOUS: '숫자 10개의 위치를 확실히 구별하지 못해 중지했습니다.',
   KEYPAD_MOVED: '키패드 위치가 바뀌어 입력을 중지했습니다.', KEYPAD_INPUT_UNVERIFIED: '키패드 입력 결과를 확인하지 못해 중지했습니다.',
+  KEYPAD_NOT_READY: '삼성 보안 키패드가 초기화되지 않아 입력하지 않고 중지했습니다.',
   ISSUER_PAGE_MISMATCH: '예상한 삼성 일반결제 화면이 아닙니다. 추가 인증·등록은 직접 확인하세요.',
   ISSUER_FIELDS_UNRECOGNIZED: '삼성 카드번호·CVC 입력란을 유일하게 확인하지 못해 중지했습니다.',
   ORDER_MISMATCH: '공식 사이트의 객실·기간·인원·금액을 대조하지 못해 중지했습니다.',

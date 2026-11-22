@@ -16,7 +16,9 @@ export function fixtureIssuer(step) {
     const keyboard=document.querySelector('#keyboard'),inputs=[...document.querySelectorAll('input')],values=new Map(inputs.map(e=>[e,'']));let selected=null;
     const picture=(body,w=37,h=30)=>'data:image/svg+xml;base64,'+btoa('<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'">'+body+'</svg>');
     function update(){document.querySelector('#next').disabled=${password ? "values.get(inputs[0]).length!==6" : "values.get(inputs[0]).length!==15||values.get(inputs[1]).length!==3"};}
+    inputs.forEach(input=>{input.readOnly=false;setTimeout(()=>input.readOnly=true,250)});
     inputs.forEach((input,index)=>input.onclick=()=>{
+      if(!input.readOnly)return;
       selected=input;keyboard.hidden=false;keyboard.replaceChildren();const bg=new Image();bg.alt='키패드';bg.id='fixture'+index+'_bg_img';bg.width=250;bg.height=135;bg.src=${JSON.stringify(background)};bg.onclick=e=>{if(e.offsetX>225&&e.offsetY<26)keyboard.hidden=true};keyboard.append(bg);
       const blanks=index===0?[1,10]:[4,8];let digit=0;
       for(let cell=0;cell<12;cell++){if(blanks.includes(cell))continue;const number=String(++digit%10),key=new Image();key.alt='키패드';key.className='key';key.style.left=(6+40*(cell%6))+'px';key.style.top=(33+33*Math.floor(cell/6))+'px';key.src=picture('<rect width="37" height="30" fill="white"/><text x="18.5" y="24" text-anchor="middle" font-family="Arial" font-size="25" fill="black">'+number+'</text>');key.onclick=()=>{const limit=${password ? '6' : 'index===0?15:3'};if(values.get(input).length>=limit)return;values.set(input,values.get(input)+number);input.value=input.type==='password'?'*'.repeat(values.get(input).length*10):values.get(input);update();};keyboard.append(key);}

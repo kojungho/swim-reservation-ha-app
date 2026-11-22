@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewGuard, samsungStep } from '../src/card-review-guard.js';
-import { digitMap } from '../src/card-keypad.js';
+import { digitMap, waitForKeypadReady } from '../src/card-keypad.js';
+test('keypad waits for vendor read-only readiness and never changes the input mode',async()=>{
+  let checks=0,waits=0;await waitForKeypadReady({evaluate:async()=>++checks===3},{sleep:async()=>{waits++},timeout:1000});assert.equal(waits,2);
+  await assert.rejects(waitForKeypadReady({evaluate:async()=>false},{sleep:async()=>{},timeout:0}),{code:'KEYPAD_NOT_READY'});
+});
 
 test('only an exact Samsung issuer origin and known step are recognized',()=>{
   assert.equal(samsungStep('https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX301.jsp'),'301');
