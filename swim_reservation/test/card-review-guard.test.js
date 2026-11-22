@@ -26,7 +26,7 @@ test('official INICIS CDN permits static GET assets only and remains blocked aft
 });
 test('only official one-time PG render and issuer-init POSTs are allowed before the password screen',()=>{
   const guard=new ReviewGuard();
-  for(const path of ['/payMain/pay','/payMain/Card','/jsApi/visa3d/before','/payAuthentication/visa3d']){
+  for(const path of ['/payMain/pay','/payMain/Card','/payMain/checkAssentAll','/payMain/getCardCodeQuota','/jsApi/visa3d/before','/payAuthentication/visa3d']){
     const input={url:'https://stdpay.inicis.com'+path,method:'POST'};assert.equal(guard.allow(input),true);assert.equal(guard.allow(input),false);
   }
   for(const path of ['/payMain/done','/payMain/payDoneView','/jsApi/visa3d/after','/payMain/CardNext'])assert.equal(guard.allow({url:'https://stdpay.inicis.com'+path,method:'POST'}),false);
