@@ -28,6 +28,9 @@ export function createReviewFixture(config) {
   return {
     record,
     async install(context, guard) {
+      // Route fulfillment works offline; any uncaught redirect or missing fixture
+      // must fail locally instead of reaching a real merchant or issuer.
+      await context.setOffline(true);
       await context.route('**/*', async route => {
         const request = route.request(), url = new URL(request.url());
         if (!guard.allow({ url: request.url(), method: request.method(), navigation: request.isNavigationRequest() })) { guard.blocked++; record.blockedApproval ||= guard.frozen; return route.abort(); }
@@ -45,7 +48,7 @@ export function createReviewFixture(config) {
         } else if (url.hostname === 'stdpay.inicis.com' && url.pathname === '/checkWin.jsp') {
           html = '인증창 연결 중';
         } else if (url.hostname === 'stdpay.inicis.com' && url.pathname === '/payAuthentication/visa3d') {
-          return route.fulfill({status:302,headers:{location:'https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX400.jsp'}});
+          html = '<script>location.replace("https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX400.jsp")</script>';
         } else if (['400','300','301'].includes(samsungStep(url.href))) html = fixtureIssuer(samsungStep(url.href));
         if (!html) return route.abort();
         return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
