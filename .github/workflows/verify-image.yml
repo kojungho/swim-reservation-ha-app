@@ -15,16 +15,19 @@ jobs:
           echo '8f81c53e2f60a67e1fe563c8560048ff5894a0c0c07e7a5077325f2bdfc57da1  official.deb' | sha256sum -c -
           cat > Dockerfile <<'DOCKER'
           FROM ghcr.io/kojungho/swim-reservation:2.15.59
-          RUN apt-get update && apt-get install -y --no-install-recommends sudo psmisc desktop-file-utils ethtool policykit-1 libnss3-tools net-tools libstdc++6
+          RUN apt-get update && apt-get install -y --no-install-recommends sudo psmisc desktop-file-utils ethtool policykit-1 libnss3-tools net-tools libstdc++6 lsb-release
           COPY official.deb /tmp/official.deb
           DOCKER
           docker build -t swim-ipinside-offline .
       - name: Install and test local startup with external networking disabled
         run: |
-          timeout -k 5s 45s docker run --rm --network none --security-opt no-new-privileges --entrypoint /bin/sh swim-ipinside-offline -ec '
+          timeout -k 5s 45s docker run --rm --network none --hostname localhost --security-opt no-new-privileges --entrypoint /bin/sh swim-ipinside-offline -ec '
             echo "Packaged version: $(dpkg-deb -f /tmp/official.deb Version)"
+            mkdir -p /var/lib/update-notifier /etc/xdg/autostart
             DEBIAN_FRONTEND=noninteractive timeout -k 3s 15s dpkg -i /tmp/official.deb || echo "Install exited with code $?"
-            dpkg-query -W ipinside-lws
+            dpkg-query -W -f="\${Status} \${Version}\n" ipinside-lws
             timeout -k 2s 5s /etc/init.d/ipinside-lws start || true
+            ldd /opt/interezen/ipinside/LWSDaemon | grep "not found" || true
+            pgrep -x LWSDaemon || true
             timeout -k 2s 10s node -e "const net=require(\"node:net\");let n=0;function check(){const s=net.connect(21400,\"127.0.0.1\");s.once(\"connect\",()=>{console.log(\"Local service socket accepted a connection\");s.destroy()});s.once(\"error\",()=>{if(++n<12)setTimeout(check,500);else{console.log(\"Local service socket unavailable\");process.exitCode=1}})}check()"
           '
