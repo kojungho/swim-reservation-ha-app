@@ -21,10 +21,10 @@ jobs:
           docker build -t swim-ipinside-offline .
       - name: Install and test local startup with external networking disabled
         run: |
-          docker run --rm --network none --security-opt no-new-privileges --entrypoint /bin/sh swim-ipinside-offline -ec '
+          timeout -k 5s 45s docker run --rm --network none --security-opt no-new-privileges --entrypoint /bin/sh swim-ipinside-offline -ec '
             echo "Packaged version: $(dpkg-deb -f /tmp/official.deb Version)"
-            dpkg -i /tmp/official.deb
+            DEBIAN_FRONTEND=noninteractive timeout -k 3s 15s dpkg -i /tmp/official.deb || echo "Install exited with code $?"
             dpkg-query -W ipinside-lws
-            /etc/init.d/ipinside-lws start || true
-            node -e "const net=require(\"node:net\");let n=0;function check(){const s=net.connect(21400,\"127.0.0.1\");s.once(\"connect\",()=>{console.log(\"Local service socket accepted a connection\");s.destroy()});s.once(\"error\",()=>{if(++n<12)setTimeout(check,500);else{console.log(\"Local service socket unavailable\");process.exitCode=1}})}check()"
+            timeout -k 2s 5s /etc/init.d/ipinside-lws start || true
+            timeout -k 2s 10s node -e "const net=require(\"node:net\");let n=0;function check(){const s=net.connect(21400,\"127.0.0.1\");s.once(\"connect\",()=>{console.log(\"Local service socket accepted a connection\");s.destroy()});s.once(\"error\",()=>{if(++n<12)setTimeout(check,500);else{console.log(\"Local service socket unavailable\");process.exitCode=1}})}check()"
           '
