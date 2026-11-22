@@ -16,10 +16,10 @@ export class ReviewGuard {
       const filename = url.pathname.split(';')[0].split('/').pop();
       if (/^(?:WBVTFX\d{3}\.jsp|[A-Za-z_-]+(?:Servlet|\.js|\.css))$/.test(filename)) resource = filename;
       if (host === 'stdpay.inicis.com' && ['/payMain/Card','/payMain/checkAssentAll','/payMain/getCardCodeQuota','/jsApi/visa3d/before','/payAuthentication/visa3d'].includes(url.pathname)) resource = url.pathname;
-      // Only public-looking static JSP paths on the exact issuer origin; never
+      // Only public-looking static issuer entry paths on the exact issuer origin; never
       // include query strings, session suffixes, numeric IDs or arbitrary paths.
       const path = url.pathname.split(';')[0];
-      if (host === 'vbv.samsungcard.co.kr' && /^(?:\/[A-Za-z_][A-Za-z0-9_-]{0,23}){0,5}\/[A-Za-z_][A-Za-z0-9_-]{0,47}\.jsp$/.test(path)) resource = path;
+      if (host === 'vbv.samsungcard.co.kr' && /^(?:\/[A-Za-z_][A-Za-z0-9_-]{0,23}){0,5}\/[A-Za-z_][A-Za-z0-9_-]{0,47}(?:\.(?:jsp|do|html))?$/.test(path)) resource = path;
     } catch {}
     this.recentBlocked.push({ host, resource, method: ['GET','POST'].includes(request.method()) ? request.method() : 'OTHER' });
     this.recentBlocked = this.recentBlocked.slice(-8);

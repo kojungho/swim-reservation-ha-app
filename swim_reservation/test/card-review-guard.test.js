@@ -47,6 +47,8 @@ test('blocked-request diagnostics omit queries, session IDs, body data and unkno
   assert.deepEqual(guard.recentBlocked,[{host:'vbv.samsungcard.co.kr',resource:'/VbV/xacsv2/WBVTFX301.jsp',method:'POST'},{host:'external',resource:'unrecognized-resource',method:'POST'}]);
   guard.noteBlocked({url:()=> 'https://vbv.samsungcard.co.kr/ACS/entry.jsp;jsessionid=private?card=private',method:()=> 'POST'});
   assert.equal(guard.recentBlocked.at(-1).resource,'/ACS/entry.jsp');
+  guard.noteBlocked({url:()=> 'https://vbv.samsungcard.co.kr/ACS/servlet/Entry?PaReq=private',method:()=> 'POST'});
+  assert.equal(guard.recentBlocked.at(-1).resource,'/ACS/servlet/Entry');
   guard.noteBlocked({url:()=> 'https://vbv.samsungcard.co.kr/378282246310005.jsp',method:()=> 'POST'});
   assert.equal(guard.recentBlocked.at(-1).resource,'unrecognized-resource');
 });
