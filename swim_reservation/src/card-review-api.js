@@ -18,6 +18,11 @@ export class CardReviewApi {
     let input, acquired = false;
     try {
       if (url.pathname === '/api/card-review' && request.method === 'GET') return reply(200, { vault: await this.vault.status(), review: this.review.status(), csrf: this.csrf });
+      if(url.pathname==='/api/card-review/connection-preview.png'&&request.method==='GET'){
+        if(request.headers['sec-fetch-site']==='cross-site')return reply(403,{code:'REVIEW_FORBIDDEN'});
+        const png=this.review.preview();if(!png)return reply(404,{code:'NOT_FOUND'});
+        response.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"});response.end(png);return true;
+      }
       if (url.pathname === '/api/card-review/options' && request.method === 'GET') return reply(200, { profiles: (await this.store.getSavedProfiles()).map((p, index) => ({ index, name: p.reserverName })), sites: [...catalog.values()].map(s => ({ id: s.siteId, name: s.name })) });
       if (!['POST', 'PUT', 'DELETE'].includes(request.method) || !['/api/card-review/vault', '/api/card-review/start', '/api/card-review/connection-test', '/api/card-review/self-test', '/api/card-review/stop'].includes(url.pathname)) return reply(404, { code: 'NOT_FOUND' });
       const supplied = Buffer.from(String(request.headers['x-swim-card-review'] || ''));

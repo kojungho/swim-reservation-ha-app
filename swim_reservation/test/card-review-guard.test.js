@@ -64,3 +64,8 @@ test('blocked-request diagnostics omit queries, session IDs, body data and unkno
   guard.noteBlocked({url:()=> 'https://vbv.samsungcard.co.kr/378282246310005.jsp',method:()=> 'POST'});
   assert.equal(guard.recentBlocked.at(-1).resource,'unrecognized-resource');
 });
+test('external probe noise cannot evict a first-party initialization failure',()=>{
+  const guard=new ReviewGuard();guard.noteBlocked({url:()=> 'https://vbv.samsungcard.co.kr/ACS/entry.jsp?private=secret',method:()=> 'POST'});
+  for(let i=0;i<30;i++)guard.noteBlocked({url:()=> 'https://external.invalid/probe',method:()=> 'GET'});
+  assert.equal(guard.recentBlocked.length,8);assert.equal(guard.recentBlocked[0].resource,'/ACS/entry.jsp');
+});

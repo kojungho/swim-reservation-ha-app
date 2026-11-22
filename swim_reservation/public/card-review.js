@@ -13,6 +13,7 @@
       const data = await api(); csrf = data.csrf; busy = data.review.busy;
       $('vaultStatus').textContent = data.vault.configured ? '삼성카드 암호화 저장됨 · 값은 다시 표시하지 않습니다.' : '저장된 카드 없음';
       $('reviewStatus').textContent = data.review.message;
+      $('previewLine').hidden=!data.review.hasConnectionPreview;
       $('reviewDetails').textContent = data.review.state === 'ready' ? `${data.review.fixture ? '샘플 테스트' : '실제 주문 검토'}: 카드번호·CVC·비밀번호 입력 확인\n최종 결제 요청 없음 · 브라우저 통신 차단 · 1분 후 입력값 폐기` : data.review.state === 'failed' ? `중지 단계: ${data.review.stepLabel || '화면 연결 확인'}` : data.review.state === 'connected' ? '카드 저장소를 열지 않고 공식 화면과 숫자 키 10개씩을 확인했습니다. 실제 카드 정보·비밀번호 입력 없음.' : '';
       controls();
     } catch { message('연결 상태를 확인하세요. 중지 여부를 확인할 때까지 검토를 다시 시작하지 마세요.'); }

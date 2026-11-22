@@ -24,3 +24,12 @@ test('connection-only review never opens the saved card vault',async()=>{
   const out=response();await api.handle(request('POST',{'x-swim-card-review':api.csrf},{startDate:'2099-01-27',nights:1,siteId:1,profileIndex:0,amount:60000,consent:true}),out,new URL('https://ha.invalid/api/card-review/connection-test'));
   assert.equal(out.code,202);assert.equal(started,true);
 });
+test('connection preview rejects cross-site access, disables caching and expires without touching the vault',async()=>{
+  const api=new CardReviewApi({dataDir:'/unused',store:{},canStart:()=>true});api.vault.open=async()=>assert.fail('must not decrypt');
+  const png=Buffer.from('synthetic-png');api.review.previewBuffer=png;api.review.previewExpiresAt=Date.now()+10000;
+  const url=new URL('https://ha.invalid/api/card-review/connection-preview.png');
+  const denied=response();await api.handle(request('GET',{'sec-fetch-site':'cross-site'}),denied,url);assert.equal(denied.code,403);
+  const out={...response(),end(body){this.body=body}};await api.handle(request('GET',{'sec-fetch-site':'same-origin'}),out,url);
+  assert.equal(out.code,200);assert.equal(out.headers['Cache-Control'],'no-store');assert.equal(out.headers['Content-Type'],'image/png');assert.equal(out.body,png);
+  api.review.previewExpiresAt=Date.now()-1;const expired=response();await api.handle(request('GET'),expired,url);assert.equal(expired.code,404);assert.ok(png.every(n=>n===0));
+});

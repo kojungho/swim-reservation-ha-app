@@ -22,7 +22,8 @@ export class ReviewGuard {
       if (host === 'vbv.samsungcard.co.kr' && /^(?:\/[A-Za-z_][A-Za-z0-9_-]{0,23}){0,5}\/[A-Za-z_][A-Za-z0-9_-]{0,47}(?:\.(?:jsp|do|html))?$/.test(path)) resource = path;
     } catch {}
     this.recentBlocked.push({ host, resource, method: ['GET','POST'].includes(request.method()) ? request.method() : 'OTHER' });
-    this.recentBlocked = this.recentBlocked.slice(-8);
+    // Advertising/local-probe requests must not evict the relevant PG/issuer failure.
+    while(this.recentBlocked.length>8){const external=this.recentBlocked.findIndex(entry=>entry.host==='external');this.recentBlocked.splice(external<0?0:external,1);}
   }
   allow({ url, method = 'GET', navigation = false }) {
     if (this.frozen) return false;

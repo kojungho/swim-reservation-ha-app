@@ -42,6 +42,13 @@ export async function cardInputControls(page) {
   const card = controls.filter(e=>e.visible&&e.card), cvc = controls.filter(e=>e.visible&&e.cvc);
   return {controls,card:card.length===1?inputs.nth(card[0].index):null,cvc:cvc.length===1?inputs.nth(cvc[0].index):null};
 }
+export async function connectionPreview(page, connectionOnly) {
+  if(!connectionOnly||!page||samsungStep(page.url())!=='300') return null;
+  if(!await page.locator('input:not([type="hidden"])').evaluateAll(es=>es.length>0&&es.every(e=>e.value.length===0))) return null;
+  const png=await page.screenshot({fullPage:false});
+  if(png.length>2000000){png.fill(0);return null;}
+  return png;
+}
 export const REVIEW_ERRORS = {
   CARD_FORMAT: '카드번호·CVC 3자리·일반결제 비밀번호 6자리를 확인하세요.',
   VAULT_PASSPHRASE: '저장소 해제 암호는 12~256자로 입력하세요.', VAULT_OPEN_FAILED: '해제 암호 또는 저장소 파일을 확인하세요.',
@@ -70,12 +77,13 @@ export class CardReview {
     Object.assign(this, { executablePath, launch, ocr, log }); this.busy = false; this.generation = 0;
     this.result = { state: 'idle', message: MESSAGES.idle, mode: 'review-only', finalPaymentAttempted: false };
   }
-  status() { return { ...this.result, busy: this.busy }; }
+  preview() { if(this.previewBuffer&&Date.now()>this.previewExpiresAt){this.previewBuffer.fill(0);this.previewBuffer=null;}return this.previewBuffer||null; }
+  status() { return { ...this.result, busy: this.busy, hasConnectionPreview:!!this.preview() }; }
   stage(state, extra = {}) { this.result = { state, message: MESSAGES[state], mode: 'review-only', finalPaymentAttempted: false, updatedAt: Date.now(), ...extra }; }
-  async stop() { this.generation++; clearTimeout(this.timer); this.busy = false; this.stage('stopped'); const browser = this.browser; this.browser = null; await browser?.close().catch(() => {}); }
+  async stop() { this.generation++; clearTimeout(this.timer); this.busy = false; this.stage('stopped');this.previewBuffer?.fill(0);this.previewBuffer=null; const browser = this.browser; this.browser = null; await browser?.close().catch(() => {}); }
   start(config, card, { fixture = null, connectionOnly = false } = {}) {
     if (this.busy) throw cardError('REVIEW_BUSY');
-    this.busy = true; this.guard = null; this.pgFrame = null; this.pgControls = []; this.issuerControls = []; this.step = 'browser'; this.stage('browser'); const generation = ++this.generation;
+    this.busy = true; this.guard = null; this.pgFrame = null; this.pgControls = []; this.issuerControls = [];this.issuerPage=null;this.connectionOnly=connectionOnly;this.runtimeErrors=new Set();this.previewBuffer?.fill(0);this.previewBuffer=null; this.step = 'browser'; this.stage('browser'); const generation = ++this.generation;
     this.timer = setTimeout(() => { void this.fail('REVIEW_TIMEOUT', generation); }, 180000); this.timer.unref?.();
     this.work = this.run(config, card, fixture, generation, connectionOnly).catch(error => this.fail(error.code, generation, error.name === 'TimeoutError' ? 'timeout' : 'screen-or-connection')).finally(() => { for (const field of Object.keys(card)) card[field] = ''; });
     return this.status();
@@ -84,12 +92,14 @@ export class CardReview {
     if (generation !== this.generation) return;
     this.generation++;
     clearTimeout(this.timer); this.busy = false; const browser = this.browser; this.browser = null;
+    const preview=await connectionPreview(this.issuerPage,this.connectionOnly).catch(()=>null);
     const pgControls = this.step === 'pg-terms' && this.pgFrame ? await this.pgFrame.evaluate(() => ['inputChk7','inputChk3','inputChk4'].map(id=>{ const e=document.getElementById(id),label=document.querySelector('label[for="'+id+'"]');return {id,present:!!e,checkbox:e?.type==='checkbox',visible:!!e?.getClientRects().length,labelVisible:!!label?.getClientRects().length,checked:e?.checked===true}; })).catch(()=>[]) : this.pgControls || [];
     await browser?.close().catch(() => {});
-    if (this.generation !== generation + 1) return;
+    if (this.generation !== generation + 1) {preview?.fill(0);return;}
+    this.previewBuffer=preview;this.previewExpiresAt=Date.now()+300000;
     const safeCode = Object.hasOwn(REVIEW_ERRORS, code) ? code : 'REVIEW_FAILED';
     const failedStep = Object.hasOwn(STEPS, this.step) ? this.step : 'browser';
-    this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode], failedStep, stepLabel: STEPS[failedStep], failureType, pgControls, issuerControls:this.issuerControls||[], blockedRequests: this.guard?.recentBlocked || [] });
+    this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode], failedStep, stepLabel: STEPS[failedStep], failureType, pgControls, issuerControls:this.issuerControls||[], runtimeErrors:[...this.runtimeErrors||[]], blockedRequests: this.guard?.recentBlocked || [] });
     await this.log('error', 'card-review', '카드 자동입력 검토 중지', { code: safeCode, failedStep, failureType }).catch?.(() => {});
   }
   async run(config, card, fixture, generation, connectionOnly = false) {
@@ -101,7 +111,7 @@ export class CardReview {
     const guard = new ReviewGuard(); this.guard = guard; await guard.install(context);
     // Offline synthetic test intercepts every request. Never forwards a request.
     if (fixture) await fixture.install(context, guard);
-    context.on('page', page => { page.on('dialog', dialog => dialog.dismiss().catch(() => {})); page.on('download', download => download.cancel().catch(() => {})); });
+    context.on('page', page => { page.on('dialog', dialog => dialog.dismiss().catch(() => {})); page.on('download', download => download.cancel().catch(() => {}));page.on('pageerror',error=>{if(generation!==this.generation)return;const name=['ReferenceError','TypeError','SyntaxError'].includes(error.name)?error.name:'Error';const symbol=['npPfsCtrl','npPfsStartup','npVCtrl','nq'].find(s=>String(error.message).includes(s))||'other';this.runtimeErrors.add(name+':'+symbol);}); });
     const page = await context.newPage(); this.stage('order'); this.step = 'order-open';
     await page.goto(campUrl(config, 'book.php', config.siteId), { waitUntil: 'domcontentloaded' });
     this.step = 'order-check'; const form = page.locator('form.js-book');
@@ -138,6 +148,7 @@ export class CardReview {
     }
     this.step = 'pg-card'; await pg.getByRole('link', { name: '삼성카드', exact: true }).click();
     this.step = 'issuer-popup'; this.stage('issuer'); const issuer = await openIssuerPopup(page, pg);
+    this.issuerPage=issuer;
     // Official PG popup first opens /checkWin.jsp and posts /payAuthentication/visa3d.
     await issuer.waitForURL(url => samsungStep(url.href) === '400');
     await issuer.waitForLoadState('domcontentloaded'); assertSamsungPage(issuer, '400');

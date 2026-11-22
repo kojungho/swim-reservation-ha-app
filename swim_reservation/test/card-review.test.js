@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {CardReview, reviewInput, waitInicisFrame, openIssuerPopup} from '../src/card-review.js';
+import {CardReview, reviewInput, waitInicisFrame, openIssuerPopup, connectionPreview} from '../src/card-review.js';
+test('connection previews never capture real-card mode, nonempty inputs or other issuer steps',async()=>{
+  let screenshots=0;const page={url:()=> 'https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX300.jsp',locator:()=>({evaluateAll:async fn=>fn([{value:''},{value:''}])}),screenshot:async()=>{screenshots++;return Buffer.from('synthetic-image')}};
+  assert.equal(await connectionPreview(page,false),null);assert.equal(screenshots,0);
+  const preview=await connectionPreview(page,true);assert.equal(screenshots,1);assert.ok(preview);
+  assert.equal(await connectionPreview({...page,locator:()=>({evaluateAll:async fn=>fn([{value:'private'}])})},true),null);assert.equal(screenshots,1);
+  assert.equal(await connectionPreview({...page,url:()=> 'https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX301.jsp'},true),null);assert.equal(screenshots,1);
+  const review=new CardReview();review.previewBuffer=preview;review.previewExpiresAt=Date.now()+10000;await review.stop();assert.ok(preview.every(n=>n===0));assert.equal(review.preview(),null);
+});
 test('popup rejection is handled immediately even while the click is pending',async()=>{
   const unhandled=[];const capture=e=>unhandled.push(e);process.on('unhandledRejection',capture);
   let finishClick;const error=Object.assign(new Error('synthetic timeout'),{name:'TimeoutError'});
@@ -29,7 +37,7 @@ test('slow cleanup of an old failure cannot overwrite a newly started review',as
   let closeOld,finishLaunch;
   const review=new CardReview({launch:()=>new Promise(resolve=>{finishLaunch=resolve})});
   review.generation=1;review.busy=true;review.browser={close:()=>new Promise(resolve=>{closeOld=resolve})};review.stage('card');
-  const failing=review.fail('REVIEW_FAILED',1);review.start({},{});closeOld();await failing;
+  const failing=review.fail('REVIEW_FAILED',1);await new Promise(resolve=>setImmediate(resolve));review.start({},{});closeOld();await failing;
   assert.equal(review.status().state,'browser');assert.equal(review.busy,true);
   await review.stop();finishLaunch({async close(){}});await review.work;
 });
