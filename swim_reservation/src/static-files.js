@@ -14,6 +14,10 @@ export async function serveStatic(pathname, response) {
   const routes = {
     "/": ["index.html", "text/html; charset=utf-8"],
     "/index.html": ["index.html", "text/html; charset=utf-8"],
+    "/card-review": ["card-review.html", "text/html; charset=utf-8"],
+    "/card-review.html": ["card-review.html", "text/html; charset=utf-8"],
+    "/card-review.js": ["card-review.js", "text/javascript; charset=utf-8"],
+    "/card-review.css": ["card-review.css", "text/css; charset=utf-8"],
     "/booking-flow.js": ["booking-flow.js", "text/javascript; charset=utf-8"],
     "/booking-flow.css": ["booking-flow.css", "text/css; charset=utf-8"],
     "/toast.js": ["toast.js", "text/javascript; charset=utf-8"],
@@ -31,6 +35,6 @@ export async function serveStatic(pathname, response) {
   const route = routes[pathname];
   if (!route) { response.writeHead(404,{"Content-Type":"application/json; charset=utf-8"});response.end(JSON.stringify({error:"Not found"}));return; }
   const body = await readFile(path.join(PUBLIC_DIR, route[0]));
-  response.writeHead(200, { "Content-Type": route[1], "Cache-Control": "no-store" });
+  response.writeHead(200, { "Content-Type": route[1], "Cache-Control": "no-store", ...(pathname.startsWith('/card-review') ? { 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" } : {}) });
   response.end(pathname==='/app.js'?renderClientScript(body.toString('utf8')):body);
 }

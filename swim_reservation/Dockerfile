@@ -1,6 +1,6 @@
 FROM node:22-bookworm-slim
 
-ARG BUILD_VERSION=2.15.8
+ARG BUILD_VERSION=2.15.42
 ARG BUILD_ARCH=amd64
 
 LABEL \
@@ -19,6 +19,8 @@ RUN apt-get update \
       chromium \
       dumb-init \
       fonts-noto-cjk \
+      tesseract-ocr \
+      tesseract-ocr-eng \
       tzdata \
     && rm -rf /var/lib/apt/lists/*
 

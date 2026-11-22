@@ -5,7 +5,7 @@ on:
       version:
         description: Published image version
         required: true
-        default: '2.14.4'
+        default: '2.15.42'
 permissions:
   contents: read
 jobs:
@@ -36,3 +36,9 @@ jobs:
             await browser.close();
             console.log('Published image browser runtime passed');
           "
+      - name: Verify offline Samsung card review and approval boundary
+        env:
+          IMAGE_VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$IMAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          docker run --rm --entrypoint node "ghcr.io/kojungho/swim-reservation:${IMAGE_VERSION}" src/card-review-smoke.js

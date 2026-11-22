@@ -26,14 +26,20 @@ import { SubmissionSettings } from "./submission-settings.js";
 import { HaNotifications, notificationService } from './ha-notifications.js';
 import { ReservationPreflight, dailyPreflightConfig } from './reservation-preflight.js';
 import { AppProblems } from './app-problems.js';
+import { CardReviewApi } from './card-review-api.js';
 
 const PORT = Number(process.env.PORT || 8099);
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
 const cancelEventIds = new Set();
+let activeLookups = 0;
 
 const store = new Store(DATA_DIR);
+const cardReview = new CardReviewApi({ dataDir: DATA_DIR, store, executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium',
+  canStart: () => !activeLookups && !scheduler.armed && !scheduler.running && !scheduler.preparing && !plans.busy && !preflight.running && !inspections.jobs.size &&
+    ![...plans.plans.values()].some(plan => plan.enabled || plan.checking || plan.scheduler?.armed || plan.scheduler?.running)
+});
 const appProblems = new AppProblems(store);
 const notifications = new HaNotifications({ service: await notificationService(path.join(DATA_DIR, 'options.json')),
   onError: () => { void store.recordLog('error', 'ha-notification', 'S25 오류 알림 전송에 실패했습니다. HA 알림 서비스와 연결을 확인해 주세요.').catch(() => {}); }
@@ -57,12 +63,12 @@ const inspections = new InspectionService(
     reader.inspect = config => config.month ? inspectMonth(reader, config) : config.calendarDate ? inspectCalendarDay(reader, config) : inspectRooms(config);
     return attachInspectionBrowser(reader, inspectionBrowser);
   },
-  () => !scheduler.running && !scheduler.preparing && !plans.busy
+  () => !cardReview.busy && !scheduler.running && !scheduler.preparing && !plans.busy
 );
 const plans = new PlanManager({ dataDir: DATA_DIR, timeSync,
   engineFactory: planStore => new ReservationEngine({ store: planStore, executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", getFinalSubmitInterval }),
   inspect: (config, signal, traceContext) => inspections.inspect(config, signal, traceContext),
-  canInspect: () => !scheduler.running && !scheduler.preparing,
+  canInspect: () => !cardReview.busy && !scheduler.running && !scheduler.preparing,
   log: (...args) => store.recordLog(...args)
 });
 const preflight = new ReservationPreflight({ dataDir: DATA_DIR, now: () => timeSync.now(),
@@ -72,7 +78,7 @@ const preflight = new ReservationPreflight({ dataDir: DATA_DIR, now: () => timeS
     if (status.state === 'waiting' && scheduler.armed) entries.push({ id: 'default', kind: 'scheduled', enabled: true, config: scheduler.armedConfig || await store.getConfig(), status });
     return entries;
   },
-  canCheck: () => !scheduler.running && !scheduler.preparing && !plans.busy && !inspections.jobs.size,
+  canCheck: () => !cardReview.busy && !scheduler.running && !scheduler.preparing && !plans.busy && !inspections.jobs.size,
   engineFactory: plan => Object.assign(new ReservationEngine({
     store: { updateStatus: async () => {}, recordLog: (level, event, message, details) => store.recordLog(level, 'preflight-step', `사전 점검: ${message}`, { ...details, planId: plan.id }) },
     executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', traceContext: { planId: plan.id, operation: 'preflight' }
@@ -84,7 +90,7 @@ const monthCache = new MonthCache({ dataDir: DATA_DIR, now: () => timeSync.now()
   countsOnly: true,
   inspect: (config, signal) => inspections.inspect(config, signal),
   knownRooms: async () => (await store.getConfig()).roomPriority.map(room => room.name),
-  canInspect: () => !scheduler.running && !scheduler.preparing && !plans.busy &&
+  canInspect: () => !cardReview.busy && !scheduler.running && !scheduler.preparing && !plans.busy &&
     ![scheduler, ...[...plans.plans.values()].filter(plan => plan.enabled).map(plan => plan.scheduler)]
       .some(item => item.armed && triggerEpoch(item.armedConfig?.triggerAt) - timeSync.now() < 300_000)
 });
@@ -114,6 +120,8 @@ await monthCache.configure(0); // Monthly availability is on-demand only; no bac
 const server = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+    if (await cardReview.handle(request, response, url)) return;
+    if (cardReview.busy && (!['GET', 'HEAD'].includes(request.method) || url.pathname === '/api/reservations')) return json(response, 409, { ok: false, error: '카드 자동입력 검토를 먼저 중지해 주세요.' });
     if (url.pathname === '/api/notifications/test' && request.method === 'POST') {
       try {
         await notifications.send('쉼오지 예약 · 알림 테스트', 'S25 오류 알림 연결을 확인했습니다. 앞으로 예약 실행·대기 중 오류가 발생하면 알려드립니다.');
@@ -287,7 +295,7 @@ const server = http.createServer(async (request, response) => {
       try { profiles = request.method === "POST" ? normalizeLookupProfiles((await readJsonBody(request)).profiles) : await store.getSavedProfiles(); }
       catch (error) { return json(response, 400, { error: error.message }); }
       const controller=new AbortController();const cancel=()=>{if(!response.writableEnded)controller.abort();};response.once("close",cancel);
-      let result;try{result=await lookupProfiles(profiles,reservationManager,"예약자",{signal:controller.signal});}catch(error){if(controller.signal.aborted)return;throw error;}finally{response.off("close",cancel);}
+      let result;activeLookups++;try{result=await lookupProfiles(profiles,reservationManager,"예약자",{signal:controller.signal});}catch(error){if(controller.signal.aborted)return;throw error;}finally{activeLookups--;response.off("close",cancel);}
       if(controller.signal.aborted)return;
       const { reservations, lookupErrors } = result;
       await store.recordLog(lookupErrors.length ? "error" : "info", "reservation-check", `예약확인 ${reservations.length}건, 조회 실패 ${lookupErrors.length}명.`, { lookupErrors: lookupErrors.map(({ profileIndex, message }) => ({ profileIndex, message })) });
@@ -426,6 +434,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
     scheduler.cancelRequested = true;
     scheduler.operation++;
     await preflight.close();
+    await cardReview.close();
     await plans.close();
     await monthCache.close();
     await inspections.cancelAll();
