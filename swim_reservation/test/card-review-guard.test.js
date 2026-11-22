@@ -20,6 +20,7 @@ test('freeze blocks every domain, verb and navigation and sets browser offline',
 test('official INICIS CDN permits static GET assets only and remains blocked after freeze',()=>{
   const guard=new ReviewGuard(),url='https://stdux.inicis.com/stdpay/stdjs/INIStdPay_third-party.js';
   assert.equal(guard.allow({url}),true);
+  assert.equal(guard.allow({url:"https://stdux.inicis.com/stdpay/pc/js/plugins.js"}),true);
   for(const input of [{url,method:'POST'},{url,navigation:true},{url:'https://stdux.inicis.com/payMain/pay'},{url:'https://stdux.inicis.com/stdpay/stdjs/result.jsp'},{url:'https://stdux.inicis.com.evil.invalid/stdpay/stdjs/INIStdPay_third-party.js'}]) assert.equal(guard.allow(input),false);
   guard.freeze();assert.equal(guard.allow({url}),false);
 });

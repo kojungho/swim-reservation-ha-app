@@ -25,7 +25,7 @@ export class ReviewGuard {
     if (u.protocol !== 'https:' || u.username || u.password || (u.port && u.port !== '443')) return false;
     // Official INIStdPay.js initializes from this separate static CDN.
     // Permit only static GET assets, never a navigation or payment endpoint.
-    if (u.hostname === 'stdux.inicis.com') return method === 'GET' && !navigation && /^\/stdpay\/(?:stdjs|css|img|images|font|fonts)\/[A-Za-z0-9_./-]+\.(?:js|css|png|gif|jpg|jpeg|svg|woff2?|ttf|eot)$/.test(u.pathname) && !u.pathname.includes('..');
+    if (u.hostname === 'stdux.inicis.com') return method === 'GET' && !navigation && /^\/stdpay\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(?:js|css|png|gif|jpg|jpeg|svg|woff2?|ttf|eot)$/.test(u.pathname) && !u.pathname.includes('..');
     if (!['www.swimozicamp.com', 'stdpay.inicis.com', 'vbv.samsungcard.co.kr'].includes(u.hostname)) return false;
     if (u.hostname === 'www.swimozicamp.com') {
       if (u.pathname === '/camp/pay_return.php' || u.pathname === '/camp/done.php') return false;
