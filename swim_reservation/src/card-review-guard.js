@@ -12,7 +12,7 @@ export class ReviewGuard {
     let host = 'external', resource = 'unrecognized-resource';
     try {
       const url = new URL(request.url());
-      if (['www.swimozicamp.com','stdpay.inicis.com','vbv.samsungcard.co.kr'].includes(url.hostname)) host = url.hostname;
+      if (['www.swimozicamp.com','stdpay.inicis.com','stdux.inicis.com','vbv.samsungcard.co.kr'].includes(url.hostname)) host = url.hostname;
       const filename = url.pathname.split(';')[0].split('/').pop();
       if (/^(?:WBVTFX\d{3}\.jsp|[A-Za-z_-]+(?:Servlet|\.js|\.css))$/.test(filename)) resource = filename;
     } catch {}

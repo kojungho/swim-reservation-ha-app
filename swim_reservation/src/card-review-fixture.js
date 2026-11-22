@@ -37,7 +37,7 @@ export function createReviewFixture(config) {
         } else if (url.hostname === 'stdux.inicis.com' && url.pathname === '/stdpay/stdjs/INIStdPay_third-party.js') {
           return route.fulfill({status:200,contentType:'application/javascript',body:'function fixtureOpenPG(){document.forms[0].submit()}'});
         } else if (url.hostname === 'stdpay.inicis.com' && url.pathname === '/payMain/pay') {
-          html = '<input type="checkbox" id="inputChk7"><input type="checkbox" id="inputChk3"><input type="checkbox" id="inputChk4"><a href="#" onclick="return false">삼성카드</a><a id="CardBtn" href="https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX400.jsp" target="_blank">다음</a>';
+          html = '<input style="display:none" type="checkbox" id="inputChk7"><label for="inputChk7">필수 약관 7</label><input style="display:none" type="checkbox" id="inputChk3"><label for="inputChk3">필수 약관 3</label><input style="display:none" type="checkbox" id="inputChk4"><label for="inputChk4">필수 약관 4</label><a href="#" onclick="return false">삼성카드</a><a id="CardBtn" href="https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX400.jsp" target="_blank">다음</a>';
         } else if (['400','300','301'].includes(samsungStep(url.href))) html = fixtureIssuer(samsungStep(url.href));
         if (!html) return route.abort();
         return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });

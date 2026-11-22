@@ -55,7 +55,7 @@ export class CardReview {
   async stop() { this.generation++; clearTimeout(this.timer); this.busy = false; this.stage('stopped'); const browser = this.browser; this.browser = null; await browser?.close().catch(() => {}); }
   start(config, card, { fixture = null, connectionOnly = false } = {}) {
     if (this.busy) throw cardError('REVIEW_BUSY');
-    this.busy = true; this.guard = null; this.step = 'browser'; this.stage('browser'); const generation = ++this.generation;
+    this.busy = true; this.guard = null; this.pgFrame = null; this.pgControls = []; this.step = 'browser'; this.stage('browser'); const generation = ++this.generation;
     this.timer = setTimeout(() => { void this.fail('REVIEW_TIMEOUT', generation); }, 180000); this.timer.unref?.();
     this.work = this.run(config, card, fixture, generation, connectionOnly).catch(error => this.fail(error.code, generation, error.name === 'TimeoutError' ? 'timeout' : 'screen-or-connection')).finally(() => { for (const field of Object.keys(card)) card[field] = ''; });
     return this.status();
@@ -64,11 +64,12 @@ export class CardReview {
     if (generation !== this.generation) return;
     this.generation++;
     clearTimeout(this.timer); this.busy = false; const browser = this.browser; this.browser = null;
+    const pgControls = this.step === 'pg-terms' && this.pgFrame ? await this.pgFrame.evaluate(() => ['inputChk7','inputChk3','inputChk4'].map(id=>{ const e=document.getElementById(id),label=document.querySelector('label[for="'+id+'"]');return {id,present:!!e,checkbox:e?.type==='checkbox',visible:!!e?.getClientRects().length,labelVisible:!!label?.getClientRects().length,checked:e?.checked===true}; })).catch(()=>[]) : this.pgControls || [];
     await browser?.close().catch(() => {});
     if (this.generation !== generation + 1) return;
     const safeCode = Object.hasOwn(REVIEW_ERRORS, code) ? code : 'REVIEW_FAILED';
     const failedStep = Object.hasOwn(STEPS, this.step) ? this.step : 'browser';
-    this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode], failedStep, stepLabel: STEPS[failedStep], failureType, blockedRequests: this.guard?.recentBlocked || [] });
+    this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode], failedStep, stepLabel: STEPS[failedStep], failureType, pgControls, blockedRequests: this.guard?.recentBlocked || [] });
     await this.log('error', 'card-review', '카드 자동입력 검토 중지', { code: safeCode, failedStep, failureType }).catch?.(() => {});
   }
   async run(config, card, fixture, generation, connectionOnly = false) {
@@ -102,8 +103,19 @@ export class CardReview {
     this.step = 'order-submit'; await form.locator('button[type="submit"]').click();
     // The merchant POST can target an about:blank iframe without changing its src attribute.
     this.step = 'pg-frame'; const pg = await waitInicisFrame(page);
+    this.pgFrame = pg;
     if (!pg || new URL(pg.url()).origin !== 'https://stdpay.inicis.com') throw cardError('ORDER_MISMATCH');
-    this.step = 'pg-terms'; for (const id of ['inputChk7', 'inputChk3', 'inputChk4']) await pg.locator('#' + id).check();
+    this.step = 'pg-terms';
+    for (const id of ['inputChk7', 'inputChk3', 'inputChk4']) {
+      const control = pg.locator('#' + id), label = pg.locator('label[for="' + id + '"]');
+      await control.waitFor({state:'attached'});
+      const info = {id, count:await control.count(), visible:await control.isVisible(), labelCount:await label.count()}; this.pgControls.push(info);
+      if (info.count !== 1 || await control.getAttribute('type') !== 'checkbox') throw cardError('ORDER_MISMATCH');
+      if (info.visible) await control.check();
+      else if (info.labelCount === 1 && await label.isVisible()) await label.click();
+      else throw cardError('ORDER_MISMATCH');
+      if (!await control.evaluate(e=>e.checked)) throw cardError('ORDER_MISMATCH');
+    }
     this.step = 'pg-card'; await pg.getByRole('link', { name: '삼성카드', exact: true }).click();
     const popupPromise = page.waitForEvent('popup');
     this.step = 'issuer-popup'; await pg.locator('#CardBtn').click(); const issuer = await popupPromise;
