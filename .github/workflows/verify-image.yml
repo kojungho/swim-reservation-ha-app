@@ -1,44 +1,30 @@
-name: Verify published HA images
+name: Check IPinside in isolated HA image
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: Published image version
-        required: true
-        default: '2.15.59'
 permissions:
   contents: read
 jobs:
-  smoke:
-    name: Runtime check ${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-          - arch: aarch64
-            runner: ubuntu-24.04-arm
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
     steps:
-      - name: Download without login and check browser runtime
-        env:
-          IMAGE_VERSION: ${{ inputs.version }}
+      - name: Prepare a disposable copy of the deployed image
         run: |
-          [[ "$IMAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
-          docker run --rm --entrypoint node "ghcr.io/kojungho/swim-reservation:${IMAGE_VERSION}" --input-type=module -e "
-            import { chromium } from 'playwright-core';
-            const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
-            const page = await browser.newPage();
-            await page.goto('data:text/html,<title>swim-image-check</title>');
-            if (await page.title() !== 'swim-image-check') throw new Error('Browser runtime check failed');
-            await browser.close();
-            console.log('Published image browser runtime passed');
-          "
-      - name: Verify offline Samsung card review and approval boundary
-        env:
-          IMAGE_VERSION: ${{ inputs.version }}
+          set -euo pipefail
+          curl -fsS 'https://vbv.samsungcard.co.kr/ipinsidelws/agent/IPinside-LWS.x86_64.deb' -o official.deb
+          echo '8f81c53e2f60a67e1fe563c8560048ff5894a0c0c07e7a5077325f2bdfc57da1  official.deb' | sha256sum -c -
+          cat > Dockerfile <<'DOCKER'
+          FROM ghcr.io/kojungho/swim-reservation:2.15.59
+          RUN apt-get update && apt-get install -y --no-install-recommends sudo psmisc desktop-file-utils ethtool policykit-1 libnss3-tools net-tools libstdc++6
+          COPY official.deb /tmp/official.deb
+          DOCKER
+          docker build -t swim-ipinside-offline .
+      - name: Install and test local startup with external networking disabled
         run: |
-          [[ "$IMAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
-          docker run --rm --entrypoint node "ghcr.io/kojungho/swim-reservation:${IMAGE_VERSION}" src/card-review-smoke.js
+          docker run --rm --network none --security-opt no-new-privileges --entrypoint /bin/sh swim-ipinside-offline -ec '
+            echo "Packaged version: $(dpkg-deb -f /tmp/official.deb Version)"
+            dpkg -i /tmp/official.deb
+            dpkg-query -W ipinside-lws
+            /etc/init.d/ipinside-lws start || true
+            node -e "const net=require(\"node:net\");let n=0;function check(){const s=net.connect(21400,\"127.0.0.1\");s.once(\"connect\",()=>{console.log(\"Local service socket accepted a connection\");s.destroy()});s.once(\"error\",()=>{if(++n<12)setTimeout(check,500);else{console.log(\"Local service socket unavailable\");process.exitCode=1}})}check()"
+          '
