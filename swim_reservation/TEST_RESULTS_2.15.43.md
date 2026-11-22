@@ -7,4 +7,6 @@
 - 이전 2.15.42의 실제 카드 검토는 일반 화면/연결 오류로 중지됨. 실패 단계 진단이 없었으므로 당시 정확한 원인은 확정하지 않음. 최종 결제 없음. 실제 세 항목 자동입력 전체 성공으로 보고하지 않음.
 - 기존 암호화 저장 형식·키 도출·AAD·파일 경로는 변경하지 않음.
 
-배포 이미지와 HA 연결 전용 진단 결과는 적용 후 기록한다.
+- Publish 45028082451 및 Verify 45028469581: amd64/aarch64 모두 통과. 합성 자동입력과 빈 iframe POST 연결/카드 없는 진단 통과.
+- HA 실제 버전 2.15.43 started 확인. 실제 연결 전용 진단은 PG_FRAME_NOT_READY, pg-frame에서 중지. 카드 복호화·입력 및 최종 결제 없음.
+- 차단 진단에서 INIStdPay_third-party.js의 외부 정적 요청 확인. 공식 https://stdpay.inicis.com/stdjs/INIStdPay.js가 cdnDomain을 https://stdux.inicis.com/stdpay로 정의하고 해당 스크립트를 로드함을 확인. 2.15.44에서 이 CDN의 정적 GET만 별도 허용한다.

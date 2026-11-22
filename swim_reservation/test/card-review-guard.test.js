@@ -17,6 +17,12 @@ test('freeze blocks every domain, verb and navigation and sets browser offline',
   const guard=new ReviewGuard();let offline=false;await guard.stopNetwork({async setOffline(value){offline=value}});assert.equal(offline,true);
   for(const host of ['www.swimozicamp.com','stdpay.inicis.com','vbv.samsungcard.co.kr','evil.invalid'])for(const method of ['GET','POST','PUT'])assert.equal(guard.allow({url:`https://${host}/VbV/xacsv2/WBVTFX301.jsp`,method,navigation:true}),false);
 });
+test('official INICIS CDN permits static GET assets only and remains blocked after freeze',()=>{
+  const guard=new ReviewGuard(),url='https://stdux.inicis.com/stdpay/stdjs/INIStdPay_third-party.js';
+  assert.equal(guard.allow({url}),true);
+  for(const input of [{url,method:'POST'},{url,navigation:true},{url:'https://stdux.inicis.com/payMain/pay'},{url:'https://stdux.inicis.com/stdpay/stdjs/result.jsp'},{url:'https://stdux.inicis.com.evil.invalid/stdpay/stdjs/INIStdPay_third-party.js'}]) assert.equal(guard.allow(input),false);
+  guard.freeze();assert.equal(guard.allow({url}),false);
+});
 test('request interception includes popup requests and websocket rejection',async()=>{
   const guard=new ReviewGuard();let routeHandler,wsHandler;await guard.install({async route(pattern,h){assert.equal(pattern,'**/*');routeHandler=h},async routeWebSocket(pattern,h){wsHandler=h}});
   let aborted=false;await routeHandler({request:()=>({url:()=> 'https://evil.invalid/pay',method:()=> 'POST',isNavigationRequest:()=>true}),abort:async()=>{aborted=true},continue:async()=>assert.fail('unexpected network')});assert.equal(aborted,true);
