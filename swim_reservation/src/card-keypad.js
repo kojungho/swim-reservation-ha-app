@@ -80,6 +80,8 @@ export async function fillKeypad(page, field, value, { ocr = recognizeDigit, bef
   const remaining = page.locator('img[alt="키패드"][id$="_bg_img"]:visible');
   if (await remaining.count()) {
     if (await remaining.count() !== 1 || await remaining.getAttribute('id') !== keyboard.backgroundId) throw cardError('KEYPAD_MOVED');
+    const current = await remaining.boundingBox();
+    if (!current || Math.abs(current.x-b.x)>1 || Math.abs(current.y-b.y)>1) throw cardError('KEYPAD_MOVED');
     await page.mouse.click(b.x + b.width - 13, b.y + 13);
   }
   return { entered: value.length };
