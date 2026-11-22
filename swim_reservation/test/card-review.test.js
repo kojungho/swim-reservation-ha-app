@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {CardReview, reviewInput, waitInicisFrame} from '../src/card-review.js';
+import {CardReview, reviewInput, waitInicisFrame, openIssuerPopup} from '../src/card-review.js';
+test('popup rejection is handled immediately even while the click is pending',async()=>{
+  const unhandled=[];const capture=e=>unhandled.push(e);process.on('unhandledRejection',capture);
+  let finishClick;const error=Object.assign(new Error('synthetic timeout'),{name:'TimeoutError'});
+  try {
+    const pg={locator:()=>({waitFor:async()=>{},click:()=>new Promise(resolve=>{finishClick=resolve})})};
+    await assert.rejects(openIssuerPopup({waitForEvent:()=>Promise.reject(error)},pg),{name:'TimeoutError'});
+    await new Promise(resolve=>setImmediate(resolve));finishClick();assert.equal(unhandled.length,0);
+  } finally {process.off('unhandledRejection',capture);}
+});
 test('stopping or timing out while Chromium launches cannot start an order afterward',async()=>{
   for(const timeout of [false,true]){
     let finishLaunch,closed=false,contextStarted=false;

@@ -7,7 +7,7 @@ import { chromiumUserAgent } from './reservation-engine.js';
 
 const MESSAGES = {
   idle: '삼성카드 검토 준비', browser: '검토 전용 브라우저 준비 중', order: '공식 예약 정보와 금액 확인 중',
-  pg: '이니시스 결제창에서 삼성카드 선택 중', card: '카드번호 키패드 자동입력 중', cvc: 'CVC 키패드 자동입력 중',
+  pg: '이니시스 결제창에서 삼성카드 선택 중', issuer: '삼성 인증창 연결 중', card: '카드번호 키패드 자동입력 중', cvc: 'CVC 키패드 자동입력 중',
   password: '비밀번호 화면 확인 · 승인 통신 차단 중', ready: '세 항목 자동입력 확인 · 최종 결제 전 정지 · 통신 차단됨',
   connected: '실제 사이트 연결·카드번호/CVC 키패드 확인 완료 · 카드 정보 입력 없음',
   'card-check': '카드번호 키패드 확인 중 · 입력 없음', 'cvc-check': 'CVC 키패드 확인 중 · 입력 없음',
@@ -23,6 +23,14 @@ export async function waitInicisFrame(page, { timeout = 15000, sleep = ms => new
     await sleep(50);
   } while (Date.now() < deadline);
   throw cardError('PG_FRAME_NOT_READY');
+}
+export async function openIssuerPopup(page, pg) {
+  const next = pg.locator('#CardBtn');
+  await next.waitFor({state:'visible'});
+  // Handle both promises immediately: a popup timeout must never become an
+  // unhandled rejection while the initiating click is still waiting.
+  const [issuer] = await Promise.all([page.waitForEvent('popup'), next.click()]);
+  return issuer;
 }
 export const REVIEW_ERRORS = {
   CARD_FORMAT: '카드번호·CVC 3자리·일반결제 비밀번호 6자리를 확인하세요.',
@@ -117,8 +125,7 @@ export class CardReview {
       if (!await control.evaluate(e=>e.checked)) throw cardError('ORDER_MISMATCH');
     }
     this.step = 'pg-card'; await pg.getByRole('link', { name: '삼성카드', exact: true }).click();
-    const popupPromise = page.waitForEvent('popup');
-    this.step = 'issuer-popup'; await pg.locator('#CardBtn').click(); const issuer = await popupPromise;
+    this.step = 'issuer-popup'; this.stage('issuer'); const issuer = await openIssuerPopup(page, pg);
     // Official PG popup first opens /checkWin.jsp and posts /payAuthentication/visa3d.
     await issuer.waitForURL(url => samsungStep(url.href) === '400');
     await issuer.waitForLoadState('domcontentloaded'); assertSamsungPage(issuer, '400');
