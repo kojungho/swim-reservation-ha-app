@@ -16,3 +16,11 @@ test('review uses an existing guest, exact amount below additional-auth threshol
   const profiles=[{reserverName:'검토자',phone:'01000000000'}];assert.equal(reviewInput(input,profiles).amount,60000);
   for(const patch of [{consent:false},{amount:300000},{profileIndex:99},{siteId:999},{nights:0}])assert.throws(()=>reviewInput({...input,...patch},profiles),{code:'REVIEW_INPUT'});
 });
+test('slow cleanup of an old failure cannot overwrite a newly started review',async()=>{
+  let closeOld,finishLaunch;
+  const review=new CardReview({launch:()=>new Promise(resolve=>{finishLaunch=resolve})});
+  review.generation=1;review.busy=true;review.browser={close:()=>new Promise(resolve=>{closeOld=resolve})};review.stage('card');
+  const failing=review.fail('REVIEW_FAILED',1);review.start({},{});closeOld();await failing;
+  assert.equal(review.status().state,'browser');assert.equal(review.busy,true);
+  await review.stop();finishLaunch({async close(){}});await review.work;
+});

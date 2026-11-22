@@ -51,6 +51,7 @@ export class CardReview {
     this.generation++;
     clearTimeout(this.timer); this.busy = false; const browser = this.browser; this.browser = null;
     await browser?.close().catch(() => {});
+    if (this.generation !== generation + 1) return;
     const safeCode = Object.hasOwn(REVIEW_ERRORS, code) ? code : 'REVIEW_FAILED';
     this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode] });
     await this.log('error', 'card-review', '카드 자동입력 검토 중지', { code: safeCode }).catch?.(() => {});
