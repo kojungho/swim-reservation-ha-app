@@ -75,6 +75,14 @@ export async function fillKeypad(page, field, value, { ocr = recognizeDigit, bef
     if (length <= previousLength) throw cardError('KEYPAD_INPUT_UNVERIFIED');
     previousLength = length;
   }
+  await closeKeypad(page, keyboard);
+  return { entered: value.length };
+}
+export async function checkKeypad(page, field, { ocr = recognizeDigit } = {}) {
+  await field.click(); const keyboard = await inspectKeypad(page, ocr);
+  await closeKeypad(page, keyboard); return { digitsRecognized: 10 };
+}
+async function closeKeypad(page, keyboard) {
   // Closing the keyboard does not submit the issuer form. Target its close icon.
   const b = keyboard.bounds;
   const remaining = page.locator('img[alt="키패드"][id$="_bg_img"]:visible');
@@ -84,5 +92,4 @@ export async function fillKeypad(page, field, value, { ocr = recognizeDigit, bef
     if (!current || Math.abs(current.x-b.x)>1 || Math.abs(current.y-b.y)>1) throw cardError('KEYPAD_MOVED');
     await page.mouse.click(b.x + b.width - 13, b.y + 13);
   }
-  return { entered: value.length };
 }

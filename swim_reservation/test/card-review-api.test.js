@@ -17,3 +17,10 @@ test('exceptions containing sensitive data are replaced with fixed public messag
   const api=new CardReviewApi({dataDir:'/unused',store:{getSavedProfiles:async()=>[]},canStart:()=>true});api.vault.save=async()=>{throw Error('PAN 378282246310005 CVC 123 password 123456')};
   const out=response();await api.handle(request('PUT',{'x-swim-card-review':api.csrf},{}),out,new URL('https://ha.invalid/api/card-review/vault'));assert.equal(out.code,400);assert.equal(out.body.code,'REVIEW_FAILED');assert.equal(JSON.stringify(out.body).includes('378282'),false);assert.equal(api.pending,false);
 });
+test('connection-only review never opens the saved card vault',async()=>{
+  const api=new CardReviewApi({dataDir:'/unused',store:{getSavedProfiles:async()=>[{reserverName:'검토자',phone:'01000000000'}]},canStart:()=>true});
+  api.vault.open=async()=>assert.fail('must not decrypt');let started=false;
+  api.review.start=(config,card,options)=>{assert.deepEqual(card,{});assert.equal(options.connectionOnly,true);started=true;return {state:'browser'}};
+  const out=response();await api.handle(request('POST',{'x-swim-card-review':api.csrf},{startDate:'2099-01-27',nights:1,siteId:1,profileIndex:0,amount:60000,consent:true}),out,new URL('https://ha.invalid/api/card-review/connection-test'));
+  assert.equal(out.code,202);assert.equal(started,true);
+});

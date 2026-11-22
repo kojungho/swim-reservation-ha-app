@@ -26,3 +26,8 @@ test('OCR must identify a complete unique set of ten keys; no guessed digits',()
   const keys=Array.from({length:10},(_,i)=>({digit:String(i),x:i*40,y:20}));assert.equal(digitMap(keys).get('7').x,280);
   for(const invalid of [keys.slice(1),keys.map((k,i)=>i===9?{...k,digit:'8'}:k),keys.map((k,i)=>i===0?{...k,digit:'O'}:k)])assert.throws(()=>digitMap(invalid),{code:'KEYPAD_AMBIGUOUS'});
 });
+test('blocked-request diagnostics omit queries, session IDs, body data and unknown path identifiers',()=>{
+  const guard=new ReviewGuard();guard.noteBlocked({url:()=> 'https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX301.jsp;jsessionid=do-not-retain?card=378282246310005&cvc=123',method:()=> 'POST'});
+  guard.noteBlocked({url:()=> 'https://unknown.invalid/sensitive-user-secret',method:()=> 'POST'});
+  assert.deepEqual(guard.recentBlocked,[{host:'vbv.samsungcard.co.kr',resource:'WBVTFX301.jsp',method:'POST'},{host:'external',resource:'unrecognized-resource',method:'POST'}]);
+});

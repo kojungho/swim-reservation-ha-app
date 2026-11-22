@@ -9,4 +9,9 @@ try {
   const status = review.status();
   if (status.state !== 'ready' || !status.fixture || !status.networkBlocked || status.finalPaymentAttempted || !Object.values(status.fieldsVerified || {}).every(Boolean)) throw Error('Offline card review failed: ' + (status.code || status.state));
   console.log('Offline card review passed: all fields verified, approval blocked, no live network');
+  await review.stop();
+  review.start(config, {}, { fixture: createReviewFixture(config), connectionOnly: true }); await review.work;
+  const connection = review.status();
+  if (connection.state !== 'connected' || connection.cardDataEntered !== false || !connection.networkBlocked) throw Error('Offline connection-only check failed: ' + (connection.code || connection.state));
+  console.log('Offline form-target frame and connection-only check passed: no card data entered');
 } finally { await review.stop(); }

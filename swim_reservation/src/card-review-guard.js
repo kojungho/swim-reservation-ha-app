@@ -7,7 +7,18 @@ export function samsungStep(address) {
 }
 // An independent network boundary, not a preference that the UI can disable.
 export class ReviewGuard {
-  constructor() { this.frozen = false; this.orderPosts = 0; this.authPosts = 0; this.reachedPassword = false; this.blocked = 0; }
+  constructor() { this.frozen = false; this.orderPosts = 0; this.authPosts = 0; this.reachedPassword = false; this.blocked = 0; this.recentBlocked = []; }
+  noteBlocked(request) {
+    let host = 'external', resource = 'unrecognized-resource';
+    try {
+      const url = new URL(request.url());
+      if (['www.swimozicamp.com','stdpay.inicis.com','vbv.samsungcard.co.kr'].includes(url.hostname)) host = url.hostname;
+      const filename = url.pathname.split(';')[0].split('/').pop();
+      if (/^(?:WBVTFX\d{3}\.jsp|[A-Za-z_-]+(?:Servlet|\.js|\.css))$/.test(filename)) resource = filename;
+    } catch {}
+    this.recentBlocked.push({ host, resource, method: ['GET','POST'].includes(request.method()) ? request.method() : 'OTHER' });
+    this.recentBlocked = this.recentBlocked.slice(-8);
+  }
   allow({ url, method = 'GET', navigation = false }) {
     if (this.frozen) return false;
     let u; try { u = new URL(url); } catch { return false; }
@@ -38,7 +49,7 @@ export class ReviewGuard {
     await context.route('**/*', async route => {
       const request = route.request();
       if (this.allow({ url: request.url(), method: request.method(), navigation: request.isNavigationRequest() })) return route.continue();
-      this.blocked++; return route.abort('blockedbyclient');
+      this.blocked++; this.noteBlocked(request); return route.abort('blockedbyclient');
     });
     await context.routeWebSocket('**', socket => socket.close());
   }

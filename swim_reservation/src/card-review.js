@@ -1,7 +1,7 @@
 import { chromium } from 'playwright-core';
 import { cardError } from './card-vault.js';
 import { ReviewGuard, assertSamsungPage, samsungStep } from './card-review-guard.js';
-import { fillKeypad } from './card-keypad.js';
+import { fillKeypad, checkKeypad } from './card-keypad.js';
 import { campUrl, checkoutDate, catalog } from './camp-site.js';
 import { chromiumUserAgent } from './reservation-engine.js';
 
@@ -9,8 +9,21 @@ const MESSAGES = {
   idle: '삼성카드 검토 준비', browser: '검토 전용 브라우저 준비 중', order: '공식 예약 정보와 금액 확인 중',
   pg: '이니시스 결제창에서 삼성카드 선택 중', card: '카드번호 키패드 자동입력 중', cvc: 'CVC 키패드 자동입력 중',
   password: '비밀번호 화면 확인 · 승인 통신 차단 중', ready: '세 항목 자동입력 확인 · 최종 결제 전 정지 · 통신 차단됨',
+  connected: '실제 사이트 연결·카드번호/CVC 키패드 확인 완료 · 카드 정보 입력 없음',
+  'card-check': '카드번호 키패드 확인 중 · 입력 없음', 'cvc-check': 'CVC 키패드 확인 중 · 입력 없음',
   stopped: '검토 종료 · 브라우저와 입력값 폐기', failed: '검토를 중지했습니다. 카드 정보는 로그에 남기지 않았습니다.'
 };
+const STEPS = { browser:'브라우저 준비', 'order-open':'예약 화면 연결', 'order-check':'예약 조건 대조', 'order-fill':'예약자 입력', 'order-submit':'미결제 주문 생성', 'pg-frame':'이니시스 결제창 연결', 'pg-terms':'PG 필수 약관', 'pg-card':'삼성카드 선택', 'issuer-popup':'삼성 인증창 연결', 'issuer-mode':'일반결제 선택', 'issuer-summary':'가맹점·금액 대조', 'card-keypad':'카드번호 키패드', 'cvc-keypad':'CVC 키패드', 'card-auth':'카드 인증 및 비밀번호 화면 이동', 'password-keypad':'비밀번호 키패드', 'approval-block':'승인 통신 차단' };
+export async function waitInicisFrame(page, { timeout = 15000, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  const deadline = Date.now() + timeout;
+  do {
+    const frames = page.frames().filter(frame => { try { const u = new URL(frame.url()); return u.origin === 'https://stdpay.inicis.com' && u.pathname === '/payMain/pay'; } catch { return false; } });
+    if (frames.length === 1) return frames[0];
+    if (frames.length > 1) throw cardError('ORDER_MISMATCH');
+    await sleep(50);
+  } while (Date.now() < deadline);
+  throw cardError('PG_FRAME_NOT_READY');
+}
 export const REVIEW_ERRORS = {
   CARD_FORMAT: '카드번호·CVC 3자리·일반결제 비밀번호 6자리를 확인하세요.',
   VAULT_PASSPHRASE: '저장소 해제 암호는 12~256자로 입력하세요.', VAULT_OPEN_FAILED: '해제 암호 또는 저장소 파일을 확인하세요.',
@@ -20,6 +33,7 @@ export const REVIEW_ERRORS = {
   ISSUER_PAGE_MISMATCH: '예상한 삼성 일반결제 화면이 아닙니다. 추가 인증·등록은 직접 확인하세요.',
   ORDER_MISMATCH: '공식 사이트의 객실·기간·인원·금액을 대조하지 못해 중지했습니다.',
   REVIEW_FAILED: '검토 중 화면 또는 연결 문제가 발생했습니다. 자동 재시도하지 않습니다.', REVIEW_TIMEOUT: '검토 제한 시간이 지나 브라우저를 닫았습니다.',
+  PG_FRAME_NOT_READY: '이니시스 결제창의 실제 연결 주소를 확인하지 못해 중지했습니다.',
   FIELD_NOT_EMPTY: '입력란이 비어 있지 않아 중지했습니다.', VAULT_BUSY: '저장소 처리 중입니다. 잠시 후 다시 시도하세요.', VAULT_UNAVAILABLE: '암호화 저장소를 읽지 못했습니다.'
 };
 export function reviewInput(input, profiles) {
@@ -39,36 +53,37 @@ export class CardReview {
   status() { return { ...this.result, busy: this.busy }; }
   stage(state, extra = {}) { this.result = { state, message: MESSAGES[state], mode: 'review-only', finalPaymentAttempted: false, updatedAt: Date.now(), ...extra }; }
   async stop() { this.generation++; clearTimeout(this.timer); this.busy = false; this.stage('stopped'); const browser = this.browser; this.browser = null; await browser?.close().catch(() => {}); }
-  start(config, card, { fixture = null } = {}) {
+  start(config, card, { fixture = null, connectionOnly = false } = {}) {
     if (this.busy) throw cardError('REVIEW_BUSY');
-    this.busy = true; this.stage('browser'); const generation = ++this.generation;
+    this.busy = true; this.guard = null; this.step = 'browser'; this.stage('browser'); const generation = ++this.generation;
     this.timer = setTimeout(() => { void this.fail('REVIEW_TIMEOUT', generation); }, 180000); this.timer.unref?.();
-    this.work = this.run(config, card, fixture, generation).catch(error => this.fail(error.code, generation)).finally(() => { for (const field of Object.keys(card)) card[field] = ''; });
+    this.work = this.run(config, card, fixture, generation, connectionOnly).catch(error => this.fail(error.code, generation, error.name === 'TimeoutError' ? 'timeout' : 'screen-or-connection')).finally(() => { for (const field of Object.keys(card)) card[field] = ''; });
     return this.status();
   }
-  async fail(code, generation) {
+  async fail(code, generation, failureType = 'screen-or-connection') {
     if (generation !== this.generation) return;
     this.generation++;
     clearTimeout(this.timer); this.busy = false; const browser = this.browser; this.browser = null;
     await browser?.close().catch(() => {});
     if (this.generation !== generation + 1) return;
     const safeCode = Object.hasOwn(REVIEW_ERRORS, code) ? code : 'REVIEW_FAILED';
-    this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode] });
-    await this.log('error', 'card-review', '카드 자동입력 검토 중지', { code: safeCode }).catch?.(() => {});
+    const failedStep = Object.hasOwn(STEPS, this.step) ? this.step : 'browser';
+    this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode], failedStep, stepLabel: STEPS[failedStep], failureType, blockedRequests: this.guard?.recentBlocked || [] });
+    await this.log('error', 'card-review', '카드 자동입력 검토 중지', { code: safeCode, failedStep, failureType }).catch?.(() => {});
   }
-  async run(config, card, fixture, generation) {
+  async run(config, card, fixture, generation, connectionOnly = false) {
     const browser = await this.launch({ executablePath: this.executablePath, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--lang=ko-KR'] });
     if (generation !== this.generation) { await browser.close(); return; }
     this.browser = browser;
     const context = await browser.newContext({ locale: 'ko-KR', timezoneId: 'Asia/Seoul', viewport: { width: 1000, height: 900 }, deviceScaleFactor: 3, serviceWorkers: 'block', userAgent: chromiumUserAgent(browser), acceptDownloads: false });
     context.setDefaultTimeout(15000); context.setDefaultNavigationTimeout(20000);
-    const guard = new ReviewGuard(); await guard.install(context);
+    const guard = new ReviewGuard(); this.guard = guard; await guard.install(context);
     // Offline synthetic test intercepts every request. Never forwards a request.
     if (fixture) await fixture.install(context, guard);
     context.on('page', page => { page.on('dialog', dialog => dialog.dismiss().catch(() => {})); page.on('download', download => download.cancel().catch(() => {})); });
-    const page = await context.newPage(); this.stage('order');
+    const page = await context.newPage(); this.stage('order'); this.step = 'order-open';
     await page.goto(campUrl(config, 'book.php', config.siteId), { waitUntil: 'domcontentloaded' });
-    const form = page.locator('form.js-book');
+    this.step = 'order-check'; const form = page.locator('form.js-book');
     if (await form.count() !== 1) throw cardError('ORDER_MISMATCH');
     const room = [...catalog.values()].find(room => room.siteId === config.siteId);
     if (!room || (config.roomName && room.name !== config.roomName)) throw cardError('ORDER_MISMATCH');
@@ -78,37 +93,44 @@ export class CardReview {
       return action.origin === 'https://www.swimozicamp.com' && action.pathname === '/camp/book.php' && element.method.toLowerCase() === 'post' && Boolean(value('_csrf')) && value('site') === String(input.siteId) && value('checkin') === input.startDate && value('checkout') === input.checkout && value('adults') === String(input.adults) && value('children') === '0' && value('infants') === '0' && element.querySelector('.sum-title')?.textContent?.replace(/\s+/g,'') === input.displayName.replace(/\s+/g,'') && amount.length > 0 && amount.every(value => value === input.amount);
     }, { ...config, profile: undefined, checkout: checkoutDate(config.startDate, config.nights), displayName: room.displayName });
     if (!matched) throw cardError('ORDER_MISMATCH');
-    await form.locator('[name="name"]').fill(config.profile.reserverName);
+    this.step = 'order-fill'; await form.locator('[name="name"]').fill(config.profile.reserverName);
     await form.locator('[name="phone"]').fill(config.profile.phone);
     await form.locator('[name="pay_method"][value="card"]').check();
     await form.locator('[name="agree_refund"]').check();
     this.stage('pg');
     // Exactly one merchant order submission. Never native submit fallback/retry.
-    await form.locator('button[type="submit"]').click();
-    const frameElement = page.locator('iframe[src^="https://stdpay.inicis.com/"]');
-    await frameElement.waitFor({ state: 'attached' });
-    const pg = await frameElement.elementHandle().then(handle => handle.contentFrame());
+    this.step = 'order-submit'; await form.locator('button[type="submit"]').click();
+    // The merchant POST can target an about:blank iframe without changing its src attribute.
+    this.step = 'pg-frame'; const pg = await waitInicisFrame(page);
     if (!pg || new URL(pg.url()).origin !== 'https://stdpay.inicis.com') throw cardError('ORDER_MISMATCH');
-    for (const id of ['inputChk7', 'inputChk3', 'inputChk4']) await pg.locator('#' + id).check();
-    await pg.getByRole('link', { name: '삼성카드', exact: true }).click();
+    this.step = 'pg-terms'; for (const id of ['inputChk7', 'inputChk3', 'inputChk4']) await pg.locator('#' + id).check();
+    this.step = 'pg-card'; await pg.getByRole('link', { name: '삼성카드', exact: true }).click();
     const popupPromise = page.waitForEvent('popup');
-    await pg.locator('#CardBtn').click(); const issuer = await popupPromise;
+    this.step = 'issuer-popup'; await pg.locator('#CardBtn').click(); const issuer = await popupPromise;
     await issuer.waitForLoadState('domcontentloaded'); assertSamsungPage(issuer, '400');
-    await issuer.getByRole('button', { name: /다른결제/ }).click();
+    this.step = 'issuer-mode'; await issuer.getByRole('button', { name: /다른결제/ }).click();
     await issuer.getByRole('button', { name: /일반 결제 카드번호로 결제/ }).click();
     await issuer.waitForURL(url => samsungStep(url.href) === '300');
     assertSamsungPage(issuer, '300');
-    const summary = await issuer.locator('body').innerText();
+    this.step = 'issuer-summary'; const summary = await issuer.locator('body').innerText();
     if (!summary.includes('쉼오지캠프') || !summary.includes(config.amount.toLocaleString('en-US') + '원')) throw cardError('ORDER_MISMATCH');
-    this.stage('card'); await fillKeypad(issuer, issuer.getByRole('textbox', { name: '카드 번호', exact: true }), card.cardNumber, { ocr: this.ocr });
-    this.stage('cvc'); await fillKeypad(issuer, issuer.getByRole('textbox', { name: 'CVC번호', exact: true }), card.cvc, { ocr: this.ocr });
+    if (connectionOnly) {
+      this.step = 'card-keypad'; this.stage('card-check'); await checkKeypad(issuer, issuer.getByRole('textbox', { name: '카드 번호', exact: true }), { ocr: this.ocr });
+      this.step = 'cvc-keypad'; this.stage('cvc-check'); await checkKeypad(issuer, issuer.getByRole('textbox', { name: 'CVC번호', exact: true }), { ocr: this.ocr });
+      if (!await issuer.getByRole('textbox').evaluateAll(elements => elements.every(e => e.value.length === 0))) throw cardError('FIELD_NOT_EMPTY');
+      await guard.stopNetwork(context); this.stage('connected', { connectionOnly: true, networkBlocked: true, cardDataEntered: false });
+      clearTimeout(this.timer); this.timer = setTimeout(() => { void this.stop(); }, 60000); this.timer.unref?.();
+      await this.log('info','card-review','결제창 연결·키패드 검토 완료 · 카드 정보 입력 없음',{connectionOnly:true}); return;
+    }
+    this.step = 'card-keypad'; this.stage('card'); await fillKeypad(issuer, issuer.getByRole('textbox', { name: '카드 번호', exact: true }), card.cardNumber, { ocr: this.ocr });
+    this.step = 'cvc-keypad'; this.stage('cvc'); await fillKeypad(issuer, issuer.getByRole('textbox', { name: 'CVC번호', exact: true }), card.cvc, { ocr: this.ocr });
     const next = issuer.getByRole('button', { name: '다음', exact: true });
     if (!await next.isEnabled()) throw cardError('KEYPAD_INPUT_UNVERIFIED');
-    await next.click(); await issuer.waitForURL(url => samsungStep(url.href) === '301'); assertSamsungPage(issuer, '301');
-    this.stage('password');
+    this.step = 'card-auth'; await next.click(); await issuer.waitForURL(url => samsungStep(url.href) === '301'); assertSamsungPage(issuer, '301');
+    this.step = 'password-keypad'; this.stage('password');
     const password = issuer.getByPlaceholder('숫자 6자리 입력', { exact: true });
     // Load and identify the keyboard, then block ALL network BEFORE entering a password.
-    await fillKeypad(issuer, password, card.password, { ocr: this.ocr, beforeTyping: () => guard.stopNetwork(context) });
+    await fillKeypad(issuer, password, card.password, { ocr: this.ocr, beforeTyping: () => { this.step = 'approval-block'; return guard.stopNetwork(context); } });
     if (!await issuer.getByRole('button', { name: '결제하기', exact: true }).isEnabled()) throw cardError('KEYPAD_INPUT_UNVERIFIED');
     // Disable every submit affordance, independently of the network guard.
     await issuer.evaluate(() => { for (const element of document.querySelectorAll('button,input[type="submit"]')) { element.disabled = true; element.setAttribute('aria-disabled', 'true'); } document.addEventListener('submit', event => { event.preventDefault(); event.stopImmediatePropagation(); }, true); });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {CardReview, reviewInput} from '../src/card-review.js';
+import {CardReview, reviewInput, waitInicisFrame} from '../src/card-review.js';
 test('stopping or timing out while Chromium launches cannot start an order afterward',async()=>{
   for(const timeout of [false,true]){
     let finishLaunch,closed=false,contextStarted=false;
@@ -23,4 +23,17 @@ test('slow cleanup of an old failure cannot overwrite a newly started review',as
   const failing=review.fail('REVIEW_FAILED',1);review.start({},{});closeOld();await failing;
   assert.equal(review.status().state,'browser');assert.equal(review.busy,true);
   await review.stop();finishLaunch({async close(){}});await review.work;
+});
+test('PG detection uses the navigated frame URL, including a form-target about:blank iframe',async()=>{
+  const pg={url:()=> 'https://stdpay.inicis.com/payMain/pay'};let calls=0;
+  const page={frames:()=>++calls===1?[{url:()=> 'about:blank'}]:[{url:()=> 'https://merchant.invalid/'},pg]};
+  assert.equal(await waitInicisFrame(page,{sleep:async()=>{},timeout:1000}),pg);
+  await assert.rejects(waitInicisFrame({frames:()=>[{url:()=> 'https://stdpay.inicis.com.evil.invalid/payMain/pay'}]},{sleep:async()=>{},timeout:0}),{code:'PG_FRAME_NOT_READY'});
+  await assert.rejects(waitInicisFrame({frames:()=>[pg,pg]}),{code:'ORDER_MISMATCH'});
+});
+test('failure diagnostics expose only a fixed phase and failure type',async()=>{
+  const records=[],review=new CardReview({log:async(...args)=>records.push(args)});review.generation=1;review.step='pg-frame';
+  await review.fail('unknown-sensitive-error',1,'timeout');
+  assert.equal(review.status().failedStep,'pg-frame');assert.equal(review.status().failureType,'timeout');assert.equal(review.status().code,'REVIEW_FAILED');
+  assert.equal(JSON.stringify(records).includes('unknown-sensitive-error'),false);
 });

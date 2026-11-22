@@ -19,7 +19,7 @@ export class CardReviewApi {
     try {
       if (url.pathname === '/api/card-review' && request.method === 'GET') return reply(200, { vault: await this.vault.status(), review: this.review.status(), csrf: this.csrf });
       if (url.pathname === '/api/card-review/options' && request.method === 'GET') return reply(200, { profiles: (await this.store.getSavedProfiles()).map((p, index) => ({ index, name: p.reserverName })), sites: [...catalog.values()].map(s => ({ id: s.siteId, name: s.name })) });
-      if (!['POST', 'PUT', 'DELETE'].includes(request.method) || !['/api/card-review/vault', '/api/card-review/start', '/api/card-review/self-test', '/api/card-review/stop'].includes(url.pathname)) return reply(404, { code: 'NOT_FOUND' });
+      if (!['POST', 'PUT', 'DELETE'].includes(request.method) || !['/api/card-review/vault', '/api/card-review/start', '/api/card-review/connection-test', '/api/card-review/self-test', '/api/card-review/stop'].includes(url.pathname)) return reply(404, { code: 'NOT_FOUND' });
       const supplied = Buffer.from(String(request.headers['x-swim-card-review'] || ''));
       if (supplied.length !== 64 || !timingSafeEqual(supplied, Buffer.from(this.csrf)) || request.headers['sec-fetch-site'] === 'cross-site') return reply(403, { code: 'REVIEW_FORBIDDEN', error: '검토 화면을 다시 열어 주세요.' });
       if (this.pending) throw cardError('REVIEW_BUSY');
@@ -32,6 +32,10 @@ export class CardReviewApi {
       if (url.pathname === '/api/card-review/self-test' && request.method === 'POST') {
         const config = { startDate: '2027-01-27', nights: 1, adults: 2, siteId: 1, amount: 60000, profile: { reserverName: '로컬 검토', phone: '01000000000' } };
         return reply(202, { review: this.review.start(config, { ...FIXTURE_CARD }, { fixture: createReviewFixture(config) }) });
+      }
+      if (url.pathname === '/api/card-review/connection-test' && request.method === 'POST') {
+        const config = reviewInput(input, await this.store.getSavedProfiles());
+        return reply(202, { review: this.review.start(config, {}, { connectionOnly: true }) });
       }
       if (url.pathname === '/api/card-review/start' && request.method === 'POST') {
         if (Date.now() < this.unlockAfter) return reply(429, { error: '해제 시도가 많습니다. 1분 뒤 다시 시도하세요.' });
