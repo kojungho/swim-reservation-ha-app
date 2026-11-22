@@ -13,6 +13,14 @@ test('one order POST, one card authentication navigation, no payment-return or u
   assert.equal(guard.allow({url:'https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX301.jsp',method:'POST',navigation:true}),true);
   for(const url of ['https://www.swimozicamp.com/camp/pay_return.php','https://www.swimozicamp.com/camp/done.php','https://stdpay.inicis.com/api/payAuth','https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX302.jsp','https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX301.jsp'])assert.equal(guard.allow({url,method:'POST',navigation:true}),false,url);
 });
+test('Samsung bootstrap navigation permits one exact POST only before the password',()=>{
+  const input={url:'https://vbv.samsungcard.co.kr/VbV/xacs/WBITFX201',method:'POST',navigation:true};
+  const guard=new ReviewGuard();assert.equal(guard.allow(input),true);assert.equal(guard.allow(input),false);
+  const after=new ReviewGuard();after.reachedPassword=true;assert.equal(after.allow(input),false);
+  assert.equal(new ReviewGuard().allow({...input,method:'GET'}),false);
+  assert.equal(new ReviewGuard().allow({...input,url:input.url+'evil'}),false);
+  const frozen=new ReviewGuard();frozen.freeze();assert.equal(frozen.allow(input),false);
+});
 test('freeze blocks every domain, verb and navigation and sets browser offline',async()=>{
   const guard=new ReviewGuard();let offline=false;await guard.stopNetwork({async setOffline(value){offline=value}});assert.equal(offline,true);
   for(const host of ['www.swimozicamp.com','stdpay.inicis.com','vbv.samsungcard.co.kr','evil.invalid'])for(const method of ['GET','POST','PUT'])assert.equal(guard.allow({url:`https://${host}/VbV/xacsv2/WBVTFX301.jsp`,method,navigation:true}),false);

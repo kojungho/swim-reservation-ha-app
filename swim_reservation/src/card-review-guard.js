@@ -7,7 +7,7 @@ export function samsungStep(address) {
 }
 // An independent network boundary, not a preference that the UI can disable.
 export class ReviewGuard {
-  constructor() { this.frozen = false; this.orderPosts = 0; this.authPosts = 0; this.pgInitPosts = new Set(); this.reachedPassword = false; this.blocked = 0; this.recentBlocked = []; }
+  constructor() { this.frozen = false; this.orderPosts = 0; this.authPosts = 0; this.issuerEntryPosts = 0; this.pgInitPosts = new Set(); this.reachedPassword = false; this.blocked = 0; this.recentBlocked = []; }
   noteBlocked(request) {
     let host = 'external', resource = 'unrecognized-resource';
     try {
@@ -50,6 +50,8 @@ export class ReviewGuard {
     }
     const step = samsungStep(url);
     if (navigation) {
+      // Observed PG-to-Samsung entry before the 400 general-payment chooser.
+      if (u.pathname === '/VbV/xacs/WBITFX201') return method === 'POST' && !this.reachedPassword && this.issuerEntryPosts++ === 0;
       if (step === '301') { if (this.authPosts++ > 0) return false; this.reachedPassword = true; return true; }
       if (this.reachedPassword) return false;
       return ['400', '300'].includes(step);

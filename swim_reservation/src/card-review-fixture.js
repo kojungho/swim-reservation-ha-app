@@ -48,6 +48,8 @@ export function createReviewFixture(config) {
         } else if (url.hostname === 'stdpay.inicis.com' && url.pathname === '/checkWin.jsp') {
           html = '인증창 연결 중';
         } else if (url.hostname === 'stdpay.inicis.com' && url.pathname === '/payAuthentication/visa3d') {
+          html = '<form method="post" action="https://vbv.samsungcard.co.kr/VbV/xacs/WBITFX201"></form><script>document.forms[0].submit()</script>';
+        } else if (url.hostname === 'vbv.samsungcard.co.kr' && url.pathname === '/VbV/xacs/WBITFX201') {
           html = '<script>location.replace("https://vbv.samsungcard.co.kr/VbV/xacsv2/WBVTFX400.jsp")</script>';
         } else if (['400','300','301'].includes(samsungStep(url.href))) html = fixtureIssuer(samsungStep(url.href));
         if (!html) return route.abort();
