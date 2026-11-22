@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ReviewGuard, samsungStep } from '../src/card-review-guard.js';
+import { ReviewGuard, samsungStep, BLOCKED_WEBSOCKET_URL } from '../src/card-review-guard.js';
+test('only the exact official local IPinside probe receives native failure semantics',()=>{
+  for(const url of ['wss://127.0.0.1:21400','wss://127.0.0.1:21400/'])assert.equal(BLOCKED_WEBSOCKET_URL.test(url),false);
+  for(const url of ['ws://127.0.0.1:21400/','wss://127.0.0.1:8099/','wss://127.0.0.1:21400/pay','wss://127.0.0.1:21400/?card=private','wss://127.0.0.1.evil.invalid:21400/','wss://vbv.samsungcard.co.kr/pay'])assert.equal(BLOCKED_WEBSOCKET_URL.test(url),true);
+});
 import { digitMap, waitForKeypadReady } from '../src/card-keypad.js';
 test('keypad waits for vendor read-only readiness and never changes the input mode',async()=>{
   let checks=0,waits=0;await waitForKeypadReady({evaluate:async()=>++checks===3},{sleep:async()=>{waits++},timeout:1000});assert.equal(waits,2);
@@ -26,7 +30,7 @@ test('Samsung bootstrap navigation permits one exact POST only before the passwo
   const frozen=new ReviewGuard();frozen.freeze();assert.equal(frozen.allow(input),false);
 });
 test('freeze blocks every domain, verb and navigation and sets browser offline',async()=>{
-  const guard=new ReviewGuard();let offline=false;await guard.stopNetwork({async setOffline(value){offline=value}});assert.equal(offline,true);
+  const guard=new ReviewGuard();let offline=false,allSocketsBlocked=false;await guard.stopNetwork({async routeWebSocket(pattern){allSocketsBlocked=pattern==='**'},async setOffline(value){offline=value}});assert.equal(offline,true);assert.equal(allSocketsBlocked,true);
   for(const host of ['www.swimozicamp.com','stdpay.inicis.com','vbv.samsungcard.co.kr','evil.invalid'])for(const method of ['GET','POST','PUT'])assert.equal(guard.allow({url:`https://${host}/VbV/xacsv2/WBVTFX301.jsp`,method,navigation:true}),false);
 });
 test('official INICIS CDN permits static GET assets only and remains blocked after freeze',()=>{

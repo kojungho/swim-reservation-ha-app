@@ -1,6 +1,10 @@
 import { cardError } from './card-vault.js';
 
 export const SAMSUNG_ORIGIN = 'https://vbv.samsungcard.co.kr';
+// Official IPinside_v6_engine.js probes precisely this local service. A mocked
+// normal close never calls its onFailure handler (only onerror does), so leave
+// this single native probe unmocked to receive the real connection failure.
+export const BLOCKED_WEBSOCKET_URL = /^(?!wss:\/\/127\.0\.0\.1:21400\/?$).+/;
 export function samsungStep(address) {
   try { const u = new URL(address); return u.origin === SAMSUNG_ORIGIN ? /^\/VbV\/xacsv2\/WBVTFX(\d{3})\.jsp(?:;[^/]*)?$/.exec(u.pathname)?.[1] || null : null; }
   catch { return null; }
@@ -69,9 +73,9 @@ export class ReviewGuard {
       if (this.allow({ url: request.url(), method: request.method(), navigation: request.isNavigationRequest() })) return route.continue();
       this.blocked++; this.noteBlocked(request); return route.abort('blockedbyclient');
     });
-    await context.routeWebSocket('**', socket => socket.close());
+    await context.routeWebSocket(BLOCKED_WEBSOCKET_URL, socket => socket.close());
   }
-  async stopNetwork(context) { this.freeze(); await context.setOffline(true); }
+  async stopNetwork(context) { this.freeze(); await context.routeWebSocket('**',socket=>socket.close());await context.setOffline(true); }
 }
 export function assertSamsungPage(page, expected) {
   if (samsungStep(page.url()) !== expected) throw cardError('ISSUER_PAGE_MISMATCH');
