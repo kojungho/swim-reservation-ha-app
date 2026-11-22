@@ -13,6 +13,7 @@ export class ReviewGuard {
     try {
       const url = new URL(request.url());
       if (['www.swimozicamp.com','stdpay.inicis.com','stdux.inicis.com','vbv.samsungcard.co.kr'].includes(url.hostname)) host = url.hostname;
+      else if(['127.0.0.1','localhost','[::1]'].includes(url.hostname))host='local-security-probe';
       const filename = url.pathname.split(';')[0].split('/').pop();
       if (/^(?:WBVTFX\d{3}\.jsp|[A-Za-z_-]+(?:Servlet|\.js|\.css))$/.test(filename)) resource = filename;
       if (host === 'stdpay.inicis.com' && ['/payMain/Card','/payMain/checkAssentAll','/payMain/getCardCodeQuota','/jsApi/visa3d/before','/payAuthentication/visa3d'].includes(url.pathname)) resource = url.pathname;

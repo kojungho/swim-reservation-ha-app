@@ -40,7 +40,7 @@ export function digitMap(keys) {
 export async function waitForKeypadReady(field, {timeout=30000,sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}) {
   const deadline=Date.now()+timeout;
   do {
-    if(await field.evaluate(e=>e.readOnly&&!e.disabled)) return;
+    if(await field.evaluate(e=>!e.disabled&&(e.readOnly||e.classList.contains('nppfs-npv')))) return;
     await sleep(100);
   } while(Date.now()<deadline);
   throw cardError('KEYPAD_NOT_READY');

@@ -37,7 +37,7 @@ export async function cardInputControls(page) {
   const controls = await inputs.evaluateAll(elements => elements.map((e,index)=>{
     const text = [e.getAttribute('aria-label'),e.getAttribute('title'),e.getAttribute('placeholder'),...[...e.labels||[]].map(label=>label.textContent)].filter(Boolean).map(t=>t.replace(/\s+/g,''));
     const safe = s=>/^[A-Za-z_][A-Za-z0-9_-]{0,47}$/.test(s||'')?s:'other';
-    return {index,id:safe(e.id),name:safe(e.name),type:['text','password','tel','number'].includes(e.type)?e.type:'other',visible:!!e.getClientRects().length,readOnly:e.readOnly,card:text.some(t=>/^카드번호(?:입력|\[-\]없이입력)?$/.test(t))||e.autocomplete==='cc-number',cvc:text.some(t=>/^CVC번호(?:입력|뒤3자리)?$/i.test(t))||e.autocomplete==='cc-csc'};
+    return {index,id:safe(e.id),name:safe(e.name),type:['text','password','tel','number'].includes(e.type)?e.type:'other',visible:!!e.getClientRects().length,readOnly:e.readOnly,keypadRegistered:e.classList.contains('nppfs-npv'),keypadMode:['toggle','checkbox','radio'].includes(e.getAttribute('data-keypad-useyn-type'))?e.getAttribute('data-keypad-useyn-type'):'other',card:text.some(t=>/^카드번호(?:입력|\[-\]없이입력)?$/.test(t))||e.autocomplete==='cc-number',cvc:text.some(t=>/^CVC번호(?:입력|뒤3자리)?$/i.test(t))||e.autocomplete==='cc-csc'};
   }));
   const card = controls.filter(e=>e.visible&&e.card), cvc = controls.filter(e=>e.visible&&e.cvc);
   return {controls,card:card.length===1?inputs.nth(card[0].index):null,cvc:cvc.length===1?inputs.nth(cvc[0].index):null};
@@ -83,7 +83,7 @@ export class CardReview {
   async stop() { this.generation++; clearTimeout(this.timer); this.busy = false; this.stage('stopped');this.previewBuffer?.fill(0);this.previewBuffer=null; const browser = this.browser; this.browser = null; await browser?.close().catch(() => {}); }
   start(config, card, { fixture = null, connectionOnly = false } = {}) {
     if (this.busy) throw cardError('REVIEW_BUSY');
-    this.busy = true; this.guard = null; this.pgFrame = null; this.pgControls = []; this.issuerControls = [];this.issuerPage=null;this.connectionOnly=connectionOnly;this.runtimeErrors=new Set();this.previewBuffer?.fill(0);this.previewBuffer=null; this.step = 'browser'; this.stage('browser'); const generation = ++this.generation;
+    this.busy = true; this.guard = null; this.pgFrame = null; this.pgControls = []; this.issuerControls = [];this.issuerPage=null;this.connectionOnly=connectionOnly;this.runtimeErrors=new Set();this.dialogChecks=[];this.previewBuffer?.fill(0);this.previewBuffer=null; this.step = 'browser'; this.stage('browser'); const generation = ++this.generation;
     this.timer = setTimeout(() => { void this.fail('REVIEW_TIMEOUT', generation); }, 180000); this.timer.unref?.();
     this.work = this.run(config, card, fixture, generation, connectionOnly).catch(error => this.fail(error.code, generation, error.name === 'TimeoutError' ? 'timeout' : 'screen-or-connection')).finally(() => { for (const field of Object.keys(card)) card[field] = ''; });
     return this.status();
@@ -93,13 +93,14 @@ export class CardReview {
     this.generation++;
     clearTimeout(this.timer); this.busy = false; const browser = this.browser; this.browser = null;
     const preview=await connectionPreview(this.issuerPage,this.connectionOnly).catch(()=>null);
+    const issuerControls=this.issuerPage&&samsungStep(this.issuerPage.url())==='300'?(await cardInputControls(this.issuerPage).catch(()=>({controls:this.issuerControls}))).controls:this.issuerControls;
     const pgControls = this.step === 'pg-terms' && this.pgFrame ? await this.pgFrame.evaluate(() => ['inputChk7','inputChk3','inputChk4'].map(id=>{ const e=document.getElementById(id),label=document.querySelector('label[for="'+id+'"]');return {id,present:!!e,checkbox:e?.type==='checkbox',visible:!!e?.getClientRects().length,labelVisible:!!label?.getClientRects().length,checked:e?.checked===true}; })).catch(()=>[]) : this.pgControls || [];
     await browser?.close().catch(() => {});
     if (this.generation !== generation + 1) {preview?.fill(0);return;}
     this.previewBuffer=preview;this.previewExpiresAt=Date.now()+300000;
     const safeCode = Object.hasOwn(REVIEW_ERRORS, code) ? code : 'REVIEW_FAILED';
     const failedStep = Object.hasOwn(STEPS, this.step) ? this.step : 'browser';
-    this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode], failedStep, stepLabel: STEPS[failedStep], failureType, pgControls, issuerControls:this.issuerControls||[], runtimeErrors:[...this.runtimeErrors||[]], blockedRequests: this.guard?.recentBlocked || [] });
+    this.stage('failed', { code: safeCode, message: REVIEW_ERRORS[safeCode], failedStep, stepLabel: STEPS[failedStep], failureType, pgControls, issuerControls:issuerControls||[], runtimeErrors:[...this.runtimeErrors||[]],dialogChecks:this.dialogChecks||[], blockedRequests: this.guard?.recentBlocked || [] });
     await this.log('error', 'card-review', '카드 자동입력 검토 중지', { code: safeCode, failedStep, failureType }).catch?.(() => {});
   }
   async run(config, card, fixture, generation, connectionOnly = false) {
@@ -111,7 +112,7 @@ export class CardReview {
     const guard = new ReviewGuard(); this.guard = guard; await guard.install(context);
     // Offline synthetic test intercepts every request. Never forwards a request.
     if (fixture) await fixture.install(context, guard);
-    context.on('page', page => { page.on('dialog', dialog => dialog.dismiss().catch(() => {})); page.on('download', download => download.cancel().catch(() => {}));page.on('pageerror',error=>{if(generation!==this.generation)return;const name=['ReferenceError','TypeError','SyntaxError'].includes(error.name)?error.name:'Error';const symbol=['npPfsCtrl','npPfsStartup','npVCtrl','nq'].find(s=>String(error.message).includes(s))||'other';this.runtimeErrors.add(name+':'+symbol);}); });
+    context.on('page', page => { page.on('dialog', dialog => {if(generation===this.generation){const message=dialog.message();this.dialogChecks.push({type:['alert','confirm','prompt'].includes(dialog.type())?dialog.type():'other',os:/Linux|운영체제|OS/.test(message),unsupported:/지원하지|지원되지|불가|unsupported/i.test(message),security:/보안|nProtect|npPfs|IPinside/i.test(message),install:/설치|install/i.test(message),connection:/연결|통신|connection/i.test(message)});this.dialogChecks=this.dialogChecks.slice(-8);}void dialog.dismiss().catch(()=>{});}); page.on('download', download => download.cancel().catch(() => {}));page.on('pageerror',error=>{if(generation!==this.generation)return;const name=['ReferenceError','TypeError','SyntaxError'].includes(error.name)?error.name:'Error';const symbol=['npPfsCtrl','npPfsStartup','npVCtrl','nq'].find(s=>String(error.message).includes(s))||'other';this.runtimeErrors.add(name+':'+symbol);}); });
     const page = await context.newPage(); this.stage('order'); this.step = 'order-open';
     await page.goto(campUrl(config, 'book.php', config.siteId), { waitUntil: 'domcontentloaded' });
     this.step = 'order-check'; const form = page.locator('form.js-book');
