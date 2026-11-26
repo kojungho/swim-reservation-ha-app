@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HaNotifications } from '../src/ha-notifications.js';
+import { HaNotifications, notificationOptions } from '../src/ha-notifications.js';
 import { Store } from '../src/store.js';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -70,4 +70,57 @@ test('root store observes forwarded plan errors and notification hook cannot bre
   await s.recordLog('error', 'status', 'failed', { state: 'failed', planId: 'one' });
   assert.equal(seen.details.planId, 'one');
   assert.equal((await s.listLogs()).length, 1);
+});
+
+test('daily opt-out suppresses only daily push notifications', async () => {
+  const titles = [];
+  const n = new HaNotifications({ token: 'token', dailyCheckNotifications: false,
+    fetchImpl: async (_, options) => { titles.push(JSON.parse(options.body).title); return { ok: true }; }
+  });
+  for (const state of ['passed', 'failed', 'unavailable', 'interrupted']) {
+    n.observe({event: 'preflight-result', details: {kind: 'daily', state, key: state}});
+  }
+  n.observe({event: 'preflight-result', details: {kind: 'scheduled', state: 'failed'}});
+  n.observe(failure());
+  await flush(n);
+  assert.deepEqual(titles, ['쉼오지 예약 · 사전 점검 확인 필요', '쉼오지 예약 · 오류 알림']);
+});
+
+test('HA options preserve old installs and load an explicit daily opt-out', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'swim-notification-options-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'options.json');
+  for (const [options, enabled] of [[null, true], [{}, true], [{daily_check_notifications: false}, false]]) {
+    if (options) await writeFile(file, JSON.stringify(options));
+    const n = new HaNotifications(await notificationOptions(file));
+    assert.equal(n.dailyCheckNotifications, enabled);
+    assert.equal(n.service, 'mobile_app_sm_s938n');
+  }
+});
+
+test('each HA notification switch mutes only its category; master also mutes test pushes', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'swim-push-switches-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'options.json');
+  const preflight = (kind, state) => ({event: 'preflight-result', details: {kind, state, key: kind + state}});
+  const cases = [
+    ['daily_check_notifications', preflight('daily', 'failed')],
+    ['scheduled_pass_notifications', preflight('scheduled', 'passed')],
+    ['scheduled_unavailable_notifications', preflight('scheduled', 'unavailable')],
+    ['scheduled_issue_notifications', preflight('scheduled', 'interrupted')],
+    ['booking_error_notifications', failure()],
+    ['watch_error_notifications', {event:'plan-watch', level:'error'}]
+  ];
+  for (const muted of ['notifications_enabled', ...cases.map(([key]) => key)]) {
+    await writeFile(file, JSON.stringify({[muted]: false}));
+    let calls = 0;
+    const n = new HaNotifications({...await notificationOptions(file), token:'test', fetchImpl:async () => { calls++; return {ok:true}; }});
+    for (const [key, entry] of cases) {
+      const before = calls;
+      n.observe(entry);
+      await flush(n);
+      assert.equal(calls - before, Number(muted !== 'notifications_enabled' && muted !== key), muted + '/' + key);
+    }
+    assert.equal(await n.send('test', 'test'), muted !== 'notifications_enabled');
+  }
 });

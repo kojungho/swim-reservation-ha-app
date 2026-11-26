@@ -23,7 +23,7 @@ import { inspectMonth, monthlyUrl, inspectCalendarDay, calendarDayUrl } from "./
 import { PlanManager, singleBookingConfig } from "./plan-manager.js";
 import { MonthCache } from "./month-cache.js";
 import { SubmissionSettings } from "./submission-settings.js";
-import { HaNotifications, notificationService } from './ha-notifications.js';
+import { HaNotifications, notificationOptions } from './ha-notifications.js';
 import { ReservationPreflight, dailyPreflightConfig } from './reservation-preflight.js';
 import { AppProblems } from './app-problems.js';
 import { CardReviewApi } from './card-review-api.js';
@@ -41,7 +41,7 @@ const cardReview = new CardReviewApi({ dataDir: DATA_DIR, store, executablePath:
     ![...plans.plans.values()].some(plan => plan.enabled || plan.checking || plan.scheduler?.armed || plan.scheduler?.running)
 });
 const appProblems = new AppProblems(store);
-const notifications = new HaNotifications({ service: await notificationService(path.join(DATA_DIR, 'options.json')),
+const notifications = new HaNotifications({ ...await notificationOptions(path.join(DATA_DIR, 'options.json')),
   onError: () => { void store.recordLog('error', 'ha-notification', 'S25 오류 알림 전송에 실패했습니다. HA 알림 서비스와 연결을 확인해 주세요.').catch(() => {}); }
 });
 store.onLog = entry => notifications.observe(entry);
@@ -124,7 +124,8 @@ const server = http.createServer(async (request, response) => {
     if (cardReview.busy && (!['GET', 'HEAD'].includes(request.method) || url.pathname === '/api/reservations')) return json(response, 409, { ok: false, error: '카드 자동입력 검토를 먼저 중지해 주세요.' });
     if (url.pathname === '/api/notifications/test' && request.method === 'POST') {
       try {
-        await notifications.send('쉼오지 예약 · 알림 테스트', 'S25 오류 알림 연결을 확인했습니다. 앞으로 예약 실행·대기 중 오류가 발생하면 알려드립니다.');
+        const sent = await notifications.send('쉼오지 예약 · 알림 테스트', '휴대폰 알림 연결을 확인했습니다.');
+        if (!sent) return json(response, 409, { ok: false, error: '애드온 구성에서 전체 알림이 꺼져 있습니다.' });
         return json(response, 200, { ok: true });
       } catch { return json(response, 503, { ok: false, error: 'HA 알림 서비스 연결을 확인해 주세요.' }); }
     }

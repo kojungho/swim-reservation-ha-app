@@ -3,9 +3,16 @@ import { readFile } from 'node:fs/promises';
 // Only final booking outcomes and watch failures trigger push notifications.
 // Do not send profile data, raw exception messages, URLs or response bodies.
 export class HaNotifications {
-  constructor({ token = process.env.SUPERVISOR_TOKEN, service = 'mobile_app_sm_s938n', fetchImpl = fetch, now = Date.now, onError = () => {} } = {}) {
+  constructor({ token = process.env.SUPERVISOR_TOKEN, service = 'mobile_app_sm_s938n', dailyCheckNotifications = true, notificationsEnabled = true,
+    scheduledPass = true, scheduledUnavailable = true, scheduledIssue = true, bookingError = true, watchError = true,
+    fetchImpl = fetch, now = Date.now, onError = () => {} } = {}) {
     this.token = token;
     this.service = service;
+    this.dailyCheckNotifications = dailyCheckNotifications;
+    this.notificationsEnabled = notificationsEnabled;
+    this.scheduled = { passed: scheduledPass, unavailable: scheduledUnavailable, failed: scheduledIssue, interrupted: scheduledIssue };
+    this.bookingError = bookingError;
+    this.watchError = watchError;
     this.fetch = fetchImpl;
     this.now = now;
     this.onError = onError;
@@ -14,10 +21,12 @@ export class HaNotifications {
   }
 
   observe(entry) {
+    if (!this.notificationsEnabled) return;
     const d = entry.details || {};
     const id = String(d.planId || 'default');
     if (entry.event === 'preflight-result') {
-      if (d.kind === 'daily' && d.state === 'passed') return; // Daily success stays in the log; only issues push.
+      if (d.kind === 'daily' && (!this.dailyCheckNotifications || d.state === 'passed')) return;
+      if (d.kind !== 'daily' && !this.scheduled[d.state]) return;
       const result = preflightNotification(d);
       const key = `preflight:${id}:${d.key || ''}`;
       if (!result || !this.token || !this.service || this.sent.has(key) || this.pending.size >= 50) return;
@@ -37,6 +46,7 @@ export class HaNotifications {
     if (!failed && !(entry.level === 'error' && entry.event === 'plan-watch')) return;
     if (!this.token || !this.service || this.pending.size >= 50) return;
     const waiting = d.stage === 'watch-read-error' || entry.event === 'plan-watch';
+    if (!(waiting ? this.watchError : this.bookingError)) return;
     const key = `${id}:${waiting ? 'waiting' : 'failed'}`;
     const last = this.sent.get(key);
     if (last !== undefined && this.now() - last < 300_000) return;
@@ -52,6 +62,7 @@ export class HaNotifications {
   }
 
   async send(title, message, id = 'test') {
+    if (!this.notificationsEnabled) return false;
     if (!this.token || !/^mobile_app_[a-z0-9_]+$/.test(this.service)) throw new Error('HA notification configuration unavailable');
     const response = await this.fetch(`http://supervisor/core/api/services/notify/${this.service}`, {
       method: 'POST',
@@ -64,6 +75,7 @@ export class HaNotifications {
     });
     if (!response.ok) throw new Error('HA notification request failed');
     await response.body?.cancel();
+    return true;
   }
 }
 
@@ -82,12 +94,21 @@ export function preflightNotification(d) {
   return { title: '쉼오지 예약 · 사전 점검 확인 필요', message: `${steps[d.step] || '예약 양식 점검'}: ${causes[d.code] || '정상 진행을 확인하지 못했습니다. 상세 로그 확인이 필요합니다.'}` + suffix };
 }
 
-export async function notificationService(optionsPath = '/data/options.json') {
+export async function notificationOptions(optionsPath = '/data/options.json') {
   try {
     const options = JSON.parse(await readFile(optionsPath, 'utf8'));
-    return options.error_notify_service ?? 'mobile_app_sm_s938n';
+    return {
+      service: options.error_notify_service,
+      notificationsEnabled: options.notifications_enabled,
+      dailyCheckNotifications: options.daily_check_notifications,
+      scheduledPass: options.scheduled_pass_notifications,
+      scheduledUnavailable: options.scheduled_unavailable_notifications,
+      scheduledIssue: options.scheduled_issue_notifications,
+      bookingError: options.booking_error_notifications,
+      watchError: options.watch_error_notifications
+    };
   } catch (error) {
-    if (error.code === 'ENOENT') return 'mobile_app_sm_s938n';
+    if (error.code === 'ENOENT') return {};
     throw error;
   }
 }
