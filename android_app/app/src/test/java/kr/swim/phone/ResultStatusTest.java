@@ -32,7 +32,7 @@ public class ResultStatusTest {
  @Test public void stoppingFuturePlanClearsWaitingNotification()throws Exception{
   LocalStore s=new LocalStore(c,1);s.save("run",Plan.sample());s.state("WAITING","예약 대기",true);
   NotificationManager m=c.getSystemService(NotificationManager.class);m.notify(11,ReservationService.notice(c,s.message(),true,1));PlanScheduler.stopSlot(c,1);
-  assertNull(Shadows.shadowOf(m).getNotification(11));assertNotNull(Shadows.shadowOf(m).getNotification(21));assertEquals("STOPPED",s.stage());
+  assertNull(Shadows.shadowOf(m).getNotification(11));assertNull(Shadows.shadowOf(m).getNotification(21));assertEquals("STOPPED",s.stage());
  }
  @Test public void oldZeroOverZeroIsRepairedWithoutDeclaringNoReservationsOrRetrying()throws Exception{
   LocalStore s=new LocalStore(c,0);s.state("SUCCESS","다인·다중 결과: 완료 0 / 0 · 각 예약은 입금 대기입니다.",false);
