@@ -6,7 +6,7 @@ final class ReservationTask {
     static Factory factory=PhoneEngine::new; // Package-private instrumentation seam.
     final ReservationService owner;final Context context;final int slot;
     final Handler main=new Handler(Looper.getMainLooper());final LocalStore store;
-    Plan plan;PhoneExecution engine;PowerManager.WakeLock wake;boolean running=false,closing=false,lookup=false;
+    Plan plan;PhoneExecution engine;PowerManager.WakeLock wake;boolean running=false,closing=false,lookup=false,userStopped=false;
     final Runnable renew=new Runnable(){public void run(){if(!running||engine==null)return;holdCpu();main.postDelayed(this,60000);}};
     final Runnable watchDue;
     ReservationTask(ReservationService owner,int slot){this.owner=owner;this.slot=slot;context=new RunContext(owner,slot);store=new LocalStore(context);watchDue=()->{if(running&&plan!=null&&plan.watch()&&store.active())execute();};}
@@ -23,7 +23,7 @@ final class ReservationTask {
         }catch(Exception e){finish(store.uncertain()?"CHECK_REQUIRED":"FAILED",e instanceof IllegalStateException||e instanceof IllegalArgumentException?e.getMessage():"폰 내부 실행 초기화 실패");}
     }
     void wake(){if(store.stage().equals("WATCHING"))execute();}
-    void stop(){if(engine!=null)engine.cancel();else finish(store.uncertain()?"CHECK_REQUIRED":"STOPPED","사용자가 중지했습니다. 미확인 제출은 내역을 먼저 확인하세요.");}
+    void stop(){userStopped=true;if(engine!=null)engine.cancel();else finish(store.uncertain()?"CHECK_REQUIRED":"STOPPED","사용자가 중지했습니다. 미확인 제출은 내역을 먼저 확인하세요.");}
     void destroy(){closing=true;main.removeCallbacksAndMessages(null);if(engine!=null){engine.cancel();engine=null;}releaseCpu();}
     private void execute(){
         if(!running||engine!=null)return;
@@ -85,7 +85,7 @@ final class ReservationTask {
         if(closing)return;closing=true;running=false;main.removeCallbacksAndMessages(null);AlarmReceiver.cancel(context);
         if(engine!=null){PhoneExecution old=engine;engine=null;old.cancel();}
         releaseCpu();store.watchDueElapsed(0);
-        store.state(stage,message==null?"작업 중지":message,false);if(plan!=null&&!plan.demo()&&!lookup&&(stage.equals("FAILED")||stage.equals("CHECK_REQUIRED")))AppProblems.enqueue(context,"execution",stage.equals("CHECK_REQUIRED")?"check_required":"failed",stage.equals("CHECK_REQUIRED")?"CHECK_REQUIRED":"EXECUTION_FAILED","execution");context.getSystemService(NotificationManager.class).cancel(10+slot);
-        context.getSystemService(NotificationManager.class).notify(20+slot,ReservationService.notice(context,store.message(),false,slot));owner.taskDone(slot);
+        store.state(stage,message==null?"작업 중지":message,false);if(!userStopped&&plan!=null&&!plan.demo()&&!lookup&&(stage.equals("FAILED")||stage.equals("CHECK_REQUIRED")))AppProblems.enqueue(context,"execution",stage.equals("CHECK_REQUIRED")?"check_required":"failed",stage.equals("CHECK_REQUIRED")?"CHECK_REQUIRED":"EXECUTION_FAILED","execution");context.getSystemService(NotificationManager.class).cancel(10+slot);
+        if(!userStopped)context.getSystemService(NotificationManager.class).notify(20+slot,ReservationService.notice(context,store.message(),false,slot));owner.taskDone(slot);
     }
 }

@@ -15,6 +15,7 @@
         <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
+        <activity android:name=".PaymentActivity" android:exported="false"/>
         <service android:name=".ReservationService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-initiated campsite booking at a chosen time and vacancy watch, with a persistent stop notification. Native timers own a service-scoped WebView reservation engine; no remote control server."/>
         </service>

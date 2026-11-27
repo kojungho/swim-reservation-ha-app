@@ -25,6 +25,30 @@ function campStep(op,p,offlineUrl){
     if(!checked.ok)return fail(checked.code);
     return {ok:true,available:checked.cards.map(room=>room.siteId),catalog:checked.cards,addedSites:checked.added,changedSites:checked.changed};
   }
+  if(offline && p.manualCard && op==='prepare')op='card-prepare';
+  if(offline && p.manualCard && op==='preflight')op='card-verify';
+  if(op==='card-prepare'||op==='card-submit'||op==='card-verify'){
+    const v=verify(false);
+    if(!p.manualCard||!p.consent||!v?.ok)return fail('CARD_FORM_MISMATCH');
+    const form=v.form;
+    const one=selector=>{const nodes=form.querySelectorAll(selector);return nodes.length===1?nodes[0]:null;};
+    const method=one('input[type=radio][name=pay_method][value=card]');
+    const agreement=one('input[type=checkbox][name=agree_refund][data-required="1"]');
+    const submit=one('button[type=submit].js-pay');
+    if(!method||method.disabled||!agreement||agreement.disabled||!submit||submit.disabled||submit.hasAttribute('formaction'))return fail('CARD_CONTROLS');
+    if(form.querySelectorAll('input[type=checkbox][data-required="1"]').length!==1)return fail('CARD_TERMS');
+    const fields={name:p.name,phone:p.phone,request:p.request||'',arrive_time:p.arrival||''};
+    for(const [name,value] of Object.entries(fields)){
+      const input=one('[name="'+name+'"]');
+      if(!input||input.disabled)return fail('CARD_FIELDS');
+      if(op==='card-prepare'){input.value=value;input.dispatchEvent(new Event('change',{bubbles:true}));}
+      if(input.value!==value)return fail('CARD_FIELDS');
+    }
+    if(op==='card-prepare'){if(!method.checked)method.click();if(!agreement.checked)agreement.click();}
+    if(!method.checked||!agreement.checked||!form.checkValidity())return fail('CARD_INPUT_MISMATCH');
+    if(op==='card-submit')submit.click();
+    return {ok:true};
+  }
   if(op==='prepare'){
     if(!document.querySelector('form.js-book')){const text=document.querySelector('.msg-box')?.textContent||'';return fail(/체크인까지|오픈|예약.*시작|아직/.test(text)?'NOT_OPEN':/예약.*(불가|마감)|예약할 수 없|선택.*(없|불가)/.test(text)?'NO_ROOM':'FORM_UNRECOGNIZED');}
     const v=verify(false);if(!v?.ok)return {ok:false,code:'FORM_MISMATCH',checks:v?.checks||{}};

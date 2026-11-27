@@ -18,7 +18,7 @@ public final class Plan {
     public long watchUntil=0;
     public int submitInterval=5;
     public JSONArray people=new JSONArray();
-    public boolean consent=false;
+    public boolean manualCard=false,consent=false;
     boolean simulation=false; // Only the built-in demo and instrumentation set this; no remote configuration.
     public boolean demo() { return mode.equals("demo")||simulation; }
     public boolean watch() { return mode.equals("watch"); }
@@ -33,6 +33,7 @@ public final class Plan {
         if(lookup) return;
         if(!List.of("reserve","watch","demo","multiple","profiles-parallel").contains(mode)) throw new IllegalArgumentException("지원하지 않는 실행 모드입니다.");
         if(submitInterval<0||submitInterval>60)throw new IllegalArgumentException("제출 간격은 0~60초입니다.");
+        if(manualCard && batch())throw new IllegalArgumentException("카드 결제 이어받기는 단일 일정에서 사용할 수 있습니다.");
         if(mode.equals("profiles-parallel")){
             if(people.length()<1||people.length()>RoomCatalog.NAMES.size())throw new IllegalArgumentException("예약자 수는 1~사이트 수 이내입니다.");
             for(int i=0;i<people.length();i++){try{Plan child=from(json());JSONObject person=people.getJSONObject(i);child.mode="reserve";child.people=new JSONArray();child.name=person.getString("name");child.payer=person.optString("payer");child.phone=person.getString("phone");child.rooms=person.getString("rooms");child.validate(false);}catch(Exception e){throw new IllegalArgumentException("예약자 "+(i+1)+" 정보·사이트 우선순위를 확인하세요.");}}
@@ -51,13 +52,13 @@ public final class Plan {
     }
     public JSONObject json() throws JSONException {
         return new JSONObject().put("date",date).put("nights",nights).put("name",name).put("payer",payer).put("phone",phone).put("birth",birth)
-            .put("rooms",rooms).put("mode",mode).put("trigger",trigger).put("pollSeconds",pollSeconds).put("consent",consent).put("simulation",simulation)
+            .put("rooms",rooms).put("mode",mode).put("trigger",trigger).put("pollSeconds",pollSeconds).put("manualCard",manualCard).put("consent",consent).put("simulation",simulation)
             .put("siteVersion",siteVersion).put("adults",adults).put("arrival",arrival).put("request",request).put("people",people).put("watchUntil",watchUntil).put("submitInterval",submitInterval);
     }
     public static Plan from(JSONObject j) {
         Plan p=new Plan(); p.date=j.optString("date"); p.nights=j.optInt("nights",1); p.name=j.optString("name");p.payer=j.optString("payer");
         p.phone=j.optString("phone");p.birth=j.optString("birth");p.rooms=j.optString("rooms");p.mode=j.optString("mode","reserve");
-        p.trigger=j.optLong("trigger");p.pollSeconds=Math.max(MIN_POLL_SECONDS,j.optInt("pollSeconds",MIN_POLL_SECONDS));p.consent=j.optBoolean("consent",false);p.simulation=j.optBoolean("simulation",false);
+        p.trigger=j.optLong("trigger");p.pollSeconds=Math.max(MIN_POLL_SECONDS,j.optInt("pollSeconds",MIN_POLL_SECONDS));p.manualCard=j.optBoolean("manualCard");p.consent=j.optBoolean("consent",false);p.simulation=j.optBoolean("simulation",false);
         p.siteVersion=j.optString("siteVersion","legacy");p.adults=j.optInt("adults",2);p.arrival=j.optString("arrival");p.request=j.optString("request");p.people=j.optJSONArray("people")==null?new JSONArray():j.optJSONArray("people");p.watchUntil=j.optLong("watchUntil");p.submitInterval=j.optInt("submitInterval",5);return p;
     }
     public static Plan sample() {

@@ -5,6 +5,13 @@ public final class ReservationService extends Service {
     static final String CHANNEL="reservation-execution",RESULT_CHANNEL="reservation-results";
     private static volatile ReservationService instance;
     final Map<Integer,ReservationTask> tasks=new java.util.concurrent.ConcurrentHashMap<>();volatile boolean closing=false;boolean dispatching=false;
+    static boolean stopRunningTask(int slot){
+        if(Looper.myLooper()!=Looper.getMainLooper() || instance==null)return false;
+        ReservationTask task=instance.tasks.get(slot);
+        if(task==null)return false;
+        task.stop();
+        return true;
+    }
     static boolean alive(){return alive(0);}
     static boolean alive(int slot){return instance!=null&&!instance.closing&&instance.tasks.containsKey(slot);}
     @Override public void onCreate(){super.onCreate();instance=this;channel(this);}
@@ -12,6 +19,8 @@ public final class ReservationService extends Service {
     static Notification notice(Context c,String text,boolean ongoing){return notice(c,text,ongoing,RunContext.slot(c));}
     static Notification notice(Context c,String text,boolean ongoing,int slot){
         PendingIntent open=PendingIntent.getActivity(c,0,new Intent(c,MainActivity.class),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+        Intent checkout=PaymentActivity.forSlot(c,slot);
+        if(checkout!=null)open=PendingIntent.getActivity(c,0,checkout,PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder b=new Notification.Builder(c,ongoing?CHANNEL:RESULT_CHANNEL).setSmallIcon(R.drawable.ic_camp).setContentTitle(notificationTitle(c,slot)).setVisibility(Notification.VISIBILITY_PRIVATE).setContentText(text).setStyle(new Notification.BigTextStyle().bigText(text)).setContentIntent(open).setOngoing(ongoing).setOnlyAlertOnce(true);
         b.addAction(new Notification.Action.Builder(null,"예약 내역 조회",lookupIntent(c)).build());
         if(ongoing)b.addAction(new Notification.Action.Builder(null,slot<0?"전체 중지":"이 작업 중지",PendingIntent.getService(c,100+slot,new Intent(c,ReservationService.class).setAction("STOP").putExtra("slot",slot),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT)).build());return b.build();

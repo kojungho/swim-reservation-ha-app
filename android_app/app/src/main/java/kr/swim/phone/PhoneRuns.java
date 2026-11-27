@@ -27,12 +27,32 @@ final class PhoneRuns {
         throw new IllegalStateException("사용 가능한 예약 세션이 없습니다. 미확인 제출 내역을 확인하세요.");
     }
     static void requireRestartable(JSONObject row){if(row.optString("stage").equals("CHECK_REQUIRED")||row.optBoolean("uncertain")||java.util.Set.of("SUCCESS","PARTIAL").contains(row.optString("stage")))throw new IllegalStateException("완료 또는 제출 결과 확인이 필요한 일정입니다. 공식 내역을 확인한 뒤 필요한 항목만 새 일정으로 등록하세요.");}
+    static final class PendingReview extends IllegalStateException {
+        final int slot;
+        final long updated;
+        final boolean active;
+        final String stay;
+        PendingReview(int slot, LocalStore store, Plan prior) {
+            super("겹치는 예약의 이전 제출 결과가 미확인입니다. 공식 내역을 먼저 확인하세요.");
+            this.slot=slot;
+            updated=store.heartbeat();
+            active=store.active();
+            stay=prior.date+" · "+prior.nights+"박 · "+prior.rooms;
+        }
+        boolean clearAfterReview(Context context) {
+            LocalStore store=new LocalStore(context,slot);
+            if(active||store.active()||!store.uncertain()||store.heartbeat()!=updated)return false;
+            store.acknowledgeReceiptCheck();
+            if(store.stage().equals("CHECK_REQUIRED"))store.state("STOPPED","공식 내역 확인 후 재예약 잠금을 해제했습니다.",false);
+            return true;
+        }
+    }
     static void guardUncertain(Context c,Plan plan)throws Exception{
         for(int n=0;n<=LIMIT;n++){LocalStore s=new LocalStore(c,n);if(!s.uncertain())continue;Plan old=s.load("run");
             java.time.LocalDate a=java.time.LocalDate.parse(plan.date),b=java.time.LocalDate.parse(old.date);
             if(!a.isBefore(b.plusDays(old.nights))||!b.isBefore(a.plusDays(plan.nights)))continue;
             Set<String> phones=targets(plan,false),rooms=targets(plan,true);phones.retainAll(targets(old,false));rooms.retainAll(targets(old,true));
-            if(!phones.isEmpty()&&!rooms.isEmpty())throw new IllegalStateException("겹치는 예약의 이전 제출 결과가 미확인입니다. 공식 내역을 먼저 확인하세요.");
+            if(!phones.isEmpty()&&!rooms.isEmpty())throw new PendingReview(n,s,old);
         }
     }
     private static Set<String> targets(Plan p,boolean rooms)throws Exception{

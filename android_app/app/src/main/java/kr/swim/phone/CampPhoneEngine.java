@@ -16,22 +16,63 @@ import java.util.*;
 final class CampPhoneEngine {
     final Context context;final Plan plan;final boolean lookup;final PhoneEngine.Events events;
     final Handler main=new Handler(Looper.getMainLooper());final String helpers;
-    WebView web;boolean ended=false,submitted=false;int candidate=-1,site=0,openingReads=0;String processed="",recordId;
+    WebView web;boolean ended=false;volatile boolean submitted=false;int candidate=-1,site=0,openingReads=0;String processed="",recordId;
     final Runnable timeout=()->finish(submitted?"CHECK_REQUIRED":"FAILED","사이트 응답 시간 초과 · 자동 재제출 없음");
     CampPhoneEngine(Context c,Plan p,boolean lookup,PhoneEngine.Events events)throws IOException{context=c;plan=p;this.lookup=lookup;this.events=events;helpers=PhoneEngine.asset(c,"camp-engine.js")+PhoneEngine.asset(c,"camp-step.js");}
+    volatile String paymentId;
+    boolean returnedFromPayment;
+    void checkoutVisible(boolean visible){
+        if(ended||paymentId==null)return;
+        main.removeCallbacks(timeout);
+        if(!visible)main.postDelayed(timeout,15*60*1000L);
+    }
+    boolean showPaymentDialog(WebView view,String message,JsResult result,boolean confirm){
+        PaymentActivity activity=PaymentActivity.visible(view);
+        if(paymentId==null||activity==null)return false;
+        android.app.AlertDialog.Builder dialog=new android.app.AlertDialog.Builder(activity)
+            .setTitle("결제 페이지 안내").setMessage(message)
+            .setPositiveButton("확인",(d,w)->result.confirm()).setOnCancelListener(d->result.cancel());
+        if(confirm)dialog.setNegativeButton("취소",(d,w)->result.cancel());
+        dialog.show();
+        return true;
+    }
+    boolean card(){return plan.manualCard && !lookup && !plan.demo();}
+    boolean processor(Uri uri){String host=uri.getHost();return "https".equals(uri.getScheme()) && uri.getUserInfo()==null && (uri.getPort()==-1 || uri.getPort()==443) && host!=null && (host.equals("inicis.com") || host.endsWith(".inicis.com"));}
+    boolean permitted(Uri uri,boolean top){
+        if(allowed(uri,top,plan.demo()))return true;
+        if(!card()||!submitted)return false;
+        if(paymentBridge(uri)||processor(uri))return true;
+        if(!top && "about:blank".equals(uri.toString()))return true;
+        return paymentId!=null && "https".equals(uri.getScheme()) && uri.getUserInfo()==null;
+    }
+    boolean paymentBridge(Uri uri){
+        return "https".equals(uri.getScheme()) && PhoneEngine.HOST.equals(uri.getHost())
+            && uri.getUserInfo()==null && (uri.getPort()==-1||uri.getPort()==443)
+            && "/camp/pay.php".equals(uri.getPath());
+    }
+    void prepareCard(){
+        stage("공식 예약 폼 · 신용카드·필수 약관 확인");
+        eval("card-prepare",r->{
+            if(!r.optBoolean("ok")){fail(r);return;}
+            try{events.beforeFinal();}catch(Exception e){finish("FAILED","미결제 주문 시작 상태 저장 실패");return;}
+            submitted=true;
+            stage("미결제 주문 요청 · 이니시스 이동 대기");
+            eval("card-submit",result->{if(!result.optBoolean("ok"))fail(result);});
+        });
+    }
     String origin(){return "https://"+(plan.demo()?"demo.swim.invalid":PhoneEngine.HOST);}
     static boolean allowed(Uri u,boolean main,boolean demo){return "https".equals(u.getScheme())&&(demo?"demo.swim.invalid":PhoneEngine.HOST).equals(u.getHost())&&(u.getPort()==-1||u.getPort()==443)&&(!main||u.getPath()!=null&&u.getPath().matches("/camp/(book\\.php|done\\.php)?"));}
     String url(String page,int id){return SiteLinks.camp(plan,page,id).replace("https://"+PhoneEngine.HOST,origin());}
     void stage(String message){events.stage(submitted?"SUBMITTING":"PREPARING",(plan.demo()?"[모의] ":"")+message);}
     @SuppressLint("SetJavaScriptEnabled") void start(){
-        web=new WebView(context);CookieManager cookies=PhoneSessions.attach(web,context);web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT,false);WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(false);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);s.setCacheMode(WebSettings.LOAD_NO_CACHE);cookies.setAcceptThirdPartyCookies(web,false);
+        web=new WebView(card()?new android.content.MutableContextWrapper(context):context);CookieManager cookies=PhoneSessions.attach(web,context);web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT,false);WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(card());s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);s.setCacheMode(WebSettings.LOAD_NO_CACHE);cookies.setAcceptThirdPartyCookies(web,card());
         web.setWebChromeClient(new WebChromeClient(){
-            @Override public boolean onJsAlert(WebView v,String u,String message,JsResult r){r.cancel();finish(submitted?"CHECK_REQUIRED":"FAILED","사이트 추가 안내 · 공식 예약 내역 확인 필요");return true;}
-            @Override public boolean onJsConfirm(WebView v,String u,String message,JsResult r){r.cancel();finish(submitted?"CHECK_REQUIRED":"FAILED","사이트 추가 확인창 · 자동 승인하지 않습니다.");return true;}
+            @Override public boolean onJsAlert(WebView v,String u,String message,JsResult r){if(showPaymentDialog(v,message,r,false))return true;r.cancel();finish(submitted?"CHECK_REQUIRED":"FAILED","사이트 추가 안내 · 공식 예약 내역 확인 필요");return true;}
+            @Override public boolean onJsConfirm(WebView v,String u,String message,JsResult r){if(showPaymentDialog(v,message,r,true))return true;r.cancel();finish(submitted?"CHECK_REQUIRED":"FAILED","사이트 추가 확인창 · 자동 승인하지 않습니다.");return true;}
         });
         web.setWebViewClient(new WebViewClient(){
             @Override public WebResourceResponse shouldInterceptRequest(WebView v,WebResourceRequest r){
-                if(!allowed(r.getUrl(),r.isForMainFrame(),plan.demo()))return new WebResourceResponse("text/plain","UTF-8",403,"Blocked",Map.of(),new ByteArrayInputStream(new byte[0]));
+                if(!permitted(r.getUrl(),r.isForMainFrame()))return new WebResourceResponse("text/plain","UTF-8",403,"Blocked",Map.of(),new ByteArrayInputStream(new byte[0]));
                 if(!plan.demo())return null;
                 if(!r.isForMainFrame())return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));
                 try{PhoneEngine.demoDocumentRequests++;String path=r.getUrl().getPath();
@@ -44,12 +85,40 @@ final class CampPhoneEngine {
                     return new WebResourceResponse("text/html","UTF-8",new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8)));
                 }catch(Exception e){return new WebResourceResponse("text/plain","UTF-8",new ByteArrayInputStream(new byte[0]));}
             }
-            @Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){if(!allowed(r.getUrl(),true,plan.demo())){finish(submitted?"CHECK_REQUIRED":"FAILED","허용되지 않은 이동 · 중지");return true;}return false;}
+            @Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){
+                Uri uri=r.getUrl();
+                if(permitted(uri,r.isForMainFrame()))return false;
+                if(paymentId!=null){
+                    PaymentActivity activity=PaymentActivity.visible(v);
+                    if(activity!=null)CardAppLaunch.offer(activity,uri);
+                    return true;
+                }
+                if(!r.isForMainFrame())return true;
+                String host=uri.getHost();
+                String destination=host!=null && host.matches("[A-Za-z0-9.-]{1,200}")?host:"외부 앱";
+                finish(submitted?"CHECK_REQUIRED":"FAILED","이동을 확인할 수 없습니다 · "+destination);
+                return true;
+            }
             @Override public void onReceivedHttpError(WebView v,WebResourceRequest r,WebResourceResponse response){if(r.isForMainFrame())finish(submitted?"CHECK_REQUIRED":"FAILED","HTTP "+response.getStatusCode()+" · 자동 재시도·재제출 없음");}
             @Override public void onReceivedError(WebView v,WebResourceRequest r,WebResourceError e){if(r.isForMainFrame())finish(submitted?"CHECK_REQUIRED":"FAILED","네트워크·페이지 오류 · 자동 재제출 없음");}
             @Override public void onReceivedSslError(WebView v,SslErrorHandler h,SslError e){h.cancel();finish(submitted?"CHECK_REQUIRED":"FAILED","인증서 검증 실패 · 중지");}
             @Override public boolean onRenderProcessGone(WebView v,RenderProcessGoneDetail d){finish(submitted?"CHECK_REQUIRED":"FAILED","예약 화면 프로세스 종료 · 자동 재제출 없음");return true;}
-            @Override public void onPageFinished(WebView v,String address){if(ended||address.equals(processed)||!allowed(Uri.parse(address),true,plan.demo()))return;processed=address;main.removeCallbacks(timeout);main.postDelayed(timeout,30000);String path=Uri.parse(address).getPath();if(path.equals("/camp/"))listing();else if(path.endsWith("book.php"))prepare();else if(path.endsWith("done.php"))receipt();}
+            @Override public void onPageFinished(WebView v,String address){if(ended)return;
+                if(card()&&submitted){
+                    if(paymentId==null && (processor(Uri.parse(address)) || paymentBridge(Uri.parse(address))) && address.equals(v.getUrl())){
+                        main.removeCallbacks(timeout);
+                        paymentId=PaymentActivity.register(CampPhoneEngine.this);
+                        events.stage("SUBMITTING","결제 대기 중 · 공식 결제창에서 직접 진행");
+                        main.postDelayed(timeout,15*60*1000L);
+                    }
+                    if(!returnedFromPayment && paymentId!=null && allowed(Uri.parse(address),true,false)
+                        && "/camp/done.php".equals(Uri.parse(address).getPath())){
+                        returnedFromPayment=true;
+                        events.stage("SUBMITTING","결제 후 공식 예약 결과 화면 · 내용을 확인하세요.");
+                    }
+                    return;
+                }
+                if(address.equals(processed)||!allowed(Uri.parse(address),true,plan.demo()))return;processed=address;main.removeCallbacks(timeout);main.postDelayed(timeout,30000);String path=Uri.parse(address).getPath();if(path.equals("/camp/"))listing();else if(path.endsWith("book.php")){if(card())prepareCard();else prepare();}else if(path.endsWith("done.php"))receipt();}
         });
         main.postDelayed(timeout,30000);stage("브라우저 준비 · 새 공식 사이트");
         cookies.removeAllCookies(done->{if(ended)return;openListing();});
@@ -73,5 +142,5 @@ final class CampPhoneEngine {
     void eval(String op,Result result){if(ended)return;try{JSONObject input=plan.json().put("catalog",RoomCatalog.entries()).put("site",site).put("checkout",LocalDate.parse(plan.date).plusDays(plan.nights).toString());web.evaluateJavascript("(function(){try{"+helpers+";return JSON.stringify(campStep("+JSONObject.quote(op)+","+input+"));}catch(e){return JSON.stringify({ok:false,code:'DOM_ERROR'});}})()",raw->{if(ended)return;try{Object decoded=new JSONTokener(raw).nextValue();result.done(new JSONObject((String)decoded));}catch(Exception e){finish(submitted?"CHECK_REQUIRED":"FAILED","화면 결과 해석 실패 · 재제출 없음");}});}catch(Exception e){finish(submitted?"CHECK_REQUIRED":"FAILED","실행 처리 실패 · 재제출 없음");}}
     void fail(JSONObject r){finish(submitted?"CHECK_REQUIRED":"FAILED",!submitted&&"PAYMENT_METHOD_UNRECOGNIZED".equals(r.optString("code"))?"무통장입금 방식을 확인하지 못해 최종 제출하지 않았습니다. 다른 결제로 전환하지 않습니다.":"검증 실패 · "+r.optString("code","RECEIPT_MISMATCH")+" · 공식 사이트 확인 필요 · 자동 재제출 없음");}
     void cancel(){finish(submitted?"CHECK_REQUIRED":"STOPPED","사용자가 중지했습니다. 제출 후에는 예약 내역을 확인하세요.");}
-    void finish(String state,String message){if(ended)return;ended=true;if(lookup&&!state.equals("INSPECTED"))new LocalStore(context).availability(plan,Set.of(),false);main.removeCallbacksAndMessages(null);if(web!=null){web.stopLoading();web.destroy();web=null;}events.finished(state,message);}
+    void finish(String state,String message){if(ended)return;ended=true;if(lookup&&!state.equals("INSPECTED"))new LocalStore(context).availability(plan,Set.of(),false);main.removeCallbacksAndMessages(null);if(paymentId!=null)PaymentActivity.remove(paymentId);if(web!=null){if(web.getParent() instanceof android.view.ViewGroup)((android.view.ViewGroup)web.getParent()).removeView(web);web.stopLoading();web.destroy();web=null;}events.finished(state,message);}
 }

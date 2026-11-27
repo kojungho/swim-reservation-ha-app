@@ -227,7 +227,7 @@ window.buildDisplayReceipt=function(value){
   const planned=validDate&&beforeOpening(),name=byId('planName');setHidden(name.closest('label'),!planned);
   const immediate=validDate&&!planned&&workspaceTab!=='watch';
   setHidden(byId('planCard')?.querySelector('.plan-registration'),immediate);
-  byId('planCard')?.querySelectorAll(':scope>p').forEach(el=>setHidden(el,immediate));
+  byId('planCard')?.querySelectorAll(':scope>p').forEach(el=>setHidden(el,immediate||(el.id==="watchHelp"&&workspaceTab!=="watch")));
   const reserveButton=phone?document.querySelector('[data-phone-run]'):byId('runNowButton');if(reserveButton&&reserveButton.textContent!=='예약 하기')reserveButton.textContent='예약 하기';
   if(autoNamed&&name.value!==generatedName){autoNamed=false;pendingName=name.value;}
   if(planned){if(autoNamed){name.value=pendingName;autoNamed=false;}}

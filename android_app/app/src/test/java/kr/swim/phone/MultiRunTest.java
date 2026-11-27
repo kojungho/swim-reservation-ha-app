@@ -51,6 +51,24 @@ public class MultiRunTest {
   long until=System.currentTimeMillis()+5000;JSONObject result;do{Thread.sleep(20);result=PhoneReads.calendar(c,month);}while(result.optBoolean("pending")&&System.currentTimeMillis()<until);
   assertTrue(result.toString(),result.optBoolean("ok"));assertEquals(4,result.getJSONObject("days").getInt(month+"-02"));assertEquals(2,PhoneRuns.count(c));
  }
+ @Test public void registeredCardPlanWaitsUntilAlarmAndStopsImmediately()throws Exception{
+  Shadows.shadowOf(c.getSystemService(android.os.PowerManager.class)).setIgnoringBatteryOptimizations(c.getPackageName(),true);
+  Plan p=plan();p.manualCard=true;p.trigger=SiteClock.now(c)+60000;
+  PhoneRepository repo=new PhoneRepository(c);
+  JSONObject saved=repo.put("plans",new JSONObject().put("plan",p.json())).getJSONArray("plans").getJSONObject(0);
+  String id=saved.getString("id");
+  assertFalse(PhoneRuns.anyActive(c));
+  PlanScheduler.start(c,repo.registeredPlan(id),false,id);
+  LocalStore slot=new LocalStore(c,1);
+  assertEquals("WAITING",slot.stage());assertTrue(slot.load("run").manualCard);
+  c.getSharedPreferences("site-clock",0).edit().putLong("offset",p.trigger-System.currentTimeMillis()).commit();
+  Intent tick=new Intent("TICK").putExtra("slot",1);
+  new AlarmReceiver().onReceive(c,tick);
+  Intent wake=Shadows.shadowOf((Application)c).getNextStartedService();
+  assertNotNull(wake);assertEquals("WAKE",wake.getAction());
+  service.onStartCommand(wake,0,1);assertTrue(engines.containsKey(1));
+  PlanScheduler.stopPlan(c,id);assertFalse(slot.active());assertTrue(engines.get(1).canceled);
+ }
  @Test public void duplicatePlanAndUnsupportedProfileCannotShareSession()throws Exception{
   start(1,"same");try{PhoneRuns.allocate(c,false,"same");fail("same plan duplicated");}catch(IllegalStateException expected){}
   PhoneSessions.testSupported=false;try{PhoneRuns.allocate(c,false,"different");fail("unsupported parallel accepted");}catch(IllegalStateException expected){assertTrue(expected.getMessage().contains("WebView"));}
@@ -67,6 +85,16 @@ public class MultiRunTest {
   try{PhoneRuns.guardUncertain(c,plan());fail("overlapping uncertain booking retried");}catch(IllegalStateException expected){}
   Plan other=plan();other.phone="01011111111";PhoneRuns.guardUncertain(c,other);
   service.onStartCommand(new Intent(c,ReservationService.class).setAction("STOP").putExtra("slot",1),0,7);PhoneRuns.acknowledge(c);assertFalse(new LocalStore(c,1).uncertain());assertEquals("STOPPED",new LocalStore(c,1).stage());PhoneRuns.guardUncertain(c,plan());
+ }
+ @Test public void reviewUnlocksOnlyStoppedOverlappingRun()throws Exception{
+  start(1,"first");engines.get(1).events.beforeFinal();
+  PhoneRuns.PendingReview active=assertThrows(PhoneRuns.PendingReview.class,()->PhoneRuns.guardUncertain(c,plan()));
+  assertFalse(active.clearAfterReview(c));
+  service.onStartCommand(new Intent(c,ReservationService.class).setAction("STOP").putExtra("slot",1),0,7);
+  LocalStore other=new LocalStore(c,2);other.markSubmitted();
+  PhoneRuns.PendingReview stopped=assertThrows(PhoneRuns.PendingReview.class,()->PhoneRuns.guardUncertain(c,plan()));
+  assertTrue(stopped.clearAfterReview(c));
+  assertFalse(new LocalStore(c,1).uncertain());assertTrue(other.uncertain());
  }
  @Test public void oldSingleRunBindsToItsUniqueSavedPlanBeforeStartingAnother()throws Exception{
   Plan p=plan();p.trigger=System.currentTimeMillis()+3600000;PhoneRepository repo=new PhoneRepository(c);JSONObject saved=repo.put("plans",new JSONObject().put("title","이전 일정").put("plan",p.json()));String id=saved.getJSONArray("plans").getJSONObject(0).getString("id");

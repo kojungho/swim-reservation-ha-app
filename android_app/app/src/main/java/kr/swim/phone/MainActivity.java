@@ -135,8 +135,20 @@ public final class MainActivity extends Activity {
         });},"booking-quote").start();
         refreshRuntime();
     }
+    private void showPendingReview(PhoneRuns.PendingReview review){
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("이전 예약 결과 확인")
+            .setMessage(review.stay+"\n\n"+(review.active?"이전 작업이 진행 중입니다. 작업을 중지한 뒤 공식 예약 내역을 확인해 주세요.":"공식 예약 내역에서 이전 신청이 취소됐거나 예약이 없는지 확인해 주세요. 결제 대기 중인 주문도 확인하세요."))
+            .setNeutralButton("예약 내역 조회",(d,w)->{lookupRequest=SystemClock.elapsedRealtimeNanos();refreshRuntime();})
+            .setNegativeButton("닫기",null);
+        if(!review.active)dialog.setPositiveButton("취소·예약 없음 확인",(d,w)->{
+            boolean cleared=review.clearAfterReview(this);
+            android.widget.Toast.makeText(this,cleared?"이전 예약 확인을 마쳤습니다. 예약 하기를 다시 누르세요.":"작업 상태가 변경됐습니다. 예약 내역을 다시 확인하세요.",android.widget.Toast.LENGTH_LONG).show();
+            refreshRuntime();
+        });
+        dialog.show();
+    }
     private void startPlan(Plan plan,boolean lookup){startPlan(plan,lookup,"");}
-    private void startPlan(Plan plan,boolean lookup,String id){try{if(!lookup&&!plan.demo()&&!executionPermissions(plan))return;PlanScheduler.start(this,plan,lookup,id);}catch(Exception e){message(e.getMessage()==null?"실행 시작 실패":e.getMessage());}finally{refreshRuntime();}}
+    private void startPlan(Plan plan,boolean lookup,String id){try{if(!lookup&&!plan.demo()&&!executionPermissions(plan))return;PlanScheduler.start(this,plan,lookup,id);}catch(PhoneRuns.PendingReview review){showPendingReview(review);}catch(Exception e){message(e.getMessage()==null?"실행 시작 실패":e.getMessage());}finally{refreshRuntime();}}
     private boolean executionPermissions(Plan plan){
         if(plan.demo())return true;
         ReservationService.channel(this);
@@ -159,8 +171,12 @@ public final class MainActivity extends Activity {
     private void safeSettings(Runnable action){try{action.run();}catch(Exception e){message("설정 화면을 열지 못했습니다. 시스템 앱 정보에서 직접 확인해 주세요.");}}
     private void open(Uri uri){try{startActivity(new Intent(Intent.ACTION_VIEW,uri));}catch(Exception e){message("브라우저를 열지 못했습니다.");}}
     private void message(String text){if(!isFinishing()&&screen!=null)screen.evaluateJavascript("window.showFloatingMessage?.("+JSONObject.quote(text)+",{error:true})",null);}
-    @Override protected void onResume(){super.onResume();if(store!=null){PhoneRuns.reconcile(this);try{PhoneRuns.reschedule(this);}catch(Exception ignored){}}if(updates!=null)updates.resume();if(displayConnection==null)displayConnection=new DisplayConnection(this,()->HaDisplay.reconnect(this));displayConnection.start();HaDisplay.reconnect(this);refreshRuntime();}
-    @Override protected void onPause(){if(displayConnection!=null)displayConnection.stop();PhoneInspection.cancel();if(updates!=null)updates.pause();super.onPause();}
+    @Override public void onWindowFocusChanged(boolean focused){
+        super.onWindowFocusChanged(focused);
+        if(focused)PaymentActivity.presentPending();
+    }
+    @Override protected void onResume(){super.onResume();PaymentActivity.mainResumed(this);if(store!=null){PhoneRuns.reconcile(this);try{PhoneRuns.reschedule(this);}catch(Exception ignored){}}if(updates!=null)updates.resume();if(displayConnection==null)displayConnection=new DisplayConnection(this,()->HaDisplay.reconnect(this));displayConnection.start();HaDisplay.reconnect(this);refreshRuntime();}
+    @Override protected void onPause(){PaymentActivity.mainPaused(this);if(displayConnection!=null)displayConnection.stop();PhoneInspection.cancel();if(updates!=null)updates.pause();super.onPause();}
     Intent mapExportIntent(String id)throws Exception{
         new MapPhotos(this).registeredFile(id);
         return new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("image/jpeg").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"swim-map-"+id+".jpg");

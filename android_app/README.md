@@ -1,4 +1,6 @@
-## 현재 배포 빌드 · 0.4.31 / versionCode 37
+## 현재 배포 빌드 · 0.4.32 / versionCode 38
+
+단일 예약에서 신용카드 결제를 선택하면 폰 앱이나 결제 대기 알림에서 공식 결제창을 이어볼 수 있습니다. 모니모페이 인증 앱 연결, 예약 작업 중지, 이용 완료 내역 조회를 지원합니다.
 
 서버가 매일 오전 10시 전체 사이트의 이름·번호를 미리 확인해 저장하고 앱은 연결 시 정상 목록을 받습니다. 번호 변경·신규 사이트를 미리 반영하며 더 최근의 폰 조회와 실행 중인 예약은 덮어쓰지 않습니다. 기존 서명·예약자·일정·제출 기록과 주간 사전 점검을 유지합니다. 애드온 2.15.39 및 HA 공개 통합 1.0.3을 사용합니다. [0.4.31 검증 보고서](TEST_RESULTS_0.4.31.md)
 
@@ -10,7 +12,7 @@
 
 ```sh
 ./gradlew :app:testDebugUnitTest :app:assembleRelease :app:lintRelease
-bash verify-release.sh app/build/outputs/apk/release/app-release.apk 37 0.4.31
+bash verify-release.sh app/build/outputs/apk/release/app-release.apk 38 0.4.32
 ```
 
 서명은 기존 `~/.android/debug.keystore`를 사용합니다. 다른 위치는 `SWIM_SIGNING_STORE`, 비밀번호·별칭은 `SWIM_SIGNING_STORE_PASSWORD`, `SWIM_SIGNING_KEY_PASSWORD`, `SWIM_SIGNING_ALIAS`로 지정합니다. 원래 인증서가 아니거나 키가 없으면 release 서명을 거부합니다. 키 파일은 저장소에 넣지 마세요. 현재 인증서는 기존 Android Debug 인증서이므로, release 빌드라고 해서 Google Play 배포용 인증서로 바뀌거나 Play Protect 승인이 보장되는 것은 아닙니다. 호환성을 위해 키를 새로 만들지 않습니다.

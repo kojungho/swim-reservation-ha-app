@@ -55,7 +55,8 @@ final class PlanScheduler {
     static synchronized void stopSlot(Context c,int slot){
         if(PhoneInspection.alive(slot)){PhoneInspection.cancel();return;}
         LocalStore s=new LocalStore(c,slot);if(!s.active())return;AlarmReceiver.cancel(c,slot);
+        if(ReservationService.stopRunningTask(slot))return;
         if(ReservationService.alive(slot))c.startService(new Intent(c,ReservationService.class).setAction("STOP").putExtra("slot",slot));
-        else {s.watchDueElapsed(0);s.state(s.uncertain()?"CHECK_REQUIRED":"STOPPED","사용자가 대기 일정을 중지했습니다.",false);c.getSystemService(NotificationManager.class).cancel(10+slot);c.getSystemService(NotificationManager.class).notify(20+slot,ReservationService.notice(c,s.message(),false,slot));}
+        else {s.watchDueElapsed(0);s.state(s.uncertain()?"CHECK_REQUIRED":"STOPPED","사용자가 대기 일정을 중지했습니다.",false);c.getSystemService(NotificationManager.class).cancel(10+slot);}
     }
 }
